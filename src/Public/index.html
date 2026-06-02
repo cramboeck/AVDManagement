@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cloud Management Portal</title>
+    <link rel="stylesheet" href="/static/css/styles.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h1>Cloud Portal</h1>
+                <p class="version">v1.0.0</p>
+            </div>
+            <nav class="sidebar-nav">
+                <a href="#dashboard" class="nav-item active" data-page="dashboard">
+                    <span class="icon">📊</span>
+                    <span>Dashboard</span>
+                </a>
+                <a href="#m365" class="nav-item" data-page="m365">
+                    <span class="icon">👥</span>
+                    <span>Microsoft 365</span>
+                </a>
+                <a href="#intune" class="nav-item" data-page="intune">
+                    <span class="icon">📱</span>
+                    <span>Intune Devices</span>
+                </a>
+                <a href="#avd" class="nav-item" data-page="avd">
+                    <span class="icon">🖥️</span>
+                    <span>Azure Virtual Desktop</span>
+                </a>
+                <a href="#sessions" class="nav-item" data-page="sessions">
+                    <span class="icon">👤</span>
+                    <span>AVD Sessions</span>
+                </a>
+            </nav>
+            <div class="sidebar-footer">
+                <div class="auth-status" id="authStatus">
+                    <span class="status-icon">🔒</span>
+                    <span class="status-text">Checking...</span>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <header class="content-header">
+                <h2 id="pageTitle">Dashboard</h2>
+                <div class="header-actions">
+                    <button class="btn btn-secondary" onclick="refreshCurrentPage()">
+                        <span>🔄</span> Refresh
+                    </button>
+                </div>
+            </header>
+
+            <div class="content-body">
+                <!-- Dashboard Page -->
+                <div id="dashboard-page" class="page active">
+                    <div class="dashboard-grid">
+                        <div class="stat-card">
+                            <div class="stat-header">
+                                <span class="stat-icon">👥</span>
+                                <span class="stat-label">M365 Users</span>
+                            </div>
+                            <div class="stat-value" id="m365-users-total">-</div>
+                            <div class="stat-detail">
+                                <span id="m365-users-active">-</span> active
+                            </div>
+                        </div>
+
+                        <div class="stat-card">
+                            <div class="stat-header">
+                                <span class="stat-icon">📱</span>
+                                <span class="stat-label">Intune Devices</span>
+                            </div>
+                            <div class="stat-value" id="intune-devices-total">-</div>
+                            <div class="stat-detail">
+                                <span id="intune-devices-compliant">-</span> compliant
+                            </div>
+                        </div>
+
+                        <div class="stat-card">
+                            <div class="stat-header">
+                                <span class="stat-icon">🖥️</span>
+                                <span class="stat-label">AVD Session Hosts</span>
+                            </div>
+                            <div class="stat-value" id="avd-hosts-total">-</div>
+                            <div class="stat-detail">
+                                <span id="avd-hosts-active">-</span> active
+                            </div>
+                        </div>
+
+                        <div class="stat-card">
+                            <div class="stat-header">
+                                <span class="stat-icon">👤</span>
+                                <span class="stat-label">Active Sessions</span>
+                            </div>
+                            <div class="stat-value" id="avd-sessions-total">-</div>
+                            <div class="stat-detail">Across all host pools</div>
+                        </div>
+                    </div>
+
+                    <div class="dashboard-details">
+                        <div class="detail-card">
+                            <h3>License Overview</h3>
+                            <div id="license-overview" class="license-list">
+                                <p class="loading">Loading...</p>
+                            </div>
+                        </div>
+
+                        <div class="detail-card">
+                            <h3>AVD Host Pools</h3>
+                            <div id="hostpool-overview" class="hostpool-list">
+                                <p class="loading">Loading...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- M365 Page -->
+                <div id="m365-page" class="page">
+                    <div class="page-section">
+                        <div class="section-header">
+                            <h3>Users</h3>
+                            <button class="btn btn-primary" onclick="showModal('createUser')">
+                                ➕ Create User
+                            </button>
+                        </div>
+                        <div class="table-container">
+                            <table id="users-table" class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Display Name</th>
+                                        <th>User Principal Name</th>
+                                        <th>Enabled</th>
+                                        <th>Licenses</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr><td colspan="5" class="loading">Loading users...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="page-section">
+                        <div class="section-header">
+                            <h3>Groups</h3>
+                            <button class="btn btn-primary" onclick="showModal('createGroup')">
+                                ➕ Create Group
+                            </button>
+                        </div>
+                        <div class="table-container">
+                            <table id="groups-table" class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Display Name</th>
+                                        <th>Type</th>
+                                        <th>Mail Enabled</th>
+                                        <th>Security Enabled</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr><td colspan="5" class="loading">Loading groups...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Intune Page -->
+                <div id="intune-page" class="page">
+                    <div class="page-section">
+                        <div class="section-header">
+                            <h3>Managed Devices</h3>
+                            <div class="filter-group">
+                                <input type="text" id="device-search" placeholder="Search devices..." class="search-input">
+                            </div>
+                        </div>
+                        <div class="table-container">
+                            <table id="devices-table" class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Device Name</th>
+                                        <th>User</th>
+                                        <th>OS</th>
+                                        <th>Compliance</th>
+                                        <th>Last Sync</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr><td colspan="6" class="loading">Loading devices...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- AVD Page -->
+                <div id="avd-page" class="page">
+                    <div class="page-section">
+                        <div class="section-header">
+                            <h3>Session Hosts</h3>
+                            <select id="hostpool-select" class="filter-select" onchange="loadSessionHosts()">
+                                <option value="">Select Host Pool...</option>
+                            </select>
+                        </div>
+                        <div class="table-container">
+                            <table id="sessionhosts-table" class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Session Host</th>
+                                        <th>Status</th>
+                                        <th>Sessions</th>
+                                        <th>Drain Mode</th>
+                                        <th>Last Heartbeat</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr><td colspan="6" class="loading">Select a host pool to view session hosts</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- AVD Sessions Page -->
+                <div id="sessions-page" class="page">
+                    <div class="page-section">
+                        <div class="section-header">
+                            <h3>Active User Sessions</h3>
+                            <select id="sessions-hostpool-select" class="filter-select" onchange="loadUserSessions()">
+                                <option value="">Select Host Pool...</option>
+                            </select>
+                        </div>
+                        <div class="table-container">
+                            <table id="sessions-table" class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>User</th>
+                                        <th>Session Host</th>
+                                        <th>Session State</th>
+                                        <th>Session Type</th>
+                                        <th>Created</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr><td colspan="6" class="loading">Select a host pool to view sessions</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <!-- Scripts -->
+    <script src="/static/js/app.js"></script>
+</body>
+</html>

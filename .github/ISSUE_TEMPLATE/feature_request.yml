@@ -1,0 +1,33 @@
+name: Feature Request
+description: Propose a new feature or enhancement for the Cloud Management Portal
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Vielen Dank für deinen Vorschlag! Bitte beschreibe das gewünschte Feature so detailliert wie möglich.
+        Du kannst Claude Code direkt im Issue taggen, um die Umsetzung zu starten (z.B. `@claude implementiere dieses Feature`).
+  - type: textarea
+    id: description
+    attributes:
+      label: Beschreibung des Features
+      description: Was soll das Feature tun? Welches Problem löst es?
+      placeholder: "z.B. Ein Button im AVD-Dashboard, um alle Session-Hosts in einem Host-Pool gleichzeitig zu starten..."
+    validations:
+      required: true
+  - type: textarea
+    id: technical_details
+    attributes:
+      label: Technische Details / API Endpunkte
+      description: Falls bekannt, welche Microsoft Graph oder Azure REST APIs werden benötigt?
+      placeholder: "z.B. Microsoft.DesktopVirtualization/hostPools/sessionHosts..."
+    validations:
+      required: false
+  - type: checkboxes
+    id: agreement
+    attributes:
+      label: Einverständnis
+      options:
+        - label: Ich habe geprüft, ob es ein ähnliches Feature bereits gibt.
+          required: true
