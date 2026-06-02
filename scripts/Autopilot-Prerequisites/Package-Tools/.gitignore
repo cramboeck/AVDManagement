@@ -1,0 +1,11 @@
+# Ignore generated IntuneWin packages
+Output/*.intunewin
+Output/*.intunewin.decode
+
+# Ignore downloaded IntuneWin Content Prep Tool
+Tools/IntuneWinAppUtil.exe
+
+# Keep folder structure
+!Output/.gitkeep
+!Tools/.gitkeep
+

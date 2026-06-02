@@ -1,0 +1,301 @@
+{
+  "version": "1.0",
+  "description": "Enterprise Printer Configuration - Customize for your environment",
+  "settings": {
+    "autoDetectLocation": true,
+    "allowUserOverride": true,
+    "enableFavorites": true,
+    "logLevel": "Info"
+  },
+  "locations": [
+    {
+      "name": "Munich",
+      "subnet": "10.1.0.0/16",
+      "printServer": "printserver-muc.company.com",
+      "timezone": "W. Europe Standard Time",
+      "country": "DE"
+    },
+    {
+      "name": "London",
+      "subnet": "10.2.0.0/16",
+      "printServer": "printserver-lon.company.com",
+      "timezone": "GMT Standard Time",
+      "country": "GB"
+    },
+    {
+      "name": "Bangalore",
+      "subnet": "10.3.0.0/16",
+      "printServer": "printserver-blr.company.com",
+      "timezone": "India Standard Time",
+      "country": "IN"
+    },
+    {
+      "name": "Headquarters",
+      "subnet": "192.168.1.0/24",
+      "printServer": "printserver01",
+      "timezone": "Eastern Standard Time",
+      "country": "US"
+    }
+  ],
+  "departments": [
+    {
+      "name": "IT",
+      "description": "Information Technology"
+    },
+    {
+      "name": "HR",
+      "description": "Human Resources"
+    },
+    {
+      "name": "Finance",
+      "description": "Finance & Accounting"
+    },
+    {
+      "name": "Sales",
+      "description": "Sales & Marketing"
+    },
+    {
+      "name": "All",
+      "description": "All Departments"
+    }
+  ],
+  "drivers": {
+    "repository": "\\\\fileserver\\PrinterDrivers",
+    "strategies": [
+      {
+        "name": "PointAndPrint",
+        "description": "Driver from print server (default)",
+        "requiresElevation": false,
+        "supported": true
+      },
+      {
+        "name": "UniversalPrint",
+        "description": "Microsoft Universal Print Driver",
+        "requiresElevation": false,
+        "supported": true,
+        "driverName": "Microsoft Print To PDF"
+      },
+      {
+        "name": "PreStaged",
+        "description": "Pre-installed via Intune",
+        "requiresElevation": false,
+        "supported": true
+      }
+    ]
+  },
+  "printers": [
+    {
+      "id": "HP-LJ-MUC-F2",
+      "name": "HP LaserJet Pro - Floor 2 Munich",
+      "server": "printserver-muc.company.com",
+      "shareName": "HP-LJ-F2",
+      "location": "Munich",
+      "department": "All",
+      "building": "Building A",
+      "floor": "2",
+      "room": "2.15",
+      "driver": {
+        "name": "HP Universal Printing PCL 6",
+        "version": "7.0.1",
+        "strategy": "PointAndPrint",
+        "fallback": "UniversalPrint"
+      },
+      "features": {
+        "color": false,
+        "duplex": true,
+        "stapler": false,
+        "maxPaperSize": "A4",
+        "scanToEmail": false,
+        "fax": false
+      },
+      "description": "High-speed black & white printer with automatic duplex",
+      "contact": "IT Support Munich ext. 2100",
+      "costCenter": "IT-MUC-001",
+      "enabled": true,
+      "tags": [
+        "high-volume",
+        "duplex",
+        "floor-2"
+      ]
+    },
+    {
+      "id": "CANON-COLOR-MUC-F1",
+      "name": "Canon Color Printer - Floor 1 Munich",
+      "server": "printserver-muc.company.com",
+      "shareName": "Canon-Color-F1",
+      "location": "Munich",
+      "department": "Sales",
+      "building": "Building A",
+      "floor": "1",
+      "room": "1.08",
+      "driver": {
+        "name": "Canon Generic Plus PCL6",
+        "version": "3.5",
+        "strategy": "PointAndPrint",
+        "fallback": "UniversalPrint"
+      },
+      "features": {
+        "color": true,
+        "duplex": true,
+        "stapler": true,
+        "maxPaperSize": "A3",
+        "scanToEmail": true,
+        "fax": true
+      },
+      "description": "Color multifunction printer with scan, copy, fax (A3 capable)",
+      "contact": "Facility Management ext. 2105",
+      "costCenter": "SALES-MUC-001",
+      "enabled": true,
+      "tags": [
+        "color",
+        "multifunction",
+        "a3",
+        "sales"
+      ]
+    },
+    {
+      "id": "XEROX-MFP-LON-F3",
+      "name": "Xerox WorkCentre - Floor 3 London",
+      "server": "printserver-lon.company.com",
+      "shareName": "Xerox-MFP-F3",
+      "location": "London",
+      "department": "All",
+      "building": "Main Building",
+      "floor": "3",
+      "room": "3.12",
+      "driver": {
+        "name": "Xerox Global Print Driver PCL6",
+        "version": "5.8.0",
+        "strategy": "PointAndPrint",
+        "fallback": "UniversalPrint"
+      },
+      "features": {
+        "color": true,
+        "duplex": true,
+        "stapler": true,
+        "maxPaperSize": "A4",
+        "scanToEmail": true,
+        "fax": false
+      },
+      "description": "Color MFP with advanced finishing options",
+      "contact": "IT Support London +44 20 1234 5678",
+      "costCenter": "IT-LON-001",
+      "enabled": true,
+      "tags": [
+        "color",
+        "multifunction",
+        "stapler",
+        "london"
+      ]
+    },
+    {
+      "id": "HP-BW-BLR-F1",
+      "name": "HP LaserJet Enterprise - Floor 1 Bangalore",
+      "server": "printserver-blr.company.com",
+      "shareName": "HP-LJ-ENT-F1",
+      "location": "Bangalore",
+      "department": "IT",
+      "building": "Tech Park",
+      "floor": "1",
+      "room": "1.20",
+      "driver": {
+        "name": "HP Universal Printing PCL 6",
+        "version": "7.0.1",
+        "strategy": "PointAndPrint",
+        "fallback": "UniversalPrint"
+      },
+      "features": {
+        "color": false,
+        "duplex": true,
+        "stapler": false,
+        "maxPaperSize": "A4",
+        "scanToEmail": false,
+        "fax": false
+      },
+      "description": "Enterprise-grade B&W printer for IT department",
+      "contact": "IT Support Bangalore +91 80 1234 5678",
+      "costCenter": "IT-BLR-001",
+      "enabled": true,
+      "tags": [
+        "it-only",
+        "high-volume",
+        "bangalore"
+      ]
+    },
+    {
+      "id": "RICOH-COLOR-BLR-F2",
+      "name": "Ricoh Color MFP - Floor 2 Bangalore",
+      "server": "printserver-blr.company.com",
+      "shareName": "Ricoh-Color-F2",
+      "location": "Bangalore",
+      "department": "All",
+      "building": "Tech Park",
+      "floor": "2",
+      "room": "2.15",
+      "driver": {
+        "name": "RICOH PCL6 UniversalDriver V4",
+        "version": "4.22.0.0",
+        "strategy": "PointAndPrint",
+        "fallback": "UniversalPrint"
+      },
+      "features": {
+        "color": true,
+        "duplex": true,
+        "stapler": true,
+        "maxPaperSize": "A3",
+        "scanToEmail": true,
+        "fax": true
+      },
+      "description": "Color A3 MFP with full finishing options",
+      "contact": "Facility Management +91 80 1234 5679",
+      "costCenter": "ADMIN-BLR-001",
+      "enabled": true,
+      "tags": [
+        "color",
+        "a3",
+        "multifunction",
+        "bangalore"
+      ]
+    },
+    {
+      "id": "HP-MOBILE-HQ",
+      "name": "HP Mobile Print Station - Headquarters",
+      "server": "printserver01",
+      "shareName": "HP-Mobile-HQ",
+      "location": "Headquarters",
+      "department": "All",
+      "building": "Main",
+      "floor": "1",
+      "room": "Lobby",
+      "driver": {
+        "name": "HP Universal Printing PCL 6",
+        "version": "7.0.1",
+        "strategy": "PointAndPrint",
+        "fallback": "UniversalPrint"
+      },
+      "features": {
+        "color": false,
+        "duplex": false,
+        "stapler": false,
+        "maxPaperSize": "A4",
+        "scanToEmail": false,
+        "fax": false
+      },
+      "description": "Guest printer in lobby for visitors and mobile users",
+      "contact": "Reception ext. 0",
+      "costCenter": "ADMIN-HQ-001",
+      "enabled": true,
+      "tags": [
+        "guest",
+        "lobby",
+        "mobile"
+      ]
+    }
+  ],
+  "metadata": {
+    "lastUpdated": "2025-10-26T14:00:00Z",
+    "updatedBy": "admin@company.com",
+    "version": "1.0",
+    "notes": "Initial configuration with multi-site support"
+  }
+}

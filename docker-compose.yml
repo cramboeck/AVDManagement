@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  cloud-portal:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: cloud-management-portal
+    ports:
+      - "8081:8080"    # External port 8081, internal port 8080 (avoids Kimai conflict)
+    volumes:
+      # Mount configuration (edit config/appsettings.json before starting)
+      - ./config/appsettings.json:/app/config/appsettings.json:ro
+      # Mount logs directory for persistence
+      - ./logs:/app/logs
+      # Mount cache directory for persistence
+      - ./cache:/app/cache
+    environment:
+      - TZ=Europe/Berlin
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - cloud-portal-network
+
+networks:
+  cloud-portal-network:
+    driver: bridge

@@ -1,0 +1,41 @@
+# Configuration files with secrets
+config/appsettings.json
+config/*.local.json
+.env
+
+# PowerShell
+*.ps1xml
+
+# Logs
+logs/
+*.log
+
+# Cache
+cache/
+*.cache
+
+# Docker
+.dockerignore
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Credentials
+*.credentials
+secrets/
+
+# Release packages (download separately)
+*.zip
