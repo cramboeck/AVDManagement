@@ -1,0 +1,138 @@
+{
+  "usersList": {
+    "value": [
+      {
+        "id": "user-001",
+        "userPrincipalName": "max.mustermann@contoso.com",
+        "displayName": "Max Mustermann",
+        "mail": "max.mustermann@contoso.com",
+        "accountEnabled": true,
+        "createdDateTime": "2024-01-15T10:30:00Z"
+      },
+      {
+        "id": "user-002",
+        "userPrincipalName": "erika.musterfrau@contoso.com",
+        "displayName": "Erika Musterfrau",
+        "mail": "erika.musterfrau@contoso.com",
+        "accountEnabled": true,
+        "createdDateTime": "2024-02-20T14:45:00Z"
+      },
+      {
+        "id": "user-003",
+        "userPrincipalName": "service.account@contoso.com",
+        "displayName": "Service Account",
+        "mail": null,
+        "accountEnabled": false,
+        "createdDateTime": "2023-06-01T08:00:00Z"
+      }
+    ],
+    "@odata.nextLink": "https://graph.microsoft.com/v1.0/users?$skiptoken=abc123"
+  },
+  "usersListPage2": {
+    "value": [
+      {
+        "id": "user-004",
+        "userPrincipalName": "test.user@contoso.com",
+        "displayName": "Test User",
+        "mail": "test.user@contoso.com",
+        "accountEnabled": true,
+        "createdDateTime": "2024-03-01T09:00:00Z"
+      }
+    ]
+  },
+  "usersDelta": {
+    "value": [
+      {
+        "id": "user-001",
+        "userPrincipalName": "max.mustermann@contoso.com",
+        "displayName": "Max Mustermann (Updated)",
+        "mail": "max.mustermann@contoso.com",
+        "accountEnabled": true,
+        "createdDateTime": "2024-01-15T10:30:00Z"
+      },
+      {
+        "id": "user-005",
+        "@removed": { "reason": "deleted" }
+      }
+    ],
+    "@odata.deltaLink": "https://graph.microsoft.com/v1.0/users/delta?$deltatoken=xyz789"
+  },
+  "singleUser": {
+    "id": "user-001",
+    "userPrincipalName": "max.mustermann@contoso.com",
+    "displayName": "Max Mustermann",
+    "mail": "max.mustermann@contoso.com",
+    "accountEnabled": true,
+    "createdDateTime": "2024-01-15T10:30:00Z"
+  },
+  "userLicenses": {
+    "value": [
+      {
+        "skuId": "sku-001",
+        "skuPartNumber": "ENTERPRISEPACK"
+      },
+      {
+        "skuId": "sku-002",
+        "skuPartNumber": "AAD_PREMIUM"
+      }
+    ]
+  },
+  "subscribedSkus": {
+    "value": [
+      {
+        "skuId": "sku-001",
+        "skuPartNumber": "ENTERPRISEPACK",
+        "consumedUnits": 45,
+        "prepaidUnits": {
+          "enabled": 50,
+          "suspended": 0,
+          "warning": 0
+        }
+      },
+      {
+        "skuId": "sku-002",
+        "skuPartNumber": "AAD_PREMIUM",
+        "consumedUnits": 30,
+        "prepaidUnits": {
+          "enabled": 50,
+          "suspended": 0,
+          "warning": 0
+        }
+      },
+      {
+        "skuId": "sku-003",
+        "skuPartNumber": "INTUNE_A",
+        "consumedUnits": 25,
+        "prepaidUnits": {
+          "enabled": 50,
+          "suspended": 0,
+          "warning": 0
+        }
+      }
+    ]
+  },
+  "error401": {
+    "error": {
+      "code": "InvalidAuthenticationToken",
+      "message": "Access token is empty."
+    }
+  },
+  "error403": {
+    "error": {
+      "code": "Authorization_RequestDenied",
+      "message": "Insufficient privileges to complete the operation."
+    }
+  },
+  "error404": {
+    "error": {
+      "code": "Request_ResourceNotFound",
+      "message": "Resource 'user-999' does not exist."
+    }
+  },
+  "error429": {
+    "error": {
+      "code": "TooManyRequests",
+      "message": "Too many requests. Please retry after 30 seconds."
+    }
+  }
+}
