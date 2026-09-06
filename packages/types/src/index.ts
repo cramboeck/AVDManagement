@@ -77,6 +77,7 @@ export interface SyncedUser {
   displayName: string;
   mail: string | null;
   accountEnabled: boolean;
+  userType: 'Member' | 'Guest';
   createdAt: Date | null;
   syncedAt: Date;
 }
@@ -97,10 +98,8 @@ export interface UserLicense {
 
 // Job-Status
 export type JobStatus =
-  | 'pending'
-  | 'preview-pending'
-  | 'preview-ready'
-  | 'approved'
+  | 'pending_approval'
+  | 'queued'
   | 'running'
   | 'completed'
   | 'failed'
@@ -143,11 +142,13 @@ export interface Job {
   status: JobStatus;
   priority: JobPriority;
   createdBy: UserId;
-  createdAt: Date;
-  startedAt: Date | null;
-  completedAt: Date | null;
+  createdByEmail: string;
+  targetCount: number;
+  createdAt: string;
+  startedAt: string | null;
+  completedAt: string | null;
   result: Record<string, unknown> | null;
-  error: JobError | null;
+  error: string | null;
   retryCount: number;
   maxRetries: number;
   correlationId: CorrelationId;
@@ -155,23 +156,23 @@ export interface Job {
 }
 
 // Audit-Ergebnis
-export type AuditResult = 'success' | 'failure' | 'partial';
+export type AuditOutcome = 'success' | 'failure' | 'partial';
 
 // Audit-Eintrag
 export interface AuditEntry {
   id: string;
   mspId: MspId;
   tenantId: TenantId | null;
-  timestamp: Date;
-  userId: UserId;
-  userDisplayName: string;
+  timestamp: string;
+  actorId: UserId;
+  actorEmail: string;
   action: string;
   targetType: string;
   targetId: string;
   targetDisplayName: string;
-  beforeState: Record<string, unknown> | null;
-  afterState: Record<string, unknown> | null;
-  result: AuditResult;
+  previousValue: Record<string, unknown> | null;
+  newValue: Record<string, unknown> | null;
+  outcome: AuditOutcome;
   errorMessage: string | null;
   correlationId: CorrelationId;
 }
