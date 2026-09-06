@@ -1,0 +1,297 @@
+// ZeroStress Cockpit - Domain Model (DBML)
+// https://dbml.dbdiagram.io/
+
+// ============================================
+// MSP-Ebene (Organisationskontext)
+// ============================================
+
+Table msp_organizations {
+  id uuid [pk]
+  name varchar(255) [not null]
+  slug varchar(100) [not null, unique]
+  branding jsonb
+  custom_domain varchar(255)
+  subscription_tier varchar(50) [not null, default: 'starter']
+  is_active boolean [not null, default: true]
+  created_at timestamptz [not null]
+
+  indexes {
+    slug
+    custom_domain
+  }
+}
+
+Table msp_users {
+  id uuid [pk]
+  msp_id uuid [not null, ref: > msp_organizations.id]
+  entra_object_id varchar(36) [not null]
+  email varchar(255) [not null]
+  display_name varchar(255) [not null]
+  role varchar(20) [not null]  // admin, operator, viewer
+  is_active boolean [not null, default: true]
+  last_login_at timestamptz
+  created_at timestamptz [not null]
+
+  indexes {
+    (msp_id, entra_object_id) [unique]
+    (msp_id, email) [unique]
+  }
+}
+
+// ============================================
+// Tenant-Ebene (Kundentenant-Kontext)
+// ============================================
+
+Table managed_tenants {
+  id uuid [pk]
+  msp_id uuid [not null, ref: > msp_organizations.id]
+  microsoft_tenant_id varchar(36) [not null]
+  display_name varchar(255) [not null]
+  primary_domain varchar(255) [not null]
+  auth_method varchar(20) [not null]  // gdap, app-consent
+  onboarded_at timestamptz [not null]
+  last_sync_at timestamptz
+  sync_status varchar(20) [not null, default: 'pending']
+  is_active boolean [not null, default: true]
+
+  indexes {
+    (msp_id, microsoft_tenant_id) [unique]
+    msp_id
+  }
+}
+
+// ============================================
+// Gespiegelte Entitaeten (von Microsoft)
+// ============================================
+
+Table synced_users {
+  id uuid [pk]
+  msp_id uuid [not null, ref: > msp_organizations.id]
+  tenant_id uuid [not null, ref: > managed_tenants.id]
+  microsoft_id varchar(36) [not null]
+  user_principal_name varchar(255) [not null]
+  display_name varchar(255)
+  mail varchar(255)
+  account_enabled boolean
+  created_at timestamptz
+  synced_at timestamptz [not null]
+
+  indexes {
+    (tenant_id, microsoft_id) [unique]
+    (msp_id, tenant_id)
+    user_principal_name
+  }
+}
+
+Table synced_groups {
+  id uuid [pk]
+  msp_id uuid [not null, ref: > msp_organizations.id]
+  tenant_id uuid [not null, ref: > managed_tenants.id]
+  microsoft_id varchar(36) [not null]
+  display_name varchar(255) [not null]
+  group_types jsonb
+  mail varchar(255)
+  synced_at timestamptz [not null]
+
+  indexes {
+    (tenant_id, microsoft_id) [unique]
+    (msp_id, tenant_id)
+  }
+}
+
+Table synced_devices {
+  id uuid [pk]
+  msp_id uuid [not null, ref: > msp_organizations.id]
+  tenant_id uuid [not null, ref: > managed_tenants.id]
+  microsoft_id varchar(36) [not null]
+  device_name varchar(255)
+  operating_system varchar(100)
+  os_version varchar(100)
+  compliance_state varchar(50)
+  enrolled_date_time timestamptz
+  last_sync_date_time timestamptz
+  synced_at timestamptz [not null]
+
+  indexes {
+    (tenant_id, microsoft_id) [unique]
+    (msp_id, tenant_id)
+    compliance_state
+  }
+}
+
+Table synced_host_pools {
+  id uuid [pk]
+  msp_id uuid [not null, ref: > msp_organizations.id]
+  tenant_id uuid [not null, ref: > managed_tenants.id]
+  azure_resource_id text [not null]
+  name varchar(255) [not null]
+  resource_group varchar(255) [not null]
+  host_pool_type varchar(50)
+  load_balancer_type varchar(50)
+  max_session_limit int
+  synced_at timestamptz [not null]
+
+  indexes {
+    (tenant_id, azure_resource_id) [unique]
+    (msp_id, tenant_id)
+  }
+}
+
+Table synced_session_hosts {
+  id uuid [pk]
+  msp_id uuid [not null, ref: > msp_organizations.id]
+  tenant_id uuid [not null, ref: > managed_tenants.id]
+  host_pool_id uuid [not null, ref: > synced_host_pools.id]
+  azure_resource_id text [not null]
+  name varchar(255) [not null]
+  status varchar(50)
+  sessions int
+  last_heartbeat timestamptz
+  synced_at timestamptz [not null]
+
+  indexes {
+    (tenant_id, azure_resource_id) [unique]
+    (msp_id, tenant_id)
+    host_pool_id
+    status
+  }
+}
+
+Table synced_licenses {
+  id uuid [pk]
+  msp_id uuid [not null, ref: > msp_organizations.id]
+  tenant_id uuid [not null, ref: > managed_tenants.id]
+  sku_id varchar(36) [not null]
+  sku_part_number varchar(100) [not null]
+  consumed_units int [not null]
+  prepaid_units_enabled int [not null]
+  prepaid_units_suspended int [not null]
+  prepaid_units_warning int [not null]
+  synced_at timestamptz [not null]
+
+  indexes {
+    (tenant_id, sku_id) [unique]
+    (msp_id, tenant_id)
+  }
+}
+
+// ============================================
+// Job-System
+// ============================================
+
+Table jobs {
+  id uuid [pk]
+  msp_id uuid [not null, ref: > msp_organizations.id]
+  tenant_id uuid [not null, ref: > managed_tenants.id]
+  type varchar(100) [not null]
+  payload jsonb [not null]
+  status varchar(20) [not null, default: 'pending']
+  priority varchar(20) [not null, default: 'normal']
+  created_by uuid [not null, ref: > msp_users.id]
+  created_at timestamptz [not null]
+  started_at timestamptz
+  completed_at timestamptz
+  result jsonb
+  error jsonb
+  retry_count int [not null, default: 0]
+  max_retries int [not null, default: 3]
+  correlation_id uuid [not null]
+  parent_job_id uuid [ref: > jobs.id]
+  preview jsonb
+
+  indexes {
+    (msp_id, tenant_id)
+    status
+    created_at
+    correlation_id
+  }
+}
+
+// ============================================
+// Audit-Log (unveraenderlich)
+// ============================================
+
+Table audit_entries {
+  id uuid [pk]
+  msp_id uuid [not null, ref: > msp_organizations.id]
+  tenant_id uuid [ref: > managed_tenants.id]
+  timestamp timestamptz [not null]
+  user_id uuid [not null, ref: > msp_users.id]
+  action varchar(100) [not null]
+  target_type varchar(50) [not null]
+  target_id varchar(100) [not null]
+  target_display_name varchar(255)
+  before_state jsonb
+  after_state jsonb
+  result varchar(20) [not null]
+  error_message text
+  correlation_id uuid [not null]
+  ip_address varchar(45)
+  user_agent text
+
+  indexes {
+    (msp_id, tenant_id, timestamp)
+    (msp_id, timestamp)
+    correlation_id
+    action
+    target_id
+  }
+}
+
+// ============================================
+// Sync-State (Delta-Query-Tracking)
+// ============================================
+
+Table sync_states {
+  id uuid [pk]
+  msp_id uuid [not null, ref: > msp_organizations.id]
+  tenant_id uuid [not null, ref: > managed_tenants.id]
+  entity_type varchar(50) [not null]
+  delta_token text
+  last_sync_at timestamptz [not null]
+  last_sync_status varchar(20) [not null]
+  error_message text
+
+  indexes {
+    (tenant_id, entity_type) [unique]
+  }
+}
+
+// ============================================
+// CSP/Distributor-Integration
+// ============================================
+
+Table distributor_configs {
+  id uuid [pk]
+  msp_id uuid [not null, ref: > msp_organizations.id]
+  distributor_type varchar(50) [not null]  // adn, ingram, td_synnex
+  is_active boolean [not null, default: true]
+  config jsonb [not null]  // Distributor-spezifische Konfiguration (keine Secrets!)
+  last_sync_at timestamptz
+
+  indexes {
+    (msp_id, distributor_type) [unique]
+  }
+}
+
+Table license_orders {
+  id uuid [pk]
+  msp_id uuid [not null, ref: > msp_organizations.id]
+  tenant_id uuid [not null, ref: > managed_tenants.id]
+  distributor_config_id uuid [not null, ref: > distributor_configs.id]
+  external_order_id varchar(100)
+  sku_part_number varchar(100) [not null]
+  quantity int [not null]
+  status varchar(20) [not null]  // pending, submitted, confirmed, failed
+  created_by uuid [not null, ref: > msp_users.id]
+  created_at timestamptz [not null]
+  submitted_at timestamptz
+  confirmed_at timestamptz
+  error_message text
+
+  indexes {
+    (msp_id, tenant_id)
+    status
+    external_order_id
+  }
+}

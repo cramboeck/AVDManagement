@@ -1,0 +1,1006 @@
+openapi: 3.1.0
+info:
+  title: ZeroStress Cockpit API
+  version: 1.0.0
+  description: |
+    Multi-Tenant-Management-API fuer Microsoft-Cloud-Umgebungen.
+
+    ## Authentifizierung
+    Alle Endpunkte erfordern ein Bearer-Token (Entra ID).
+    Der MSP-Kontext wird aus dem Token oder der Subdomain ermittelt.
+
+    ## Tenant-Kontext
+    Die meisten Endpunkte operieren auf einem spezifischen Kundentenant.
+    Der Tenant wird ueber den Pfad-Parameter `tenantId` angegeben.
+
+    ## Fehlerformat
+    Fehler werden im RFC 9457 Problem Details Format zurueckgegeben.
+  contact:
+    name: ZeroStress Support
+    email: support@zerostress.io
+  license:
+    name: Proprietary
+
+servers:
+  - url: https://api.zerostress.io/v1
+    description: Produktion
+  - url: https://api.staging.zerostress.io/v1
+    description: Staging
+
+tags:
+  - name: Tenants
+    description: Verwaltung von Kundentenants
+  - name: Users
+    description: Benutzerverwaltung (Identity-Modul)
+  - name: Devices
+    description: Geräteverwaltung (Intune-Modul)
+  - name: AVD
+    description: Azure Virtual Desktop
+  - name: Exchange
+    description: Exchange Online
+  - name: Licenses
+    description: Lizenzverwaltung
+  - name: Jobs
+    description: Asynchrone Aktionen
+  - name: Audit
+    description: Audit-Log
+
+paths:
+  # ============================================
+  # Tenants
+  # ============================================
+  /tenants:
+    get:
+      tags: [Tenants]
+      summary: Liste aller verwalteten Tenants
+      operationId: listTenants
+      parameters:
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/PageToken'
+      responses:
+        '200':
+          description: Liste der Tenants
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      tags: [Tenants]
+      summary: Neuen Tenant onboarden
+      operationId: createTenant
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TenantCreate'
+      responses:
+        '202':
+          description: Onboarding gestartet (Job erstellt)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Job'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /tenants/{tenantId}:
+    parameters:
+      - $ref: '#/components/parameters/TenantId'
+
+    get:
+      tags: [Tenants]
+      summary: Tenant-Details abrufen
+      operationId: getTenant
+      responses:
+        '200':
+          description: Tenant-Details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tenant'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ============================================
+  # Users (Identity-Modul)
+  # ============================================
+  /tenants/{tenantId}/users:
+    parameters:
+      - $ref: '#/components/parameters/TenantId'
+
+    get:
+      tags: [Users]
+      summary: Benutzer auflisten
+      operationId: listUsers
+      parameters:
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/PageToken'
+        - name: filter
+          in: query
+          schema:
+            type: string
+          description: OData-Filter (z.B. "accountEnabled eq true")
+        - name: search
+          in: query
+          schema:
+            type: string
+          description: Volltextsuche in displayName und mail
+      responses:
+        '200':
+          description: Benutzerliste
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /tenants/{tenantId}/users/{userId}:
+    parameters:
+      - $ref: '#/components/parameters/TenantId'
+      - $ref: '#/components/parameters/UserId'
+
+    get:
+      tags: [Users]
+      summary: Benutzer-Details abrufen
+      operationId: getUser
+      responses:
+        '200':
+          description: Benutzer-Details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /tenants/{tenantId}/users/{userId}/disable:
+    parameters:
+      - $ref: '#/components/parameters/TenantId'
+      - $ref: '#/components/parameters/UserId'
+
+    post:
+      tags: [Users]
+      summary: Benutzer deaktivieren
+      operationId: disableUser
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                revokeSignInSessions:
+                  type: boolean
+                  default: true
+                  description: Alle aktiven Sessions beenden
+      responses:
+        '202':
+          description: Job erstellt
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Job'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ============================================
+  # Devices (Intune-Modul)
+  # ============================================
+  /tenants/{tenantId}/devices:
+    parameters:
+      - $ref: '#/components/parameters/TenantId'
+
+    get:
+      tags: [Devices]
+      summary: Geraete auflisten
+      operationId: listDevices
+      parameters:
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/PageToken'
+        - name: complianceState
+          in: query
+          schema:
+            type: string
+            enum: [compliant, noncompliant, unknown]
+      responses:
+        '200':
+          description: Geraeteliste
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /tenants/{tenantId}/devices/{deviceId}/sync:
+    parameters:
+      - $ref: '#/components/parameters/TenantId'
+      - $ref: '#/components/parameters/DeviceId'
+
+    post:
+      tags: [Devices]
+      summary: Gerät synchronisieren (Intune-Sync anfordern)
+      operationId: syncDevice
+      responses:
+        '202':
+          description: Job erstellt
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Job'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ============================================
+  # AVD
+  # ============================================
+  /tenants/{tenantId}/avd/host-pools:
+    parameters:
+      - $ref: '#/components/parameters/TenantId'
+
+    get:
+      tags: [AVD]
+      summary: Host Pools auflisten
+      operationId: listHostPools
+      responses:
+        '200':
+          description: Host-Pool-Liste
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HostPoolList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /tenants/{tenantId}/avd/host-pools/{hostPoolId}/session-hosts:
+    parameters:
+      - $ref: '#/components/parameters/TenantId'
+      - $ref: '#/components/parameters/HostPoolId'
+
+    get:
+      tags: [AVD]
+      summary: Session Hosts auflisten
+      operationId: listSessionHosts
+      responses:
+        '200':
+          description: Session-Host-Liste
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionHostList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /tenants/{tenantId}/avd/session-hosts/{sessionHostId}/start:
+    parameters:
+      - $ref: '#/components/parameters/TenantId'
+      - $ref: '#/components/parameters/SessionHostId'
+
+    post:
+      tags: [AVD]
+      summary: Session Host starten
+      operationId: startSessionHost
+      responses:
+        '202':
+          description: Job erstellt
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Job'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /tenants/{tenantId}/avd/sessions:
+    parameters:
+      - $ref: '#/components/parameters/TenantId'
+
+    get:
+      tags: [AVD]
+      summary: Aktive Sessions auflisten
+      operationId: listSessions
+      parameters:
+        - name: hostPoolId
+          in: query
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Session-Liste (live von Graph)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ============================================
+  # Jobs
+  # ============================================
+  /jobs:
+    get:
+      tags: [Jobs]
+      summary: Jobs auflisten
+      operationId: listJobs
+      parameters:
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/PageToken'
+        - name: tenantId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, preview-ready, approved, running, completed, failed, cancelled]
+      responses:
+        '200':
+          description: Job-Liste
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /jobs/{jobId}:
+    parameters:
+      - $ref: '#/components/parameters/JobId'
+
+    get:
+      tags: [Jobs]
+      summary: Job-Details abrufen
+      operationId: getJob
+      responses:
+        '200':
+          description: Job-Details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Job'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /jobs/{jobId}/approve:
+    parameters:
+      - $ref: '#/components/parameters/JobId'
+
+    post:
+      tags: [Jobs]
+      summary: Job-Preview bestaetigen und Ausfuehrung starten
+      operationId: approveJob
+      responses:
+        '200':
+          description: Job bestaetigt
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Job'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Job nicht im Status preview-ready
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+  /jobs/{jobId}/cancel:
+    parameters:
+      - $ref: '#/components/parameters/JobId'
+
+    post:
+      tags: [Jobs]
+      summary: Job abbrechen
+      operationId: cancelJob
+      responses:
+        '200':
+          description: Job abgebrochen
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Job'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Job kann nicht abgebrochen werden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+  # ============================================
+  # Audit
+  # ============================================
+  /audit:
+    get:
+      tags: [Audit]
+      summary: Audit-Eintraege auflisten
+      operationId: listAuditEntries
+      parameters:
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/PageToken'
+        - name: tenantId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: action
+          in: query
+          schema:
+            type: string
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: Audit-Eintraege
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditEntryList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Entra-ID-Bearer-Token
+
+  parameters:
+    TenantId:
+      name: tenantId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+    UserId:
+      name: userId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+    DeviceId:
+      name: deviceId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+    HostPoolId:
+      name: hostPoolId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+    SessionHostId:
+      name: sessionHostId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+    JobId:
+      name: jobId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+    PageSize:
+      name: pageSize
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 25
+
+    PageToken:
+      name: pageToken
+      in: query
+      schema:
+        type: string
+      description: Opaque Token fuer Pagination
+
+  schemas:
+    # ============================================
+    # Fehlerformat (RFC 9457)
+    # ============================================
+    ProblemDetails:
+      type: object
+      required: [type, title, status]
+      properties:
+        type:
+          type: string
+          format: uri
+          description: URI-Referenz zum Fehlertyp
+          example: "https://api.zerostress.io/problems/tenant-not-found"
+        title:
+          type: string
+          description: Kurze, menschenlesbare Zusammenfassung
+          example: "Tenant not found"
+        status:
+          type: integer
+          description: HTTP-Statuscode
+          example: 404
+        detail:
+          type: string
+          description: Detaillierte Fehlerbeschreibung
+          example: "Tenant with ID '123' does not exist or you don't have access"
+        instance:
+          type: string
+          format: uri
+          description: URI-Referenz zur spezifischen Fehlerinstanz
+        correlationId:
+          type: string
+          format: uuid
+          description: Correlation-ID fuer Debugging
+
+    # ============================================
+    # Tenant
+    # ============================================
+    Tenant:
+      type: object
+      required: [id, microsoftTenantId, displayName, authMethod, syncStatus]
+      properties:
+        id:
+          type: string
+          format: uuid
+        microsoftTenantId:
+          type: string
+        displayName:
+          type: string
+        primaryDomain:
+          type: string
+        authMethod:
+          type: string
+          enum: [gdap, app-consent]
+        onboardedAt:
+          type: string
+          format: date-time
+        lastSyncAt:
+          type: string
+          format: date-time
+        syncStatus:
+          type: string
+          enum: [pending, syncing, synced, error]
+        isActive:
+          type: boolean
+
+    TenantCreate:
+      type: object
+      required: [microsoftTenantId, displayName, authMethod]
+      properties:
+        microsoftTenantId:
+          type: string
+        displayName:
+          type: string
+        authMethod:
+          type: string
+          enum: [gdap, app-consent]
+
+    TenantList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Tenant'
+        nextPageToken:
+          type: string
+
+    # ============================================
+    # User
+    # ============================================
+    User:
+      type: object
+      required: [id, userPrincipalName, accountEnabled]
+      properties:
+        id:
+          type: string
+          format: uuid
+        microsoftId:
+          type: string
+        userPrincipalName:
+          type: string
+        displayName:
+          type: string
+        mail:
+          type: string
+        accountEnabled:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+
+    UserList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/User'
+        nextPageToken:
+          type: string
+
+    # ============================================
+    # Device
+    # ============================================
+    Device:
+      type: object
+      required: [id, deviceName, complianceState]
+      properties:
+        id:
+          type: string
+          format: uuid
+        microsoftId:
+          type: string
+        deviceName:
+          type: string
+        operatingSystem:
+          type: string
+        osVersion:
+          type: string
+        complianceState:
+          type: string
+          enum: [compliant, noncompliant, unknown]
+        lastSyncDateTime:
+          type: string
+          format: date-time
+
+    DeviceList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Device'
+        nextPageToken:
+          type: string
+
+    # ============================================
+    # AVD
+    # ============================================
+    HostPool:
+      type: object
+      required: [id, name, hostPoolType]
+      properties:
+        id:
+          type: string
+          format: uuid
+        azureResourceId:
+          type: string
+        name:
+          type: string
+        resourceGroup:
+          type: string
+        hostPoolType:
+          type: string
+          enum: [personal, pooled]
+        loadBalancerType:
+          type: string
+          enum: [breadthFirst, depthFirst]
+        maxSessionLimit:
+          type: integer
+
+    HostPoolList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/HostPool'
+
+    SessionHost:
+      type: object
+      required: [id, name, status]
+      properties:
+        id:
+          type: string
+          format: uuid
+        azureResourceId:
+          type: string
+        name:
+          type: string
+        status:
+          type: string
+          enum: [available, unavailable, shutdown, upgrading]
+        sessions:
+          type: integer
+        lastHeartbeat:
+          type: string
+          format: date-time
+
+    SessionHostList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/SessionHost'
+
+    Session:
+      type: object
+      required: [id, userName, state]
+      properties:
+        id:
+          type: string
+        userName:
+          type: string
+        sessionHostName:
+          type: string
+        state:
+          type: string
+          enum: [active, disconnected, pending]
+        createTime:
+          type: string
+          format: date-time
+
+    SessionList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Session'
+
+    # ============================================
+    # Job
+    # ============================================
+    Job:
+      type: object
+      required: [id, type, tenantId, status, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          example: "user.disable"
+        tenantId:
+          type: string
+          format: uuid
+        payload:
+          type: object
+        status:
+          type: string
+          enum: [pending, preview-pending, preview-ready, approved, running, completed, failed, cancelled]
+        priority:
+          type: string
+          enum: [low, normal, high, critical]
+        createdBy:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        startedAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+        result:
+          type: object
+        error:
+          $ref: '#/components/schemas/JobError'
+        retryCount:
+          type: integer
+        correlationId:
+          type: string
+          format: uuid
+        preview:
+          $ref: '#/components/schemas/JobPreview'
+
+    JobError:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        retryable:
+          type: boolean
+
+    JobPreview:
+      type: object
+      properties:
+        changes:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlannedChange'
+        warnings:
+          type: array
+          items:
+            type: string
+        estimatedDuration:
+          type: integer
+          description: Geschaetzte Dauer in Sekunden
+        expiresAt:
+          type: string
+          format: date-time
+
+    PlannedChange:
+      type: object
+      required: [objectType, objectId, action]
+      properties:
+        objectType:
+          type: string
+        objectId:
+          type: string
+        objectDisplayName:
+          type: string
+        action:
+          type: string
+          enum: [create, update, delete]
+        before:
+          type: object
+        after:
+          type: object
+
+    JobList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Job'
+        nextPageToken:
+          type: string
+
+    # ============================================
+    # Audit
+    # ============================================
+    AuditEntry:
+      type: object
+      required: [id, timestamp, userId, action, result]
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        timestamp:
+          type: string
+          format: date-time
+        userId:
+          type: string
+          format: uuid
+        userDisplayName:
+          type: string
+        action:
+          type: string
+        targetType:
+          type: string
+        targetId:
+          type: string
+        targetDisplayName:
+          type: string
+        beforeState:
+          type: object
+        afterState:
+          type: object
+        result:
+          type: string
+          enum: [success, failure, partial]
+        errorMessage:
+          type: string
+        correlationId:
+          type: string
+          format: uuid
+
+    AuditEntryList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditEntry'
+        nextPageToken:
+          type: string
+
+  responses:
+    BadRequest:
+      description: Ungueltige Anfrage
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+
+    Unauthorized:
+      description: Nicht authentifiziert
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+
+    Forbidden:
+      description: Keine Berechtigung
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+
+    NotFound:
+      description: Ressource nicht gefunden
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+
+    Conflict:
+      description: Konflikt (z.B. Ressource existiert bereits)
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+
+security:
+  - bearerAuth: []
