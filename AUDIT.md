@@ -1,160 +1,256 @@
-# Repository Audit Report: AVDManagement
+# Repository Audit Report: ZeroStress Cockpit (AVDManagement)
 
-**Audit-Datum:** 2026-01-29
-**Repository:** cramboeck/AVDManagement
+**Audit-Datum:** 2026-09-06  
+**Repository:** cramboeck/AVDManagement  
 **Branch:** claude/document-and-audit-repo-DeKtL
 
 ---
 
 ## 1. Zusammenfassung
 
-Das Repository `AVDManagement` ist ein **leeres Git-Repository** ohne Quellcode, Konfigurationsdateien oder Dokumentation. Es wurde initialisiert, aber es wurden noch keine Dateien eingecheckt und keine Commits erstellt.
+Das Repository `AVDManagement` ist die kuenftige Codebasis fuer **ZeroStress Cockpit** — eine Multi-Tenant-SaaS-Managementkonsole fuer Microsoft-Cloud-Umgebungen (AVD, Intune, M365, Exchange Online).
 
-## 2. Repository-Struktur
+**Aktueller Zustand:** Das Repository ist ein frisch initialisiertes Git-Repository. Es enthaelt die Projektkonstitution (CLAUDE.md), aber noch keinen Quellcode.
+
+## 2. Projektueberblick
+
+### 2.1 Produkt
+Webbasierte Konsole zur Verwaltung von:
+- Azure Virtual Desktop (AVD)
+- Microsoft Intune
+- Microsoft 365 (Identitaeten/Lizenzen)
+- Exchange Online
+
+**Zielgruppe:** MSPs im DACH-Raum  
+**Positionierung:** Die UX, die das Azure-Portal nicht hat
+
+### 2.2 Architekturprinzipien (aus CLAUDE.md)
+
+| Prinzip | Beschreibung |
+|---------|--------------|
+| Provider-Abstraktion | Jede Microsoft-API hinter `ResourceProvider`-Interface |
+| Modul-Registry | Fachmodule registrieren sich ueber Contract-Objekte |
+| Job-basierte Writes | Synchrone Writes verboten; alles ueber Job-Queue |
+| Preview vor Write | Diff/Plan vor destruktiven Aktionen |
+| Throttling-Handling | Graph 429 als Normalbetrieb, nicht als Fehler |
+| Tenant-Isolation | TenantId in jeder Query und jedem Cache-Key |
+
+### 2.3 Technologie-Stack (geplant)
+
+| Komponente | Technologie |
+|------------|-------------|
+| Frontend | TypeScript (strict), React |
+| Backend | TypeScript (strict) |
+| API | Microsoft Graph |
+| Auth | Entra ID mit MFA/FIDO2 |
+| Secrets | Azure Key Vault / Managed Identity |
+| Scripting | PowerShell 5.1 (ASCII-only) |
+
+## 3. Repository-Struktur (aktuell)
 
 ```
 AVDManagement/
-└── .git/               # Git-Metadaten (einziges Verzeichnis)
-    ├── config           # Git-Konfiguration (Remote: origin)
-    ├── HEAD             # Aktueller Branch-Zeiger
-    ├── FETCH_HEAD       # Letzter Fetch-Zustand
-    ├── description      # Repository-Beschreibung (Standard)
-    ├── info/
-    │   └── exclude      # Lokale Ignore-Patterns
-    ├── hooks/           # 14 Beispiel-Hook-Skripte (Standard)
-    ├── objects/          # (leer - keine Commits)
-    ├── refs/
-    │   ├── heads/       # (leer - keine lokalen Branches)
-    │   └── tags/        # (leer - keine Tags)
-    └── branches/         # (leer - veraltet)
+├── CLAUDE.md            # Projektkonstitution
+├── AUDIT.md             # Dieser Audit-Bericht
+└── .git/                # Git-Metadaten
 ```
 
-**Arbeitsdateien im Repository:** 0
-**Gesamtgroesse:** ~75 KB (ausschliesslich `.git/`-Verzeichnis)
+## 4. Empfohlene Projektstruktur
 
-## 3. Technologie-Stack
+Basierend auf den Architekturprinzipien in CLAUDE.md:
 
-Nicht ermittelbar -- das Repository enthaelt keinen Quellcode oder Konfigurationsdateien, die Rueckschluesse auf verwendete Technologien erlauben wuerden.
-
-Basierend auf dem Repository-Namen "AVDManagement" laesst sich vermuten, dass es sich um ein Projekt zur Verwaltung von **Azure Virtual Desktops (AVD)** handelt. Typische Technologien fuer solche Projekte waeren:
-
-- **PowerShell** (Azure-Automatisierung)
-- **Bicep / ARM Templates** (Infrastructure as Code)
-- **Terraform** (alternative IaC)
-- **Azure CLI / Az Module**
-- **JSON/YAML** (Konfiguration)
-
-## 4. Identifizierte Probleme und Befunde
-
-### 4.1 Kritische Befunde
-
-| Nr. | Kategorie        | Befund                                         | Schweregrad |
-|-----|------------------|-------------------------------------------------|-------------|
-| 1   | Projektstruktur  | Kein Quellcode vorhanden                        | Kritisch    |
-| 2   | Dokumentation    | Keine README.md vorhanden                       | Kritisch    |
-| 3   | Versionierung    | Keine Commits in der Git-Historie               | Kritisch    |
-| 4   | Konfiguration    | Keine .gitignore-Datei vorhanden                | Hoch        |
-| 5   | CI/CD            | Keine Pipeline-Konfiguration vorhanden          | Hoch        |
-| 6   | Sicherheit       | Keine CODEOWNERS-Datei vorhanden                | Mittel      |
-| 7   | Qualitaet        | Keine Linting- oder Formatierungsregeln         | Mittel      |
-
-### 4.2 Detaillierte Beschreibung der Befunde
-
-#### Befund 1: Kein Quellcode vorhanden
-Das Repository enthaelt keine einzige Datei im Arbeitsverzeichnis. Es gibt keinen Code, keine Skripte und keine Konfigurationen.
-
-**Empfehlung:** Initiale Projektstruktur anlegen, z.B.:
 ```
 AVDManagement/
-├── README.md
-├── .gitignore
-├── LICENSE
-├── src/                    # Quellcode
-├── modules/                # Wiederverwendbare Module
-├── templates/              # ARM/Bicep Templates
-├── scripts/                # Automatisierungsskripte
-├── tests/                  # Tests
-├── docs/                   # Dokumentation
+├── CLAUDE.md                    # Projektkonstitution
+├── README.md                    # Projektbeschreibung
+├── CHANGELOG.md                 # Aenderungshistorie (DoD-Anforderung)
+├── LICENSE                      # Lizenz
+├── .gitignore                   # Ausschlussmuster
+├── package.json                 # Abhaengigkeiten
+├── tsconfig.json                # TypeScript-Konfiguration
+│
+├── src/
+│   ├── core/                    # Kern-Infrastruktur
+│   │   ├── providers/           # ResourceProvider-Interfaces
+│   │   ├── registry/            # Modul-Registry
+│   │   ├── jobs/                # Job-Queue-System
+│   │   ├── audit/               # Audit-Logging
+│   │   └── auth/                # Entra-ID-Integration
+│   │
+│   ├── modules/                 # Fachmodule (Plugin-Architektur)
+│   │   ├── avd/                 # Azure Virtual Desktop
+│   │   │   ├── contract.ts      # Modul-Contract
+│   │   │   ├── provider.ts      # AVD ResourceProvider
+│   │   │   ├── routes.ts        # API-Routen
+│   │   │   ├── jobs/            # AVD-spezifische Jobs
+│   │   │   └── components/      # UI-Komponenten
+│   │   ├── intune/              # Microsoft Intune
+│   │   ├── identity/            # M365 Identitaeten/Lizenzen
+│   │   └── exchange/            # Exchange Online
+│   │
+│   ├── shared/                  # Geteilte Komponenten
+│   │   ├── ui/                  # UI-Bibliothek
+│   │   └── utils/               # Hilfsfunktionen
+│   │
+│   └── api/                     # API-Layer
+│       ├── graph/               # Graph-Client mit Throttling
+│       └── batch/               # $batch-Request-Handler
+│
+├── tests/
+│   ├── fixtures/                # Aufgezeichnete Graph-Responses
+│   ├── unit/                    # Unit-Tests
+│   └── integration/             # Integrationstests
+│
+├── scripts/                     # PowerShell-Skripte
+│
+├── docs/                        # Dokumentation
+│   └── permissions/             # Graph-Permissions pro Modul
+│
 └── .github/
-    └── workflows/          # CI/CD Pipelines
+    └── workflows/               # CI/CD-Pipelines
 ```
 
-#### Befund 2: Keine README.md
-Eine README.md ist essenziell fuer jedes Repository. Sie sollte enthalten:
-- Projektbeschreibung und Zweck
-- Voraussetzungen und Setup-Anweisungen
-- Verwendung und Beispiele
-- Beitragsrichtlinien
-- Lizenzinformationen
+## 5. Identifizierte Luecken und Empfehlungen
 
-#### Befund 3: Keine Commits
-Das Repository hat keinerlei Git-Historie. Es gibt weder auf dem aktuellen Branch noch auf Remote-Branches irgendwelche Commits.
+### 5.1 Fehlende Basis-Dateien
 
-#### Befund 4: Keine .gitignore
-Ohne .gitignore besteht die Gefahr, dass sensible Dateien (Zugangsdaten, Zertifikate, lokale Konfigurationen) versehentlich eingecheckt werden.
+| Datei | Status | Prioritaet | Empfehlung |
+|-------|--------|------------|------------|
+| README.md | Fehlt | Kritisch | Projektbeschreibung, Setup, Beitragsrichtlinien |
+| .gitignore | Fehlt | Kritisch | Sensible Dateien ausschliessen (s.u.) |
+| CHANGELOG.md | Fehlt | Hoch | DoD verlangt Eintraege bei jeder Aufgabe |
+| LICENSE | Fehlt | Hoch | Lizenzmodell festlegen |
+| package.json | Fehlt | Hoch | Abhaengigkeiten definieren |
+| tsconfig.json | Fehlt | Hoch | TypeScript strict-Modus konfigurieren |
 
-**Empfehlung:** Eine .gitignore-Datei mit folgenden Eintraegen erstellen:
-```
-# Azure / Secrets
+### 5.2 Empfohlene .gitignore
+
+```gitignore
+# Abhaengigkeiten
+node_modules/
+
+# Build-Artefakte
+dist/
+build/
+*.js.map
+
+# TypeScript
+*.tsbuildinfo
+
+# Secrets (NIEMALS einchecken!)
+.env
+.env.local
+.env.*.local
 *.pfx
 *.pem
 *.key
-*.env
 local.settings.json
+appsettings.Development.json
 
-# OS
-.DS_Store
-Thumbs.db
+# Azure
+.azure/
 
 # IDE
 .vscode/
 .idea/
 *.swp
+*.swo
 
-# Build
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
 *.log
-bin/
-obj/
+logs/
+
+# Tests
+coverage/
+.nyc_output/
+
+# Temp
+tmp/
+temp/
 ```
 
-#### Befund 5: Keine CI/CD-Pipeline
-Es gibt keine GitHub Actions, Azure DevOps Pipelines oder andere CI/CD-Konfigurationen.
+### 5.3 Empfohlene tsconfig.json
 
-**Empfehlung:** GitHub Actions Workflow erstellen fuer:
-- Code-Validierung (Linting)
-- Template-Validierung (z.B. `az bicep build`)
-- Automatisierte Tests
-- Deployment-Pipeline
+```json
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "declaration": true,
+    "outDir": "./dist",
+    "rootDir": "./src"
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist", "tests"]
+}
+```
 
-#### Befund 6: Keine CODEOWNERS
-Ohne CODEOWNERS-Datei gibt es keine automatische Zuweisung von Reviewern bei Pull Requests.
+## 6. Sicherheits-Checkliste (aus CLAUDE.md)
 
-#### Befund 7: Keine Code-Qualitaetsregeln
-Es existieren keine Konfigurationen fuer:
-- PSScriptAnalyzer (PowerShell)
-- EditorConfig
-- Pre-commit Hooks
+Die folgenden Sicherheitsanforderungen muessen bei der Implementierung eingehalten werden:
 
-## 5. Sicherheitsanalyse
+| Anforderung | Status | Pruefung |
+|-------------|--------|----------|
+| Keine Secrets in Repo/DB/ENV/Logs | Offen | Code-Review + Secret-Scanning |
+| Azure Key Vault / Managed Identity | Offen | Architektur-Review |
+| Entra ID mit MFA | Offen | Auth-Implementierung |
+| FIDO2/Passkey-Support | Offen | Auth-Implementierung |
+| Unveraenderliches Audit-Log | Offen | Audit-Modul-Implementierung |
+| Vorher-/Nachher-Werte im Audit | Offen | Provider-Implementierung |
+| Keine PII in Logs/Telemetrie | Offen | Log-Review |
+| DSGVO-konform, EU-Hosting | Offen | Infrastruktur-Planung |
 
-Da kein Quellcode vorhanden ist, konnte keine Code-Sicherheitsanalyse durchgefuehrt werden. Folgende Aspekte sollten bei der Entwicklung beruecksichtigt werden:
+## 7. Definition of Done (DoD) Checkliste
 
-- **Secrets Management:** Azure Key Vault verwenden statt hartcodierter Zugangsdaten
-- **RBAC:** Minimale Berechtigungen (Least Privilege) fuer Service Principals
-- **Network Security:** Private Endpoints und NSGs fuer AVD-Ressourcen
-- **Logging:** Diagnostics Settings fuer Audit-Trail
-- **Compliance:** Sicherstellen, dass AVD-Konfigurationen den Unternehmensrichtlinien entsprechen
+Pro Aufgabe muessen folgende Punkte erfuellt sein:
 
-## 6. Empfohlene naechste Schritte
+- [ ] Tests gruen, inkl. mindestens einem Fehlerpfad (401, 403, 429, 404)
+- [ ] Audit-Eintrag wird erzeugt und ist geprueft
+- [ ] Loading-, Empty-, Error- und Partial-Failure-State in der UI vorhanden
+- [ ] Keyboard bedienbar, Fokusreihenfolge sinnvoll
+- [ ] Benoetigte Graph-Permissions im Modul-Contract dokumentiert
+- [ ] Eintrag im CHANGELOG
 
-1. **README.md erstellen** mit Projektbeschreibung und Setup-Anweisungen
-2. **.gitignore hinzufuegen** mit relevanten Ausschlussmustern
-3. **Initiale Projektstruktur anlegen** (Verzeichnisse, Basis-Dateien)
-4. **CI/CD-Pipeline einrichten** (GitHub Actions oder Azure DevOps)
-5. **Quellcode entwickeln** fuer AVD-Management-Funktionen
-6. **Tests schreiben** fuer alle kritischen Funktionen
-7. **Dokumentation pflegen** waehrend der Entwicklung
+## 8. Naechste Schritte
+
+1. **Basis-Infrastruktur erstellen**
+   - README.md mit Projektbeschreibung
+   - .gitignore mit Sicherheitsausschluessen
+   - CHANGELOG.md initialisieren
+   - package.json mit TypeScript-Setup
+   - tsconfig.json mit strict-Modus
+
+2. **Core-Module implementieren**
+   - ResourceProvider-Interface definieren
+   - Modul-Registry aufbauen
+   - Job-Queue-System entwickeln
+   - Audit-Log-Infrastruktur
+
+3. **Erstes Fachmodul (AVD)**
+   - Contract definieren
+   - Provider implementieren
+   - Tests mit Fixtures schreiben
+
+4. **CI/CD einrichten**
+   - GitHub Actions fuer Linting/Tests
+   - Secret-Scanning aktivieren
+   - TypeScript-Compilation pruefen
 
 ---
 
-*Dieser Audit-Bericht wurde automatisch erstellt.*
+*Dieser Audit-Bericht dokumentiert den aktuellen Zustand des Repositories und gibt Empfehlungen fuer die weitere Entwicklung basierend auf der Projektkonstitution (CLAUDE.md).*
