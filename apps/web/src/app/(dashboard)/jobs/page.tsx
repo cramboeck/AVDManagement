@@ -54,7 +54,7 @@ export default function JobsPage() {
 
   const approveMutation = useMutation({
     mutationFn: (jobId: string) =>
-      api.post(`/tenants/${activeTenant!.id}/jobs/${jobId}/approve`),
+      api.post<Job>(`/tenants/${activeTenant!.id}/jobs/${jobId}/approve`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['jobs', activeTenant?.id] });
       setSelectedJob(null);

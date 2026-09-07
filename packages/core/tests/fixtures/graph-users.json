@@ -7,6 +7,7 @@
         "displayName": "Max Mustermann",
         "mail": "max.mustermann@contoso.com",
         "accountEnabled": true,
+        "userType": "Member",
         "createdDateTime": "2024-01-15T10:30:00Z"
       },
       {
@@ -15,6 +16,7 @@
         "displayName": "Erika Musterfrau",
         "mail": "erika.musterfrau@contoso.com",
         "accountEnabled": true,
+        "userType": "Member",
         "createdDateTime": "2024-02-20T14:45:00Z"
       },
       {
@@ -23,6 +25,7 @@
         "displayName": "Service Account",
         "mail": null,
         "accountEnabled": false,
+        "userType": "Member",
         "createdDateTime": "2023-06-01T08:00:00Z"
       }
     ],
@@ -36,6 +39,7 @@
         "displayName": "Test User",
         "mail": "test.user@contoso.com",
         "accountEnabled": true,
+        "userType": "Guest",
         "createdDateTime": "2024-03-01T09:00:00Z"
       }
     ]
@@ -48,6 +52,7 @@
         "displayName": "Max Mustermann (Updated)",
         "mail": "max.mustermann@contoso.com",
         "accountEnabled": true,
+        "userType": "Member",
         "createdDateTime": "2024-01-15T10:30:00Z"
       },
       {
@@ -63,6 +68,7 @@
     "displayName": "Max Mustermann",
     "mail": "max.mustermann@contoso.com",
     "accountEnabled": true,
+    "userType": "Member",
     "createdDateTime": "2024-01-15T10:30:00Z"
   },
   "userLicenses": {

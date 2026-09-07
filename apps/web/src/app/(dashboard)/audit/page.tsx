@@ -49,8 +49,9 @@ export default function AuditPage() {
       if (filters.outcome) params.set('outcome', filters.outcome);
       if (filters.search) params.set('search', filters.search);
       if (pageToken) params.set('pageToken', pageToken);
+      const queryString = params.toString();
       return api.get<AuditResponse>(
-        `/tenants/${activeTenant!.id}/audit?${params}`
+        `/tenants/${activeTenant!.id}/audit${queryString ? `?${queryString}` : ''}`
       );
     },
     enabled: !!activeTenant,

@@ -2,13 +2,15 @@
 
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useRouter } from 'next/navigation';
 import { useTenant } from '@/hooks/use-tenant';
 import { api } from '@/lib/api';
 import { NoTenantSelected, NoResults } from '@/components/ui/empty-state';
 import { LoadingTable } from '@/components/ui/loading';
 import { ErrorState } from '@/components/ui/error-state';
+import { AssignLicenseDialog } from '@/components/assign-license-dialog';
 import clsx from 'clsx';
-import type { SyncedUser } from '@zerostress/types';
+import type { SyncedUser, Job } from '@zerostress/types';
 
 interface UsersResponse {
   items: SyncedUser[];
@@ -18,8 +20,10 @@ interface UsersResponse {
 
 export default function UsersPage() {
   const { activeTenant, isLoading: tenantLoading } = useTenant();
+  const router = useRouter();
   const [search, setSearch] = useState('');
   const [pageToken, setPageToken] = useState<string | null>(null);
+  const [selectedUser, setSelectedUser] = useState<SyncedUser | null>(null);
 
   const {
     data,
@@ -71,7 +75,7 @@ export default function UsersPage() {
         <NoResults query={search} />
       ) : (
         <>
-          <UserTable users={data.items} />
+          <UserTable users={data.items} onAssignLicense={setSelectedUser} />
           <Pagination
             hasNext={!!data.nextPageToken}
             onNext={() => setPageToken(data.nextPageToken)}
@@ -79,6 +83,17 @@ export default function UsersPage() {
             hasPrev={!!pageToken}
           />
         </>
+      )}
+
+      {selectedUser && (
+        <AssignLicenseDialog
+          user={selectedUser}
+          onClose={() => setSelectedUser(null)}
+          onSuccess={(job: Job) => {
+            setSelectedUser(null);
+            router.push('/jobs');
+          }}
+        />
       )}
     </div>
   );
@@ -119,7 +134,13 @@ function SearchInput({
   );
 }
 
-function UserTable({ users }: { users: SyncedUser[] }) {
+function UserTable({
+  users,
+  onAssignLicense,
+}: {
+  users: SyncedUser[];
+  onAssignLicense: (user: SyncedUser) => void;
+}) {
   return (
     <div className="overflow-x-auto rounded-lg border">
       <table className="w-full text-sm">
@@ -176,13 +197,17 @@ function UserTable({ users }: { users: SyncedUser[] }) {
               </td>
               <td className="px-4 py-3 text-right">
                 <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onAssignLicense(user);
+                  }}
                   className={clsx(
                     'rounded px-2 py-1 text-xs',
                     'hover:bg-accent',
                     'focus:outline-none focus-visible:ring-2 focus-visible:ring-primary'
                   )}
                 >
-                  Bearbeiten
+                  Lizenz zuweisen
                 </button>
               </td>
             </tr>

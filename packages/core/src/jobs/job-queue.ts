@@ -98,10 +98,12 @@ export class JobQueue {
       tenantId: input.tenantId,
       mspId: input.mspId,
       payload: input.payload,
-      status: registered.definition.requiresPreview ? 'preview-pending' : 'pending',
+      status: registered.definition.requiresPreview ? 'pending_approval' : 'queued',
       priority: input.priority ?? 'normal',
       createdBy: input.userId,
-      createdAt: now,
+      createdByEmail: input.userEmail ?? '',
+      targetCount: (input.payload.targetIds as unknown[])?.length ?? 1,
+      createdAt: now.toISOString(),
       startedAt: null,
       completedAt: null,
       result: null,
@@ -117,7 +119,6 @@ export class JobQueue {
     if (registered.definition.requiresPreview && registered.previewGenerator) {
       const preview = await this.generatePreview(job, registered.previewGenerator);
       await this.jobStore.update(id, {
-        status: 'preview-ready',
         preview: {
           ...preview,
           expiresAt: new Date(Date.now() + 5 * 60 * 1000),
@@ -139,7 +140,7 @@ export class JobQueue {
       throw new JobError(jobId, 'NOT_FOUND', 'Job not found', false);
     }
 
-    if (job.status !== 'preview-ready') {
+    if (job.status !== 'pending_approval') {
       throw new JobError(
         jobId,
         'INVALID_STATE',
@@ -152,8 +153,8 @@ export class JobQueue {
       throw new JobError(jobId, 'PREVIEW_EXPIRED', 'Preview has expired', false);
     }
 
-    await this.jobStore.update(jobId, { status: 'approved' });
-    await this.enqueue({ ...job, status: 'approved' });
+    await this.jobStore.update(jobId, { status: 'queued' });
+    await this.enqueue({ ...job, status: 'queued' });
 
     return (await this.jobStore.findById(jobId))!;
   }
@@ -178,7 +179,7 @@ export class JobQueue {
 
     await this.jobStore.update(jobId, {
       status: 'cancelled',
-      completedAt: new Date(),
+      completedAt: new Date().toISOString(),
     });
 
     return (await this.jobStore.findById(jobId))!;
@@ -223,7 +224,7 @@ export class JobQueue {
 
         await this.jobStore.update(job.id, {
           status: 'running',
-          startedAt: new Date(),
+          startedAt: new Date().toISOString(),
           retryCount: bullJob.attemptsMade,
         });
 
@@ -243,7 +244,7 @@ export class JobQueue {
           if (result.success) {
             await this.jobStore.update(job.id, {
               status: 'completed',
-              completedAt: now,
+              completedAt: now.toISOString(),
               result: result.data ?? {},
             });
 
@@ -263,8 +264,8 @@ export class JobQueue {
           } else {
             await this.jobStore.update(job.id, {
               status: 'failed',
-              completedAt: now,
-              error: result.error,
+              completedAt: now.toISOString(),
+              error: result.error?.message ?? 'Unknown error',
             });
 
             await this.auditLogger.log({
@@ -287,12 +288,8 @@ export class JobQueue {
 
           await this.jobStore.update(job.id, {
             status: 'failed',
-            completedAt: new Date(),
-            error: {
-              code: 'EXECUTION_ERROR',
-              message: errorMessage,
-              retryable: bullJob.attemptsMade < registered.definition.maxRetries,
-            },
+            completedAt: new Date().toISOString(),
+            error: errorMessage,
           });
 
           await this.auditLogger.log({
@@ -361,7 +358,7 @@ export class JobQueue {
       priority: priorityMap[job.priority] ?? 3,
     });
 
-    await this.jobStore.update(job.id, { status: 'pending' });
+    await this.jobStore.update(job.id, { status: 'queued' });
   }
 
   private async generatePreview(

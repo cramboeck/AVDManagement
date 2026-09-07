@@ -29,6 +29,7 @@ interface GraphUser {
   displayName: string;
   mail: string | null;
   accountEnabled: boolean;
+  userType: 'Member' | 'Guest';
   createdDateTime: string | null;
   '@removed'?: { reason: string };
 }
@@ -86,7 +87,7 @@ export class IdentityProvider extends BaseResourceProvider {
       url = deltaToken;
     } else {
       const params = new URLSearchParams({
-        $select: 'id,userPrincipalName,displayName,mail,accountEnabled,createdDateTime',
+        $select: 'id,userPrincipalName,displayName,mail,accountEnabled,userType,createdDateTime',
         $top: String(pageSize),
       });
       url = `/users/delta?${params}`;
@@ -130,7 +131,7 @@ export class IdentityProvider extends BaseResourceProvider {
       url = pageToken;
     } else {
       const params = new URLSearchParams({
-        $select: 'id,userPrincipalName,displayName,mail,accountEnabled,createdDateTime',
+        $select: 'id,userPrincipalName,displayName,mail,accountEnabled,userType,createdDateTime',
         $top: String(pageSize),
         $orderby: 'displayName',
       });
@@ -175,7 +176,7 @@ export class IdentityProvider extends BaseResourceProvider {
     try {
       const user = await this.graphClient.get<GraphUser>(
         ctx.tenantId as string,
-        `/users/${userId}?$select=id,userPrincipalName,displayName,mail,accountEnabled,createdDateTime`,
+        `/users/${userId}?$select=id,userPrincipalName,displayName,mail,accountEnabled,userType,createdDateTime`,
         this.requiredScopes
       );
 
@@ -280,6 +281,7 @@ export class IdentityProvider extends BaseResourceProvider {
       displayName: user.displayName,
       mail: user.mail,
       accountEnabled: user.accountEnabled,
+      userType: user.userType ?? 'Member',
       createdAt: user.createdDateTime ? new Date(user.createdDateTime) : null,
       syncedAt: new Date(),
     };

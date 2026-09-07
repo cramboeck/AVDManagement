@@ -29,6 +29,7 @@ export interface CreateJobInput {
   tenantId: TenantId;
   mspId: MspId;
   userId: UserId;
+  userEmail?: string;
   payload: Record<string, unknown>;
   priority?: JobPriority;
 }
@@ -42,7 +43,7 @@ export interface JobData {
   payload: Record<string, unknown>;
   priority: JobPriority;
   correlationId: CorrelationId;
-  createdAt: Date;
+  createdAt: string;
 }
 
 export interface JobContext {

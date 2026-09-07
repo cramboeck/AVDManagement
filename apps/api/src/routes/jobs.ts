@@ -120,6 +120,7 @@ app.post(
       tenantId: tenant.id,
       mspId: auth.mspId,
       userId: auth.user.id,
+      userEmail: auth.user.email,
       payload: {
         userId: body.userId,
         userDisplayName: body.userDisplayName,
