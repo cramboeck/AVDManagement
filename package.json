@@ -16,8 +16,9 @@
     "lint": "npm run lint --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "clean": "npm run clean --workspaces --if-present && rm -rf node_modules",
-    "db:migrate": "npm run db:migrate --workspace=@zerostress/api",
-    "db:seed": "npm run db:seed --workspace=@zerostress/api"
+    "db:push": "npm run db:push --workspace=@zerostress/api",
+    "db:migrate": "npm run db:push --workspace=@zerostress/api",
+    "db:studio": "npm run db:studio --workspace=@zerostress/api"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",
