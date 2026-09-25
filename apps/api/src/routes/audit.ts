@@ -53,23 +53,26 @@ app.get('/', async (c) => {
   });
   const userMap = new Map(users.map((u) => [u.id, u.displayName]));
 
-  const items: AuditEntry[] = rows.map((row) => ({
-    id: row.id,
-    mspId: row.mspId as MspId,
-    tenantId: row.tenantId as TenantId | null,
-    timestamp: row.timestamp,
-    userId: row.userId as UserId,
-    userDisplayName: userMap.get(row.userId) ?? 'Unknown',
-    action: row.action,
-    targetType: row.targetType,
-    targetId: row.targetId,
-    targetDisplayName: row.targetDisplayName ?? '',
-    beforeState: row.beforeState as Record<string, unknown> | null,
-    afterState: row.afterState as Record<string, unknown> | null,
-    result: row.result as 'success' | 'failure' | 'partial',
-    errorMessage: row.errorMessage,
-    correlationId: row.correlationId as CorrelationId,
-  }));
+  const items: AuditEntry[] = rows.map((row) => {
+    const user = users.find((u) => u.id === row.userId);
+    return {
+      id: row.id,
+      mspId: row.mspId as MspId,
+      tenantId: row.tenantId as TenantId | null,
+      timestamp: row.timestamp.toISOString(),
+      actorId: row.userId as UserId,
+      actorEmail: user?.email ?? '',
+      action: row.action,
+      targetType: row.targetType,
+      targetId: row.targetId,
+      targetDisplayName: row.targetDisplayName ?? '',
+      previousValue: row.beforeState as Record<string, unknown> | null,
+      newValue: row.afterState as Record<string, unknown> | null,
+      outcome: row.result as 'success' | 'failure' | 'partial',
+      errorMessage: row.errorMessage,
+      correlationId: row.correlationId as CorrelationId,
+    };
+  });
 
   return c.json({ items });
 });
@@ -105,16 +108,16 @@ app.get('/:entryId', async (c) => {
     id: row.id,
     mspId: row.mspId as MspId,
     tenantId: row.tenantId as TenantId | null,
-    timestamp: row.timestamp,
-    userId: row.userId as UserId,
-    userDisplayName: user?.displayName ?? 'Unknown',
+    timestamp: row.timestamp.toISOString(),
+    actorId: row.userId as UserId,
+    actorEmail: user?.email ?? '',
     action: row.action,
     targetType: row.targetType,
     targetId: row.targetId,
     targetDisplayName: row.targetDisplayName ?? '',
-    beforeState: row.beforeState as Record<string, unknown> | null,
-    afterState: row.afterState as Record<string, unknown> | null,
-    result: row.result as 'success' | 'failure' | 'partial',
+    previousValue: row.beforeState as Record<string, unknown> | null,
+    newValue: row.afterState as Record<string, unknown> | null,
+    outcome: row.result as 'success' | 'failure' | 'partial',
     errorMessage: row.errorMessage,
     correlationId: row.correlationId as CorrelationId,
   };

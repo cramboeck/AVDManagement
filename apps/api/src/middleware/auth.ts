@@ -5,7 +5,7 @@
 import { createMiddleware } from 'hono/factory';
 import { HTTPException } from 'hono/http-exception';
 import * as jose from 'jose';
-import { eq, and } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { db, mspUsers, mspOrganizations } from '../db/index.js';
 import type { SessionUser, UserRole, MspId, UserId } from '@zerostress/types';
 
