@@ -248,7 +248,14 @@ function SecurityTab({ base, tenantId, deviceId }: { base: string; tenantId: str
   return (
     <div className="space-y-8">
       <section className="space-y-3">
-        <h2 className="font-medium">Fehlende Sicherheitsupdates</h2>
+        <div className="flex flex-wrap items-baseline gap-2">
+          <h2 className="font-medium">Fehlende Sicherheitsupdates</h2>
+          {posture.missingKbsSource === 'derived' && (
+            <span className="text-xs text-muted-foreground" title="Der Defender-Endpunkt fuer fehlende KBs ist ohne Software.Read.All nicht verfuegbar; die Liste ist aus den Schwachstellen des Geraets abgeleitet.">
+              abgeleitet aus Schwachstellen
+            </span>
+          )}
+        </div>
         {!posture.missingKbs.available ? (
           <CapabilityNotice what="fehlende Sicherheitsupdates" {...posture.missingKbs} />
         ) : posture.missingKbs.data.length === 0 ? (

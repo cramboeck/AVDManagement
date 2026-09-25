@@ -63,7 +63,11 @@ app.get('/:deviceId/security', requireConnectedTenant, async (c) => {
       missingPermission: null,
       detail: null,
     };
-    const posture: DeviceSecurityPosture = { vulnerabilities: notOnboarded, missingKbs: notOnboarded };
+    const posture: DeviceSecurityPosture = {
+      vulnerabilities: notOnboarded,
+      missingKbs: notOnboarded,
+      missingKbsSource: null,
+    };
     return c.json(posture);
   }
 

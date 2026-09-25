@@ -443,6 +443,8 @@ export interface MissingKb {
 export interface DeviceSecurityPosture {
   vulnerabilities: CapabilityResult<DeviceVulnerability[]>;
   missingKbs: CapabilityResult<MissingKb[]>;
+  // 'derived': aus den Schwachstellen des Geraets abgeleitet, weil der KB-Endpunkt nicht verfuegbar war
+  missingKbsSource: 'defender' | 'derived' | null;
 }
 
 // Schwachstelle aus Sicht des Tenants (Defender)

@@ -180,19 +180,50 @@ describe('DeviceProvider', () => {
     });
   });
 
-  it('reports the role the Defender API actually demands', async () => {
-    defender.get
-      .mockResolvedValueOnce({ value: [] })
-      .mockRejectedValueOnce(
-        new GraphApiError(
+  it('derives missing KBs from machine vulnerabilities when Software.Read.All is missing', async () => {
+    defender.get.mockImplementation(async (_tenant: string, path: string) => {
+      if (path.endsWith('/getmissingkbs')) {
+        throw new GraphApiError(
           403,
           'Forbidden',
           'Missing application roles. API required roles: Software.Read.All, application roles: Vulnerability.Read.All,Machine.Read.All.'
-        )
-      );
+        );
+      }
+      if (path.includes('machinesVulnerabilities')) {
+        expect(decodeURIComponent(path)).toContain("machineId eq 'mde-1'");
+        return {
+          value: [
+            { id: 'a', cveId: 'CVE-1', machineId: 'mde-1', fixingKbId: '5041585', productName: 'windows_11', productVendor: 'microsoft', productVersion: '23H2', severity: 'Critical' },
+            { id: 'b', cveId: 'CVE-2', machineId: 'mde-1', fixingKbId: '5041585', productName: 'windows_11', productVendor: 'microsoft', productVersion: '23H2', severity: 'High' },
+            { id: 'c', cveId: 'CVE-3', machineId: 'mde-1', fixingKbId: null, productName: 'chrome', productVendor: 'google', productVersion: '128', severity: 'Medium' },
+          ],
+        };
+      }
+      return { value: [] };
+    });
 
     const posture = await provider.getSecurityPosture(ctx, 'mde-1');
 
+    expect(posture.missingKbsSource).toBe('derived');
+    expect(posture.missingKbs.available && posture.missingKbs.data).toEqual([
+      expect.objectContaining({ id: '5041585', cveAddressed: 2, products: ['microsoft windows_11'] }),
+    ]);
+  });
+
+  it('reports the role the Defender API actually demands when no fallback is possible', async () => {
+    defender.get.mockImplementation(async (_tenant: string, path: string) => {
+      if (path.endsWith('/getmissingkbs')) {
+        throw new GraphApiError(403, 'Forbidden', 'Missing application roles. API required roles: Software.Read.All, application roles: Machine.Read.All.');
+      }
+      if (path.includes('machinesVulnerabilities')) {
+        throw new GraphApiError(403, 'Forbidden', 'Missing application roles. API required roles: Vulnerability.Read.All, application roles: Machine.Read.All.');
+      }
+      return { value: [] };
+    });
+
+    const posture = await provider.getSecurityPosture(ctx, 'mde-1');
+
+    expect(posture.missingKbsSource).toBeNull();
     expect(posture.missingKbs).toMatchObject({
       available: false,
       reason: 'permission-missing',
@@ -207,6 +238,7 @@ describe('DeviceProvider', () => {
 
     expect(posture.vulnerabilities).toMatchObject({ available: false, reason: 'not-onboarded' });
     expect(posture.missingKbs).toMatchObject({ available: false, reason: 'not-onboarded' });
+    expect(posture.missingKbsSource).toBeNull();
   });
 
   it('maps a vulnerability detail including exploit metadata', async () => {

@@ -204,12 +204,66 @@ export class DeviceProvider extends BaseResourceProvider {
   async getSecurityPosture(ctx: ProviderContext, machineId: string): Promise<DeviceSecurityPosture> {
     this.validateContext(ctx);
 
-    const [vulnerabilities, missingKbs] = await Promise.all([
+    const [vulnerabilities, directKbs] = await Promise.all([
       this.loadVulnerabilities(ctx, machineId),
       this.loadMissingKbs(ctx, machineId),
     ]);
 
-    return { vulnerabilities, missingKbs };
+    if (directKbs.available) {
+      return { vulnerabilities, missingKbs: directKbs, missingKbsSource: 'defender' };
+    }
+
+    // Ohne Software.Read.All: behebende KBs aus den Schwachstellen des Geraets ableiten
+    if (directKbs.reason === 'permission-missing') {
+      const derived = await this.deriveMissingKbs(ctx, machineId);
+      if (derived.available) {
+        return { vulnerabilities, missingKbs: derived, missingKbsSource: 'derived' };
+      }
+    }
+
+    return { vulnerabilities, missingKbs: directKbs, missingKbsSource: null };
+  }
+
+  private async deriveMissingKbs(ctx: ProviderContext, machineId: string): Promise<CapabilityResult<MissingKb[]>> {
+    try {
+      const response = await this.defenderClient.get<GraphResponse<DefenderMachineVulnerability[]>>(
+        ctx.tenantId as string,
+        `/api/vulnerabilities/machinesVulnerabilities?$filter=${encodeURIComponent(`machineId eq '${machineId}'`)}&$top=${MACHINE_VULNERABILITY_PAGE_SIZE}`,
+        DEFENDER_SCOPES
+      );
+
+      const byKb = new Map<string, { products: Set<string>; cves: Set<string> }>();
+      for (const row of response.value) {
+        if (!row.fixingKbId) continue;
+        let entry = byKb.get(row.fixingKbId);
+        if (!entry) {
+          entry = { products: new Set(), cves: new Set() };
+          byKb.set(row.fixingKbId, entry);
+        }
+        const product = [row.productVendor, row.productName].filter(Boolean).join(' ');
+        if (product) entry.products.add(product);
+        entry.cves.add(row.cveId);
+      }
+
+      return {
+        available: true,
+        data: Array.from(byKb.entries())
+          .map(([id, e]) => ({
+            id,
+            name: `Sicherheitsupdate KB${id}`,
+            osBuild: null,
+            products: Array.from(e.products).sort(),
+            url: `https://support.microsoft.com/help/${id}`,
+            cveAddressed: e.cves.size,
+            missingSince: null,
+          }))
+          .sort((a, b) => b.cveAddressed - a.cveAddressed),
+      };
+    } catch (error) {
+      const unavailable = asUnavailable(error, 'Vulnerability.Read.All');
+      if (unavailable) return unavailable;
+      throw error;
+    }
   }
 
   async getVulnerability(ctx: ProviderContext, cveId: string): Promise<CapabilityResult<VulnerabilityDetail>> {
