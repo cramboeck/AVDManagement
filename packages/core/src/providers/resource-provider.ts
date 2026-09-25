@@ -2,7 +2,7 @@
  * ResourceProvider - Basis-Interface fuer alle Microsoft-API-Provider
  */
 
-import type { TenantId, PaginatedResponse } from '@zerostress/types';
+import type { TenantId } from '@zerostress/types';
 
 export interface ProviderContext {
   tenantId: TenantId;

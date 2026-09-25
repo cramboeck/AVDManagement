@@ -134,7 +134,7 @@ export class JobQueue {
   /**
    * Preview bestaetigen und Job ausfuehren
    */
-  async approveJob(jobId: JobId, userId: UserId): Promise<Job> {
+  async approveJob(jobId: JobId, _userId: UserId): Promise<Job> {
     const job = await this.jobStore.findById(jobId);
     if (!job) {
       throw new JobError(jobId, 'NOT_FOUND', 'Job not found', false);

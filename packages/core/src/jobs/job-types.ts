@@ -8,9 +8,7 @@ import type {
   UserId,
   JobId,
   CorrelationId,
-  JobStatus,
   JobPriority,
-  JobPreview,
   JobError,
   PlannedChange,
 } from '@zerostress/types';

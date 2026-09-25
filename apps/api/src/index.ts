@@ -12,6 +12,7 @@ import { usersRouter } from './routes/users.js';
 import { jobsRouter } from './routes/jobs.js';
 import { auditRouter } from './routes/audit.js';
 import { licensesRouter } from './routes/licenses.js';
+import { avdRouter } from './routes/avd.js';
 
 const app = new Hono();
 
@@ -48,6 +49,7 @@ app.route('/tenants/:tenantId/users', usersRouter);
 app.route('/tenants/:tenantId/jobs', jobsRouter);
 app.route('/tenants/:tenantId/licenses', licensesRouter);
 app.route('/tenants/:tenantId/audit', auditRouter);
+app.route('/tenants/:tenantId/avd', avdRouter);
 
 // Session-Info (fuer Frontend)
 app.get('/me', async (c) => {

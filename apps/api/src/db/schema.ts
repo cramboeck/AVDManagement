@@ -111,3 +111,55 @@ export const syncStates = pgTable('sync_states', {
   lastSyncStatus: varchar('last_sync_status', { length: 20 }).notNull(),
   errorMessage: text('error_message'),
 });
+
+// ============================================
+// AVD-Tabellen (Azure Virtual Desktop)
+// ============================================
+
+// Gespiegelte Host Pools
+export const syncedHostPools = pgTable('synced_host_pools', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  mspId: uuid('msp_id').notNull().references(() => mspOrganizations.id),
+  tenantId: uuid('tenant_id').notNull().references(() => managedTenants.id),
+  azureResourceId: text('azure_resource_id').notNull().unique(),
+  azureSubscriptionId: varchar('azure_subscription_id', { length: 36 }).notNull(),
+  resourceGroupName: varchar('resource_group_name', { length: 90 }).notNull(),
+  name: varchar('name', { length: 255 }).notNull(),
+  friendlyName: varchar('friendly_name', { length: 255 }),
+  description: text('description'),
+  hostPoolType: varchar('host_pool_type', { length: 20 }).notNull(),
+  loadBalancerType: varchar('load_balancer_type', { length: 20 }).notNull(),
+  maxSessionLimit: integer('max_session_limit').notNull().default(999999),
+  preferredAppGroupType: varchar('preferred_app_group_type', { length: 30 }).notNull(),
+  validationEnvironment: boolean('validation_environment').notNull().default(false),
+  startVmOnConnect: boolean('start_vm_on_connect').notNull().default(false),
+  customRdpProperty: text('custom_rdp_property'),
+  personalDesktopAssignmentType: varchar('personal_desktop_assignment_type', { length: 20 }),
+  vmTemplate: text('vm_template'),
+  sessionHostCount: integer('session_host_count').notNull().default(0),
+  activeSessionCount: integer('active_session_count').notNull().default(0),
+  syncedAt: timestamp('synced_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+// Gespiegelte Session Hosts
+export const syncedSessionHosts = pgTable('synced_session_hosts', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  mspId: uuid('msp_id').notNull().references(() => mspOrganizations.id),
+  tenantId: uuid('tenant_id').notNull().references(() => managedTenants.id),
+  hostPoolId: uuid('host_pool_id').notNull().references(() => syncedHostPools.id),
+  azureResourceId: text('azure_resource_id').notNull().unique(),
+  vmResourceId: text('vm_resource_id'),
+  name: varchar('name', { length: 255 }).notNull(),
+  status: varchar('status', { length: 50 }).notNull(),
+  healthStatus: varchar('health_status', { length: 30 }).notNull(),
+  allowNewSession: boolean('allow_new_session').notNull().default(true),
+  sessions: integer('sessions').notNull().default(0),
+  assignedUser: varchar('assigned_user', { length: 255 }),
+  lastHeartbeat: timestamp('last_heartbeat', { withTimezone: true }),
+  osVersion: varchar('os_version', { length: 100 }),
+  sxsStackVersion: varchar('sxs_stack_version', { length: 50 }),
+  lastUpdateTime: timestamp('last_update_time', { withTimezone: true }),
+  statusTimestamp: timestamp('status_timestamp', { withTimezone: true }),
+  vmId: varchar('vm_id', { length: 100 }),
+  syncedAt: timestamp('synced_at', { withTimezone: true }).notNull().defaultNow(),
+});

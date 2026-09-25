@@ -103,9 +103,11 @@ export class IdentityProvider extends BaseResourceProvider {
       .filter((u) => !u['@removed'])
       .map((u) => this.mapGraphUserToSyncedUser(ctx.tenantId, u));
 
-    const deletedIds = response.value
+    const deletedIds: string[] = response.value
       .filter((u) => u['@removed'])
       .map((u) => u.id);
+
+    void deletedIds;
 
     return {
       items: users,
@@ -270,6 +272,117 @@ export class IdentityProvider extends BaseResourceProvider {
         removeLicenses: [skuId],
       }
     );
+  }
+
+  /**
+   * Passwort zuruecksetzen
+   * Generiert ein temporaeres Passwort, das der Benutzer beim naechsten Login aendern muss
+   */
+  async resetPassword(
+    ctx: ProviderContext,
+    userId: string
+  ): Promise<{ temporaryPassword: string }> {
+    this.validateContext(ctx);
+
+    const temporaryPassword = this.generateSecurePassword();
+
+    await this.graphClient.patch(
+      ctx.tenantId as string,
+      `/users/${userId}`,
+      this.licenseWriteScopes,
+      {
+        passwordProfile: {
+          password: temporaryPassword,
+          forceChangePasswordNextSignIn: true,
+          forceChangePasswordNextSignInWithMfa: false,
+        },
+      }
+    );
+
+    return { temporaryPassword };
+  }
+
+  /**
+   * Benutzer deaktivieren (Offboarding)
+   * Setzt accountEnabled auf false
+   */
+  async disableUser(
+    ctx: ProviderContext,
+    userId: string
+  ): Promise<void> {
+    this.validateContext(ctx);
+
+    await this.graphClient.patch(
+      ctx.tenantId as string,
+      `/users/${userId}`,
+      this.licenseWriteScopes,
+      {
+        accountEnabled: false,
+      }
+    );
+  }
+
+  /**
+   * Benutzer aktivieren
+   * Setzt accountEnabled auf true
+   */
+  async enableUser(
+    ctx: ProviderContext,
+    userId: string
+  ): Promise<void> {
+    this.validateContext(ctx);
+
+    await this.graphClient.patch(
+      ctx.tenantId as string,
+      `/users/${userId}`,
+      this.licenseWriteScopes,
+      {
+        accountEnabled: true,
+      }
+    );
+  }
+
+  /**
+   * Alle Sign-In-Sessions widerrufen
+   * Wichtig fuer Offboarding - erzwingt Re-Authentifizierung
+   */
+  async revokeSignInSessions(
+    ctx: ProviderContext,
+    userId: string
+  ): Promise<void> {
+    this.validateContext(ctx);
+
+    await this.graphClient.post(
+      ctx.tenantId as string,
+      `/users/${userId}/revokeSignInSessions`,
+      this.licenseWriteScopes,
+      {}
+    );
+  }
+
+  /**
+   * Generiert ein sicheres temporaeres Passwort
+   * Erfuellt Azure AD Passwort-Anforderungen
+   */
+  private generateSecurePassword(): string {
+    const length = 16;
+    const uppercase = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+    const lowercase = 'abcdefghjkmnpqrstuvwxyz';
+    const numbers = '23456789';
+    const special = '!@#$%&*';
+    const all = uppercase + lowercase + numbers + special;
+
+    let password = '';
+    password += uppercase[Math.floor(Math.random() * uppercase.length)];
+    password += lowercase[Math.floor(Math.random() * lowercase.length)];
+    password += numbers[Math.floor(Math.random() * numbers.length)];
+    password += special[Math.floor(Math.random() * special.length)];
+
+    for (let i = 4; i < length; i++) {
+      password += all[Math.floor(Math.random() * all.length)];
+    }
+
+    return password.split('').sort(() => Math.random() - 0.5).join('');
   }
 
   private mapGraphUserToSyncedUser(tenantId: TenantId, user: GraphUser): SyncedUser {

@@ -112,6 +112,32 @@ export class GraphApiError extends AppError {
   }
 }
 
+export class ArmApiError extends AppError {
+  readonly type = 'arm-api-error';
+
+  constructor(
+    readonly statusCode: number,
+    readonly armErrorCode: string,
+    message: string,
+    readonly retryAfterSeconds?: number,
+    correlationId?: string
+  ) {
+    super(message, correlationId);
+  }
+
+  get isThrottled(): boolean {
+    return this.statusCode === 429;
+  }
+
+  get isAuthError(): boolean {
+    return this.statusCode === 401 || this.statusCode === 403;
+  }
+
+  get isRetryable(): boolean {
+    return this.statusCode >= 500 || this.isThrottled;
+  }
+}
+
 export class TenantConnectionError extends AppError {
   readonly statusCode = 502;
   readonly type = 'tenant-connection-error';

@@ -5,7 +5,7 @@
 import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
-import Redis from 'ioredis';
+import { Redis } from 'ioredis';
 import { authMiddleware, requireRole } from '../middleware/auth.js';
 import { tenantContextMiddleware, requireConnectedTenant } from '../middleware/tenant-context.js';
 import {
@@ -13,11 +13,14 @@ import {
   IdentityProvider,
   GraphClient,
   TokenProvider,
+  ArmClient,
+  AvdProvider,
   registerIdentityJobs,
+  registerAvdJobs,
 } from '@zerostress/core';
 import { DrizzleJobStore } from '../services/job-store.js';
 import { DrizzleAuditLogger } from '../services/audit-logger.js';
-import type { JobId, TenantId, Job, JobStatus } from '@zerostress/types';
+import type { JobId, Job, JobStatus } from '@zerostress/types';
 
 const app = new Hono();
 
@@ -46,8 +49,16 @@ function getJobQueue(): JobQueue {
 
     const identityProvider = new IdentityProvider(graphClient);
 
+    // ARM-Client fuer AVD
+    const armClient = new ArmClient({
+      getAccessToken: (tenantId, scopes) => tokenProvider.getAccessToken(tenantId, scopes),
+    });
+
+    const avdProvider = new AvdProvider(armClient);
+
     // Jobs registrieren
     registerIdentityJobs(identityProvider);
+    registerAvdJobs(avdProvider);
 
     jobQueue = new JobQueue({ redis }, jobStore, auditLogger);
     jobQueue.startWorker();
@@ -57,7 +68,6 @@ function getJobQueue(): JobQueue {
 
 // Jobs auflisten
 app.get('/', async (c) => {
-  const auth = c.get('auth');
   const tenant = c.get('tenant');
   const queue = getJobQueue();
 

@@ -202,3 +202,193 @@ export interface SessionUser {
   displayName: string;
   role: UserRole;
 }
+
+// ============================================
+// AVD-Typen (Azure Virtual Desktop)
+// ============================================
+
+export type HostPoolId = Brand<string, 'HostPoolId'>;
+export type SessionHostId = Brand<string, 'SessionHostId'>;
+export type UserSessionId = Brand<string, 'UserSessionId'>;
+export type AzureSubscriptionId = Brand<string, 'AzureSubscriptionId'>;
+export type AzureResourceId = Brand<string, 'AzureResourceId'>;
+
+// Host-Pool-Typ
+export type HostPoolType = 'Personal' | 'Pooled';
+
+// Load-Balancer-Typ fuer Pooled Host Pools
+export type LoadBalancerType = 'BreadthFirst' | 'DepthFirst' | 'Persistent';
+
+// Bevorzugter Application-Group-Typ
+export type PreferredAppGroupType = 'Desktop' | 'RailApplications' | 'None';
+
+// Session-Host-Status
+export type SessionHostStatus =
+  | 'Available'
+  | 'Unavailable'
+  | 'Shutdown'
+  | 'Disconnected'
+  | 'Upgrading'
+  | 'UpgradeFailed'
+  | 'NoHeartbeat'
+  | 'NotJoinedToDomain'
+  | 'DomainTrustRelationshipLost'
+  | 'SxSStackListenerNotReady'
+  | 'FSLogixNotHealthy'
+  | 'NeedsAssistance';
+
+// Session-Host-Health-Status
+export type SessionHostHealthStatus =
+  | 'Healthy'
+  | 'Unhealthy'
+  | 'NeedsAssistance'
+  | 'SessionHostNotJoined';
+
+// Benutzer-Session-Zustand
+export type UserSessionState =
+  | 'Active'
+  | 'Disconnected'
+  | 'Pending'
+  | 'LogOff'
+  | 'UserProfileDiskMounted';
+
+// Host Pool (gespiegelt aus Azure)
+export interface SyncedHostPool {
+  id: HostPoolId;
+  tenantId: TenantId;
+  mspId: MspId;
+  azureResourceId: AzureResourceId;
+  azureSubscriptionId: AzureSubscriptionId;
+  resourceGroupName: string;
+  name: string;
+  friendlyName: string | null;
+  description: string | null;
+  hostPoolType: HostPoolType;
+  loadBalancerType: LoadBalancerType;
+  maxSessionLimit: number;
+  preferredAppGroupType: PreferredAppGroupType;
+  validationEnvironment: boolean;
+  startVMOnConnect: boolean;
+  customRdpProperty: string | null;
+  personalDesktopAssignmentType: 'Automatic' | 'Direct' | null;
+  vmTemplate: string | null;
+  sessionHostCount: number;
+  activeSessionCount: number;
+  syncedAt: Date;
+}
+
+// Session Host (gespiegelt aus Azure)
+export interface SyncedSessionHost {
+  id: SessionHostId;
+  tenantId: TenantId;
+  mspId: MspId;
+  hostPoolId: HostPoolId;
+  azureResourceId: AzureResourceId;
+  vmResourceId: AzureResourceId | null;
+  name: string;
+  status: SessionHostStatus;
+  healthStatus: SessionHostHealthStatus;
+  allowNewSession: boolean;
+  sessions: number;
+  assignedUser: string | null;
+  lastHeartbeat: Date | null;
+  osVersion: string | null;
+  sxSStackVersion: string | null;
+  lastUpdateTime: Date | null;
+  statusTimestamp: Date | null;
+  vmId: string | null;
+  resourceId: string;
+  syncedAt: Date;
+}
+
+// Benutzer-Session
+export interface UserSession {
+  id: UserSessionId;
+  sessionHostId: SessionHostId;
+  hostPoolId: HostPoolId;
+  userPrincipalName: string;
+  activeDirectoryUserName: string | null;
+  sessionState: UserSessionState;
+  createTime: Date;
+  applicationType: 'Desktop' | 'RemoteApp';
+}
+
+// Host-Pool-Zusammenfassung fuer Dashboard
+export interface HostPoolSummary {
+  id: HostPoolId;
+  name: string;
+  friendlyName: string | null;
+  hostPoolType: HostPoolType;
+  totalHosts: number;
+  availableHosts: number;
+  unavailableHosts: number;
+  shutdownHosts: number;
+  hostsInDrainMode: number;
+  totalSessions: number;
+  maxSessions: number;
+  utilizationPercent: number;
+}
+
+// Session-Host-Aktion
+export type SessionHostAction =
+  | 'start'
+  | 'stop'
+  | 'restart'
+  | 'enable-drain'
+  | 'disable-drain';
+
+// Job-Payloads fuer AVD-Aktionen
+export interface StartSessionHostPayload {
+  hostPoolId: string;
+  hostPoolName: string;
+  sessionHostId: string;
+  sessionHostName: string;
+  vmResourceId: string;
+}
+
+export interface StopSessionHostPayload {
+  hostPoolId: string;
+  hostPoolName: string;
+  sessionHostId: string;
+  sessionHostName: string;
+  vmResourceId: string;
+  force: boolean;
+}
+
+export interface SetDrainModePayload {
+  hostPoolId: string;
+  hostPoolName: string;
+  sessionHostId: string;
+  sessionHostName: string;
+  allowNewSession: boolean;
+}
+
+export interface DisconnectSessionPayload {
+  hostPoolId: string;
+  hostPoolName: string;
+  sessionHostId: string;
+  sessionHostName: string;
+  sessionId: string;
+  userPrincipalName: string;
+}
+
+export interface LogoffSessionPayload {
+  hostPoolId: string;
+  hostPoolName: string;
+  sessionHostId: string;
+  sessionHostName: string;
+  sessionId: string;
+  userPrincipalName: string;
+  force: boolean;
+}
+
+export interface SendMessagePayload {
+  hostPoolId: string;
+  hostPoolName: string;
+  sessionHostId: string;
+  sessionHostName: string;
+  sessionId: string;
+  userPrincipalName: string;
+  messageTitle: string;
+  messageBody: string;
+}

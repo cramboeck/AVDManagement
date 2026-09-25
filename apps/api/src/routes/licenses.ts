@@ -6,7 +6,7 @@ import { Hono } from 'hono';
 import { authMiddleware } from '../middleware/auth.js';
 import { tenantContextMiddleware, requireConnectedTenant } from '../middleware/tenant-context.js';
 import { IdentityProvider, GraphClient, TokenProvider } from '@zerostress/core';
-import type { LicenseSku } from '@zerostress/types';
+// Type imports removed - using inferred types from provider methods
 
 const app = new Hono();
 

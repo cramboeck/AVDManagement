@@ -1,8 +1,6 @@
 /**
  * Job-Handler fuer Identity-Modul
  */
-
-import type { TenantId, MspId, UserId } from '@zerostress/types';
 import {
   registerJob,
   type JobContext,
@@ -11,7 +9,6 @@ import {
   type PreviewResult,
 } from './job-types.js';
 import { IdentityProvider } from '../providers/identity-provider.js';
-import { GraphClient } from '../providers/graph-client.js';
 
 // Payload-Typen
 interface AssignLicensePayload {
@@ -35,7 +32,7 @@ export function createAssignLicenseHandler(
   identityProvider: IdentityProvider
 ): (ctx: JobContext) => Promise<JobResult> {
   return async (ctx: JobContext): Promise<JobResult> => {
-    const payload = ctx.payload as AssignLicensePayload;
+    const payload = ctx.payload as unknown as AssignLicensePayload;
 
     try {
       await identityProvider.assignLicense(
@@ -73,7 +70,7 @@ export function createAssignLicensePreviewGenerator(
   identityProvider: IdentityProvider
 ): (ctx: PreviewContext) => Promise<PreviewResult> {
   return async (ctx: PreviewContext): Promise<PreviewResult> => {
-    const payload = ctx.payload as AssignLicensePayload;
+    const payload = ctx.payload as unknown as AssignLicensePayload;
     const warnings: string[] = [];
 
     const currentLicenses = await identityProvider.getUserLicenses(
@@ -114,7 +111,7 @@ export function createRemoveLicenseHandler(
   identityProvider: IdentityProvider
 ): (ctx: JobContext) => Promise<JobResult> {
   return async (ctx: JobContext): Promise<JobResult> => {
-    const payload = ctx.payload as RemoveLicensePayload;
+    const payload = ctx.payload as unknown as RemoveLicensePayload;
 
     try {
       await identityProvider.removeLicense(
@@ -174,7 +171,7 @@ export function registerIdentityJobs(identityProvider: IdentityProvider): void {
     createRemoveLicenseHandler(identityProvider),
     // Preview-Generator fuer Remove analog zu Assign
     async (ctx: PreviewContext): Promise<PreviewResult> => {
-      const payload = ctx.payload as RemoveLicensePayload;
+      const payload = ctx.payload as unknown as RemoveLicensePayload;
       return {
         changes: [
           {
