@@ -5,6 +5,7 @@
 import type { ProblemDetails } from '@zerostress/types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
+const DEV_AUTH_BYPASS = process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS === 'true';
 
 export class ApiError extends Error {
   constructor(
@@ -46,8 +47,9 @@ export class ApiError extends Error {
 }
 
 async function getAccessToken(): Promise<string | null> {
-  // In Produktion: MSAL oder Auth-Provider
-  // Fuer Entwicklung: Token aus localStorage
+  if (DEV_AUTH_BYPASS) {
+    return 'dev-token';
+  }
   return localStorage.getItem('access_token');
 }
 

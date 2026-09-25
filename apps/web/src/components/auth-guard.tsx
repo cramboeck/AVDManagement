@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { isAuthenticated } from '@/lib/auth';
 
+const DEV_AUTH_BYPASS = process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS === 'true';
+
 export function AuthGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [isChecking, setIsChecking] = useState(true);
@@ -11,6 +13,12 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const checkAuth = () => {
+      if (DEV_AUTH_BYPASS) {
+        setIsAuth(true);
+        setIsChecking(false);
+        return;
+      }
+
       const authenticated = isAuthenticated();
       setIsAuth(authenticated);
       setIsChecking(false);
