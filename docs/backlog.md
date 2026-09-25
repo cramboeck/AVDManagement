@@ -59,4 +59,4 @@ vor dem Bau klar sind.
 | Teams-/M365-Gruppen | Graph groups, members, owners | Directory.Read.All (vorhanden) | Umgesetzt: Seite Gruppen mit Snapshot, Auffaelligkeiten (ohne Besitzer, ein Besitzer, oeffentliches Team, Gaeste, dynamisch, leer), Detail mit Besitzern und Mitgliedern. Offen: externe Freigaben je Gruppe (SharePoint), Aktionen (Besitzer setzen) als Jobs |
 | Security-Baselines | Graph policies (CA, Auth-Methoden), Secure Score, DNS | Policy.Read.All | Umgesetzt als Best-Practice-Checks (18 Checks, Erfuellungsgrad, Belege). Offen: tenant-uebergreifende Sicht, Drift ueber Zeit, Checks als Job mit Behebung |
 | Monitoring AVD Ebene 2/3 | Azure Monitor Metrics, Log Analytics | Monitoring Reader | Siehe docs/design/avd-monitoring-concept.md |
-| MCP-Server | eigene API | Entra-Login, Job-Modell | Duenne Schicht ueber denselben Endpunkten inkl. Preview und Audit |
+| MCP-Server | eigene API | Entra-Login, Job-Modell | Umgesetzt: `POST /mcp` mit 13 Werkzeugen, Preview und Freigabe als getrennte Schritte, Audit. Offen: Server-Streaming (SSE), Ressourcen statt nur Werkzeuge |

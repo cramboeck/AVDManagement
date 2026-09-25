@@ -98,6 +98,31 @@ verwendet bestehende Gruppen gleichen Namens wieder und weist sie auf
 Wunsch sofort zu. Paketkatalog, Upload und Build-Worker (Stufen C/D) sind
 im Plan `docs/implementation/apps-module-plan.md` beschrieben und offen.
 
+## MCP-Server
+
+Die API stellt unter `POST /mcp` einen MCP-Server (Model Context Protocol,
+Streamable HTTP ohne Server-Streaming) bereit. Er nutzt dieselbe
+Authentifizierung (Bearer-Token des angemeldeten Konsolenbenutzers, lokal
+der Dev-Bypass), dieselbe Tenant-Isolation und dieselben Dienste wie die
+Oberflaeche. Werkzeuge: `list_tenants`, `list_devices`, `get_device`,
+`list_groups`, `list_apps`, `security_checks`, `list_alerts`,
+`mailbox_usage`, `list_jobs`, `list_job_types`, `create_job`,
+`approve_job`, `get_job`. Schreibende Aktionen laufen nur ueber
+`create_job` (liefert die Preview, fuehrt nichts aus) und `approve_job`
+(Rolle Engineer); beides und jeder Blick in personenbezogene Daten stehen
+im Audit als `mcp.<tool>`.
+
+Anbindung an Claude Code lokal:
+
+```powershell
+claude mcp add --transport http zerostress http://localhost:3001/mcp
+```
+
+Ohne Dev-Bypass zusaetzlich `--header "Authorization: Bearer <Token>"`
+mit einem Token aus der Konsolenanmeldung. Der Server ist kein Ersatz fuer
+die Freigabe in der Oberflaeche: ein Assistent kann Jobs vorbereiten, die
+Freigabe bleibt eine bewusste Aktion mit Engineer-Rolle.
+
 ## Alerts (Anmelde-Anomalien)
 
 Ein festes Regelwerk wertet alle zehn Minuten die Anmeldungen der letzten

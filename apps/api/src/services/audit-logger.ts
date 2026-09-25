@@ -8,7 +8,8 @@ import type { MspId, TenantId, UserId, CorrelationId } from '@zerostress/types';
 
 interface AuditLogEntry {
   mspId: MspId;
-  tenantId: TenantId;
+  // null bei MSP-weiten Aktionen ohne Tenant-Bezug
+  tenantId: TenantId | null;
   userId: UserId;
   action: string;
   targetType: string;
