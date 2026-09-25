@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import clsx from 'clsx';
+import { DataTable, type ColumnDef } from '@/components/ui/data-table';
 import type { SignInEvent } from '@zerostress/types';
 
 const MODERN_CLIENTS = new Set(['Browser', 'Mobile Apps and Desktop clients']);
@@ -44,114 +45,170 @@ export function formatLocation(location: SignInEvent['location']): string {
   return [location.city, location.countryOrRegion].filter(Boolean).join(', ') || '—';
 }
 
-export function SignInTable({ events, showUser }: { events: SignInEvent[]; showUser: boolean }) {
+export function SignInTable({
+  events,
+  showUser,
+  storageKey = 'sign-ins',
+}: {
+  events: SignInEvent[];
+  showUser: boolean;
+  storageKey?: string;
+}) {
+  const columns: ColumnDef<SignInEvent>[] = [
+    {
+      id: 'createdAt',
+      header: 'Zeit',
+      accessor: (e) => new Date(e.createdAt),
+      cell: (e) => (
+        <span className="whitespace-nowrap text-muted-foreground" title={e.createdAt}>
+          {formatDateTime(e.createdAt)}
+          {!e.isInteractive && (
+            <span className="ml-1 text-xs" title="Nicht-interaktive Anmeldung">
+              (auto)
+            </span>
+          )}
+        </span>
+      ),
+    },
+    ...(showUser
+      ? [
+          {
+            id: 'user',
+            header: 'Benutzer',
+            accessor: (e: SignInEvent) => `${e.userDisplayName} ${e.userPrincipalName}`,
+            cell: (e: SignInEvent) => (
+              <Link href={`/users/${e.userId}`} className="hover:underline">
+                <span className="block truncate font-medium">{e.userDisplayName}</span>
+                <span className="block truncate text-xs text-muted-foreground">{e.userPrincipalName}</span>
+              </Link>
+            ),
+          } satisfies ColumnDef<SignInEvent>,
+        ]
+      : []),
+    {
+      id: 'app',
+      header: 'Anwendung',
+      accessor: (e) => e.appDisplayName,
+      cell: (e) => (
+        <span className="block max-w-[12rem] truncate" title={e.appDisplayName}>
+          {e.appDisplayName}
+        </span>
+      ),
+    },
+    {
+      id: 'outcome',
+      header: 'Ergebnis',
+      accessor: (e) => outcomeLabels[e.outcome],
+      filterOptions: (Object.keys(outcomeLabels) as SignInEvent['outcome'][]).map((o) => ({ value: outcomeLabels[o], label: outcomeLabels[o] })),
+      cell: (e) => (
+        <>
+          <span className={clsx('inline-flex rounded-full px-2 py-0.5 text-xs font-medium', outcomeClasses[e.outcome])} title={e.failureReason ?? undefined}>
+            {outcomeLabels[e.outcome]}
+            {e.errorCode !== 0 && <span className="ml-1 font-mono">{e.errorCode}</span>}
+          </span>
+          {e.failureReason && e.outcome !== 'success' && (
+            <p className="mt-0.5 max-w-[16rem] truncate text-xs text-muted-foreground" title={e.failureReason}>
+              {e.failureReason}
+            </p>
+          )}
+        </>
+      ),
+    },
+    {
+      id: 'location',
+      header: 'Herkunft',
+      accessor: (e) => `${formatLocation(e.location)} ${e.ipAddress ?? ''}`.trim(),
+      cell: (e) => (
+        <>
+          <span className="block">{formatLocation(e.location)}</span>
+          {e.ipAddress && <span className="block font-mono text-xs text-muted-foreground">{e.ipAddress}</span>}
+        </>
+      ),
+    },
+    {
+      id: 'country',
+      header: 'Land',
+      accessor: (e) => e.location?.countryOrRegion ?? null,
+      defaultHidden: true,
+    },
+    {
+      id: 'client',
+      header: 'Client',
+      accessor: (e) => e.clientAppUsed,
+      filterOptions: [
+        { value: 'Browser', label: 'Browser' },
+        { value: 'Mobile Apps and Desktop clients', label: 'Moderne Clients' },
+      ],
+      cell: (e) => (
+        <>
+          <span className="block truncate text-xs">{e.clientAppUsed ?? '—'}</span>
+          {isLegacyClient(e.clientAppUsed) && (
+            <span className="inline-flex rounded-full bg-destructive/10 px-1.5 py-0.5 text-xs text-destructive">Legacy</span>
+          )}
+        </>
+      ),
+    },
+    {
+      id: 'auth',
+      header: 'Auth',
+      accessor: (e) => (e.authenticationRequirement === 'multiFactorAuthentication' ? 'MFA' : '1FA'),
+      filterOptions: [
+        { value: 'MFA', label: 'MFA' },
+        { value: '1FA', label: 'Nur Passwort' },
+      ],
+      cell: (e) => (
+        <div className="flex flex-wrap gap-1">
+          <span
+            className={clsx(
+              'rounded-full px-1.5 py-0.5 text-xs',
+              e.authenticationRequirement === 'multiFactorAuthentication' ? 'bg-success/10 text-success' : 'bg-muted text-muted-foreground'
+            )}
+            title="Authentifizierungsanforderung"
+          >
+            {e.authenticationRequirement === 'multiFactorAuthentication' ? 'MFA' : '1FA'}
+          </span>
+          {e.conditionalAccessStatus === 'failure' && (
+            <span className="rounded-full bg-destructive/10 px-1.5 py-0.5 text-xs text-destructive" title="Conditional Access hat blockiert">
+              CA
+            </span>
+          )}
+          {e.riskLevel !== 'none' && e.riskLevel !== 'unknown' && (
+            <span className={clsx('rounded-full px-1.5 py-0.5 text-xs', riskClasses[e.riskLevel])} title="Risiko waehrend der Anmeldung">
+              Risiko {e.riskLevel}
+            </span>
+          )}
+        </div>
+      ),
+    },
+    {
+      id: 'device',
+      header: 'Geraet',
+      accessor: (e) => (e.device ? [e.device.operatingSystem, e.device.browser].filter(Boolean).join(' / ') || null : null),
+      cell: (e) =>
+        e.device ? (
+          <span className="text-xs text-muted-foreground">
+            <span className="block">{[e.device.operatingSystem, e.device.browser].filter(Boolean).join(' / ') || '—'}</span>
+            {e.device.isCompliant !== null && (
+              <span className={e.device.isCompliant ? 'text-success' : 'text-warning'}>{e.device.isCompliant ? 'konform' : 'nicht konform'}</span>
+            )}
+          </span>
+        ) : (
+          <span className="text-xs text-muted-foreground">—</span>
+        ),
+    },
+  ];
+
   return (
-    <div className="overflow-x-auto rounded-lg border">
-      <table className="w-full text-sm">
-        <thead className="border-b bg-muted/50">
-          <tr className="text-left">
-            <th className="px-3 py-2 font-medium">Zeit</th>
-            {showUser && <th className="px-3 py-2 font-medium">Benutzer</th>}
-            <th className="px-3 py-2 font-medium">Anwendung</th>
-            <th className="px-3 py-2 font-medium">Ergebnis</th>
-            <th className="px-3 py-2 font-medium">Herkunft</th>
-            <th className="px-3 py-2 font-medium">Client</th>
-            <th className="px-3 py-2 font-medium">Auth</th>
-            <th className="px-3 py-2 font-medium">Geraet</th>
-          </tr>
-        </thead>
-        <tbody>
-          {events.map((event) => {
-            const legacy = isLegacyClient(event.clientAppUsed);
-            return (
-              <tr key={event.id} className={clsx('border-b last:border-0', event.outcome === 'failure' && 'bg-destructive/5')}>
-                <td className="whitespace-nowrap px-3 py-2 text-muted-foreground" title={event.createdAt}>
-                  {formatDateTime(event.createdAt)}
-                  {!event.isInteractive && (
-                    <span className="ml-1 text-xs" title="Nicht-interaktive Anmeldung">(auto)</span>
-                  )}
-                </td>
-                {showUser && (
-                  <td className="px-3 py-2">
-                    <Link href={`/users/${event.userId}`} className="hover:underline">
-                      <span className="block truncate font-medium">{event.userDisplayName}</span>
-                      <span className="block truncate text-xs text-muted-foreground">{event.userPrincipalName}</span>
-                    </Link>
-                  </td>
-                )}
-                <td className="max-w-[12rem] truncate px-3 py-2" title={event.appDisplayName}>
-                  {event.appDisplayName}
-                </td>
-                <td className="px-3 py-2">
-                  <span
-                    className={clsx('inline-flex rounded-full px-2 py-0.5 text-xs font-medium', outcomeClasses[event.outcome])}
-                    title={event.failureReason ?? undefined}
-                  >
-                    {outcomeLabels[event.outcome]}
-                    {event.errorCode !== 0 && <span className="ml-1 font-mono">{event.errorCode}</span>}
-                  </span>
-                  {event.failureReason && event.outcome !== 'success' && (
-                    <p className="mt-0.5 max-w-[16rem] truncate text-xs text-muted-foreground" title={event.failureReason}>
-                      {event.failureReason}
-                    </p>
-                  )}
-                </td>
-                <td className="px-3 py-2">
-                  <span className="block">{formatLocation(event.location)}</span>
-                  {event.ipAddress && <span className="block font-mono text-xs text-muted-foreground">{event.ipAddress}</span>}
-                </td>
-                <td className="px-3 py-2">
-                  <span className="block truncate text-xs">{event.clientAppUsed ?? '—'}</span>
-                  {legacy && (
-                    <span className="inline-flex rounded-full bg-destructive/10 px-1.5 py-0.5 text-xs text-destructive">
-                      Legacy
-                    </span>
-                  )}
-                </td>
-                <td className="px-3 py-2">
-                  <div className="flex flex-wrap gap-1">
-                    <span
-                      className={clsx(
-                        'rounded-full px-1.5 py-0.5 text-xs',
-                        event.authenticationRequirement === 'multiFactorAuthentication'
-                          ? 'bg-success/10 text-success'
-                          : 'bg-muted text-muted-foreground'
-                      )}
-                      title="Authentifizierungsanforderung"
-                    >
-                      {event.authenticationRequirement === 'multiFactorAuthentication' ? 'MFA' : '1FA'}
-                    </span>
-                    {event.conditionalAccessStatus === 'failure' && (
-                      <span className="rounded-full bg-destructive/10 px-1.5 py-0.5 text-xs text-destructive" title="Conditional Access hat blockiert">
-                        CA
-                      </span>
-                    )}
-                    {event.riskLevel !== 'none' && event.riskLevel !== 'unknown' && (
-                      <span className={clsx('rounded-full px-1.5 py-0.5 text-xs', riskClasses[event.riskLevel])} title="Risiko waehrend der Anmeldung">
-                        Risiko {event.riskLevel}
-                      </span>
-                    )}
-                  </div>
-                </td>
-                <td className="px-3 py-2 text-xs text-muted-foreground">
-                  {event.device ? (
-                    <>
-                      <span className="block">{[event.device.operatingSystem, event.device.browser].filter(Boolean).join(' / ') || '—'}</span>
-                      {event.device.isCompliant !== null && (
-                        <span className={event.device.isCompliant ? 'text-success' : 'text-warning'}>
-                          {event.device.isCompliant ? 'konform' : 'nicht konform'}
-                        </span>
-                      )}
-                    </>
-                  ) : (
-                    '—'
-                  )}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
+    <DataTable
+      rows={events}
+      columns={columns}
+      getRowId={(e) => e.id}
+      storageKey={storageKey}
+      initialSort={{ columnId: 'createdAt', direction: 'desc' }}
+      searchPlaceholder="Benutzer, App, IP, Ort..."
+      rowClassName={(e) => (e.outcome === 'failure' ? 'bg-destructive/5' : undefined)}
+      exportFileName="anmeldungen"
+      dense
+    />
   );
 }

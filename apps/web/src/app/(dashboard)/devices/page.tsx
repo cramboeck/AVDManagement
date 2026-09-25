@@ -1,6 +1,5 @@
 'use client';
 
-import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import clsx from 'clsx';
@@ -8,7 +7,8 @@ import { useTenant } from '@/hooks/use-tenant';
 import { api } from '@/lib/api';
 import { LoadingTable } from '@/components/ui/loading';
 import { ErrorState } from '@/components/ui/error-state';
-import { NoTenantSelected, EmptyState, NoResults } from '@/components/ui/empty-state';
+import { NoTenantSelected, EmptyState } from '@/components/ui/empty-state';
+import { DataTable, type ColumnDef } from '@/components/ui/data-table';
 import { CapabilityNotice } from '@/components/identity/capability-notice';
 import {
   ComplianceBadge,
@@ -18,19 +18,19 @@ import {
   complianceLabels,
   formatRelative,
 } from '@/components/devices/device-badges';
-import type { Device, DeviceInventory, DeviceComplianceState, DeviceExposureLevel } from '@zerostress/types';
+import type { Device, DeviceInventory, DeviceComplianceState, DeviceExposureLevel, DeviceRiskScore } from '@zerostress/types';
 
-type ComplianceFilter = 'all' | DeviceComplianceState;
-type ExposureFilter = 'all' | DeviceExposureLevel;
-type SourceFilter = 'all' | 'intune-only' | 'defender-only' | 'both';
+const exposureRank: Record<DeviceExposureLevel, number> = { High: 0, Medium: 1, Low: 2, None: 3, Unknown: 4 };
+const riskRank: Record<DeviceRiskScore, number> = { High: 0, Medium: 1, Low: 2, Informational: 3, None: 4, Unknown: 5 };
+
+function sourceOf(d: Device): 'both' | 'intune-only' | 'defender-only' {
+  if (d.intune && d.defender) return 'both';
+  return d.intune ? 'intune-only' : 'defender-only';
+}
 
 export default function DevicesPage() {
   const { activeTenant, isLoading: tenantLoading } = useTenant();
   const router = useRouter();
-  const [search, setSearch] = useState('');
-  const [compliance, setCompliance] = useState<ComplianceFilter>('all');
-  const [exposure, setExposure] = useState<ExposureFilter>('all');
-  const [source, setSource] = useState<SourceFilter>('all');
 
   const inventoryQuery = useQuery({
     queryKey: ['devices', activeTenant?.id],
@@ -39,31 +39,106 @@ export default function DevicesPage() {
     staleTime: 5 * 60 * 1000,
   });
 
-  const devices = inventoryQuery.data?.items ?? [];
-
-  const filtered = useMemo(() => {
-    const term = search.trim().toLowerCase();
-    return devices.filter((d) => {
-      if (term && !`${d.name} ${d.primaryUser ?? ''} ${d.operatingSystem ?? ''}`.toLowerCase().includes(term)) return false;
-      if (compliance !== 'all' && d.intune?.complianceState !== compliance) return false;
-      if (exposure !== 'all' && d.defender?.exposureLevel !== exposure) return false;
-      if (source === 'intune-only' && (!d.intune || d.defender)) return false;
-      if (source === 'defender-only' && (d.intune || !d.defender)) return false;
-      if (source === 'both' && !(d.intune && d.defender)) return false;
-      return true;
-    });
-  }, [devices, search, compliance, exposure, source]);
-
   if (tenantLoading) return <LoadingTable />;
   if (!activeTenant) return <NoTenantSelected />;
 
   const inventory = inventoryQuery.data;
+  const devices = inventory?.items ?? [];
+  const intuneAvailable = inventory?.intune.available ?? true;
+  const defenderAvailable = inventory?.defender.available ?? true;
+
   const counts = {
     total: devices.length,
     noncompliant: devices.filter((d) => d.intune?.complianceState === 'noncompliant').length,
     highExposure: devices.filter((d) => d.defender?.exposureLevel === 'High').length,
     stale: devices.filter((d) => d.lastActivityAt && Date.now() - new Date(d.lastActivityAt).getTime() > 30 * 86400000).length,
   };
+
+  const columns: ColumnDef<Device>[] = [
+    {
+      id: 'name',
+      header: 'Geraet',
+      accessor: (d) => d.name,
+      cell: (d) => (
+        <>
+          <span className="block font-medium">{d.name}</span>
+          <span className="block text-xs text-muted-foreground">{d.primaryUser ?? '—'}</span>
+        </>
+      ),
+    },
+    { id: 'primaryUser', header: 'Benutzer', accessor: (d) => d.primaryUser, defaultHidden: true },
+    {
+      id: 'os',
+      header: 'Betriebssystem',
+      accessor: (d) => [d.operatingSystem, d.osVersion].filter(Boolean).join(' ') || null,
+      cell: (d) => (
+        <>
+          <span className="block">{d.operatingSystem ?? '—'}</span>
+          <span className="block text-xs text-muted-foreground">{d.osVersion ?? ''}</span>
+        </>
+      ),
+    },
+    {
+      id: 'compliance',
+      header: 'Compliance',
+      accessor: (d) => d.intune?.complianceState ?? null,
+      filterOptions: (Object.keys(complianceLabels) as DeviceComplianceState[]).map((s) => ({ value: s, label: complianceLabels[s] })),
+      cell: (d) =>
+        d.intune ? (
+          <ComplianceBadge state={d.intune.complianceState} />
+        ) : (
+          <span className="text-xs text-muted-foreground">{intuneAvailable ? 'nicht in Intune' : 'Intune nicht verfuegbar'}</span>
+        ),
+    },
+    {
+      id: 'exposure',
+      header: 'Exposure',
+      accessor: (d) => d.defender?.exposureLevel ?? null,
+      sortValue: (d) => (d.defender ? exposureRank[d.defender.exposureLevel] : 99),
+      filterOptions: (['High', 'Medium', 'Low', 'None', 'Unknown'] as DeviceExposureLevel[]).map((l) => ({ value: l, label: `Exposure ${l}` })),
+      cell: (d) =>
+        d.defender ? (
+          <ExposureBadge level={d.defender.exposureLevel} />
+        ) : (
+          <span className="text-xs text-muted-foreground" title={defenderAvailable ? 'Kein Defender-Datensatz fuer dieses Geraet' : 'Defender-Quelle nicht verfuegbar, siehe Hinweis oben'}>
+            {defenderAvailable ? 'nicht onboarded' : 'Defender nicht verfuegbar'}
+          </span>
+        ),
+    },
+    {
+      id: 'risk',
+      header: 'Risiko',
+      accessor: (d) => d.defender?.riskScore ?? null,
+      sortValue: (d) => (d.defender ? riskRank[d.defender.riskScore] : 99),
+      filterOptions: (['High', 'Medium', 'Low', 'Informational', 'None'] as DeviceRiskScore[]).map((r) => ({ value: r, label: `Risiko ${r}` })),
+      cell: (d) => (d.defender ? <RiskBadge score={d.defender.riskScore} /> : <span className="text-xs text-muted-foreground">—</span>),
+    },
+    {
+      id: 'lastActivity',
+      header: 'Zuletzt aktiv',
+      accessor: (d) => (d.lastActivityAt ? new Date(d.lastActivityAt) : null),
+      cell: (d) => (
+        <span className="text-muted-foreground" title={d.lastActivityAt ?? undefined}>
+          {formatRelative(d.lastActivityAt)}
+        </span>
+      ),
+    },
+    {
+      id: 'source',
+      header: 'Quellen',
+      accessor: (d) => sourceOf(d),
+      filterOptions: [
+        { value: 'both', label: 'In Intune und Defender' },
+        { value: 'intune-only', label: 'Nur Intune' },
+        { value: 'defender-only', label: 'Nur Defender' },
+      ],
+      filterLabel: 'Quelle',
+      searchable: false,
+      cell: (d) => <SourceChips intune={!!d.intune} defender={!!d.defender} />,
+    },
+    { id: 'serial', header: 'Seriennummer', accessor: (d) => d.intune?.serialNumber ?? null, defaultHidden: true, className: 'font-mono text-xs' },
+    { id: 'model', header: 'Modell', accessor: (d) => [d.intune?.manufacturer, d.intune?.model].filter(Boolean).join(' ') || null, defaultHidden: true },
+  ];
 
   return (
     <div className="space-y-6">
@@ -96,156 +171,31 @@ export default function DevicesPage() {
             <Stat label="Seit 30 Tagen inaktiv" value={counts.stale} tone={counts.stale > 0 ? 'warning' : undefined} />
           </div>
 
-          {inventory && !inventory.intune.available && (
-            <CapabilityNotice what="Intune-Geraete" {...inventory.intune} compact />
-          )}
+          {inventory && !inventory.intune.available && <CapabilityNotice what="Intune-Geraete" {...inventory.intune} compact />}
           {inventory && !inventory.defender.available && (
             <CapabilityNotice what="Defender-Daten (Exposure, Schwachstellen, fehlende Updates)" {...inventory.defender} compact />
           )}
-
-          <div className="flex flex-wrap items-center gap-2">
-            <input
-              type="search"
-              placeholder="Name, Benutzer oder OS..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="h-9 w-64 rounded-md border bg-background px-3 text-sm placeholder:text-muted-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-              aria-label="Geraete suchen"
-            />
-            <Select value={compliance} onChange={(v) => setCompliance(v as ComplianceFilter)} label="Compliance">
-              <option value="all">Compliance: alle</option>
-              {(Object.keys(complianceLabels) as DeviceComplianceState[]).map((s) => (
-                <option key={s} value={s}>
-                  {complianceLabels[s]}
-                </option>
-              ))}
-            </Select>
-            <Select value={exposure} onChange={(v) => setExposure(v as ExposureFilter)} label="Exposure">
-              <option value="all">Exposure: alle</option>
-              {(['High', 'Medium', 'Low', 'None', 'Unknown'] as DeviceExposureLevel[]).map((l) => (
-                <option key={l} value={l}>
-                  Exposure {l}
-                </option>
-              ))}
-            </Select>
-            <Select value={source} onChange={(v) => setSource(v as SourceFilter)} label="Quelle">
-              <option value="all">Quelle: alle</option>
-              <option value="both">In Intune und Defender</option>
-              <option value="intune-only">Nur Intune</option>
-              <option value="defender-only">Nur Defender</option>
-            </Select>
-            <span className="ml-auto text-xs text-muted-foreground">
-              {filtered.length} von {devices.length}
-            </span>
-          </div>
 
           {devices.length === 0 ? (
             <EmptyState
               title="Keine Geraete gefunden"
               description="In diesem Tenant sind weder Intune-verwaltete noch Defender-onboardete Geraete sichtbar."
             />
-          ) : filtered.length === 0 ? (
-            <NoResults query={search} />
           ) : (
-            <DeviceTable
-              devices={filtered}
-              intuneAvailable={inventory?.intune.available ?? true}
-              defenderAvailable={inventory?.defender.available ?? true}
-              onOpen={(d) => router.push(`/devices/${encodeURIComponent(d.id)}`)}
+            <DataTable
+              rows={devices}
+              columns={columns}
+              getRowId={(d) => d.id}
+              storageKey="devices"
+              initialSort={{ columnId: 'name', direction: 'asc' }}
+              searchPlaceholder="Name, Benutzer, OS, Seriennummer..."
+              onRowClick={(d) => router.push(`/devices/${encodeURIComponent(d.id)}`)}
+              exportFileName="geraete"
             />
           )}
         </>
       )}
     </div>
-  );
-}
-
-function DeviceTable({
-  devices,
-  intuneAvailable,
-  defenderAvailable,
-  onOpen,
-}: {
-  devices: Device[];
-  intuneAvailable: boolean;
-  defenderAvailable: boolean;
-  onOpen: (device: Device) => void;
-}) {
-  return (
-    <div className="overflow-x-auto rounded-lg border">
-      <table className="w-full text-sm">
-        <thead className="border-b bg-muted/50">
-          <tr className="text-left">
-            <th className="px-3 py-2 font-medium">Geraet</th>
-            <th className="px-3 py-2 font-medium">Betriebssystem</th>
-            <th className="px-3 py-2 font-medium">Compliance</th>
-            <th className="px-3 py-2 font-medium">Defender</th>
-            <th className="px-3 py-2 font-medium">Zuletzt aktiv</th>
-            <th className="px-3 py-2 font-medium">Quellen</th>
-          </tr>
-        </thead>
-        <tbody>
-          {devices.map((d) => (
-            <tr
-              key={d.id}
-              tabIndex={0}
-              onClick={() => onOpen(d)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') onOpen(d);
-              }}
-              className="cursor-pointer border-b last:border-0 hover:bg-accent/50 focus:outline-none focus-visible:bg-accent"
-            >
-              <td className="px-3 py-2">
-                <span className="block font-medium">{d.name}</span>
-                <span className="block text-xs text-muted-foreground">{d.primaryUser ?? '—'}</span>
-              </td>
-              <td className="px-3 py-2">
-                <span className="block">{d.operatingSystem ?? '—'}</span>
-                <span className="block text-xs text-muted-foreground">{d.osVersion ?? ''}</span>
-              </td>
-              <td className="px-3 py-2">
-                {d.intune ? (
-                  <ComplianceBadge state={d.intune.complianceState} />
-                ) : (
-                  <span className="text-xs text-muted-foreground">{intuneAvailable ? 'nicht in Intune' : 'Intune nicht verfuegbar'}</span>
-                )}
-              </td>
-              <td className="px-3 py-2">
-                {d.defender ? (
-                  <span className="flex flex-wrap gap-1">
-                    <ExposureBadge level={d.defender.exposureLevel} />
-                    <RiskBadge score={d.defender.riskScore} />
-                  </span>
-                ) : (
-                  <span className="text-xs text-muted-foreground" title={defenderAvailable ? 'Kein Defender-Datensatz fuer dieses Geraet' : 'Defender-Quelle nicht verfuegbar, siehe Hinweis oben'}>
-                    {defenderAvailable ? 'nicht onboarded' : 'Defender nicht verfuegbar'}
-                  </span>
-                )}
-              </td>
-              <td className="px-3 py-2 text-muted-foreground" title={d.lastActivityAt ?? undefined}>
-                {formatRelative(d.lastActivityAt)}
-              </td>
-              <td className="px-3 py-2">
-                <SourceChips intune={!!d.intune} defender={!!d.defender} />
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function Select({ value, onChange, label, children }: { value: string; onChange: (v: string) => void; label: string; children: React.ReactNode }) {
-  return (
-    <select
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      aria-label={label}
-      className="h-9 rounded-md border bg-background px-2 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-    >
-      {children}
-    </select>
   );
 }
 

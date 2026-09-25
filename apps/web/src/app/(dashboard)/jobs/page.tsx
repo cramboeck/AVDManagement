@@ -7,6 +7,7 @@ import { api } from '@/lib/api';
 import { NoTenantSelected, EmptyState } from '@/components/ui/empty-state';
 import { LoadingTable } from '@/components/ui/loading';
 import { ErrorState, ErrorBanner } from '@/components/ui/error-state';
+import { DataTable, type ColumnDef } from '@/components/ui/data-table';
 import clsx from 'clsx';
 import type { Job, JobStatus } from '@zerostress/types';
 
@@ -113,10 +114,16 @@ export default function JobsPage() {
           description="Es sind aktuell keine Jobs fuer diesen Tenant vorhanden."
         />
       ) : (
-        <JobTable
-          jobs={data.items}
-          onSelect={setSelectedJob}
-          selectedId={selectedJob?.id}
+        <DataTable
+          rows={data.items}
+          columns={jobColumns}
+          getRowId={(job) => job.id}
+          storageKey="jobs"
+          initialSort={{ columnId: 'createdAt', direction: 'desc' }}
+          searchPlaceholder="Typ, Ziel, Ersteller..."
+          onRowClick={setSelectedJob}
+          rowClassName={(job) => (selectedJob?.id === job.id ? 'bg-accent' : undefined)}
+          exportFileName="jobs"
         />
       )}
 
@@ -132,64 +139,43 @@ export default function JobsPage() {
   );
 }
 
-function JobTable({
-  jobs,
-  onSelect,
-  selectedId,
-}: {
-  jobs: Job[];
-  onSelect: (job: Job) => void;
-  selectedId?: string;
-}) {
-  return (
-    <div className="overflow-x-auto rounded-lg border">
-      <table className="w-full text-sm">
-        <thead className="border-b bg-muted/50">
-          <tr>
-            <th className="px-4 py-3 text-left font-medium">Typ</th>
-            <th className="px-4 py-3 text-left font-medium">Ziel</th>
-            <th className="px-4 py-3 text-left font-medium">Status</th>
-            <th className="px-4 py-3 text-left font-medium">Erstellt</th>
-            <th className="px-4 py-3 text-left font-medium">Erstellt von</th>
-          </tr>
-        </thead>
-        <tbody>
-          {jobs.map((job) => (
-            <tr
-              key={job.id}
-              onClick={() => onSelect(job)}
-              className={clsx(
-                'cursor-pointer border-b last:border-0',
-                selectedId === job.id ? 'bg-accent' : 'hover:bg-accent/50'
-              )}
-            >
-              <td className="px-4 py-3 font-medium">{job.type}</td>
-              <td className="px-4 py-3 text-muted-foreground">
-                {job.targetCount} Objekte
-              </td>
-              <td className="px-4 py-3">
-                <span
-                  className={clsx(
-                    'inline-flex rounded-full px-2 py-0.5 text-xs font-medium',
-                    statusColors[job.status]
-                  )}
-                >
-                  {statusLabels[job.status]}
-                </span>
-              </td>
-              <td className="px-4 py-3 text-muted-foreground">
-                {formatDate(job.createdAt)}
-              </td>
-              <td className="px-4 py-3 text-muted-foreground">
-                {job.createdByEmail}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
+const jobColumns: ColumnDef<Job>[] = [
+  { id: 'type', header: 'Typ', accessor: (job) => job.type, className: 'font-mono text-xs' },
+  {
+    id: 'target',
+    header: 'Ziel',
+    accessor: (job) => (typeof job.payload.targetDisplayName === 'string' ? job.payload.targetDisplayName : null),
+    cell: (job) => (
+      <span className="text-muted-foreground">
+        {typeof job.payload.targetDisplayName === 'string' ? job.payload.targetDisplayName : `${job.targetCount} Objekte`}
+      </span>
+    ),
+  },
+  {
+    id: 'status',
+    header: 'Status',
+    accessor: (job) => statusLabels[job.status],
+    filterOptions: (Object.keys(statusLabels) as JobStatus[]).map((s) => ({ value: statusLabels[s], label: statusLabels[s] })),
+    cell: (job) => (
+      <span className={clsx('inline-flex rounded-full px-2 py-0.5 text-xs font-medium', statusColors[job.status])}>{statusLabels[job.status]}</span>
+    ),
+  },
+  {
+    id: 'createdAt',
+    header: 'Erstellt',
+    accessor: (job) => new Date(job.createdAt),
+    cell: (job) => <span className="text-muted-foreground">{formatDate(job.createdAt)}</span>,
+  },
+  {
+    id: 'completedAt',
+    header: 'Abgeschlossen',
+    accessor: (job) => (job.completedAt ? new Date(job.completedAt) : null),
+    cell: (job) => <span className="text-muted-foreground">{job.completedAt ? formatDate(job.completedAt) : '—'}</span>,
+    defaultHidden: true,
+  },
+  { id: 'createdBy', header: 'Erstellt von', accessor: (job) => job.createdByEmail || null, className: 'text-muted-foreground' },
+  { id: 'error', header: 'Fehler', accessor: (job) => job.error, defaultHidden: true, className: 'max-w-xs truncate text-xs text-destructive' },
+];
 
 function JobDetailPanel({
   job,

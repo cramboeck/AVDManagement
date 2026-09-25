@@ -2,10 +2,12 @@
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import clsx from 'clsx';
 import { useTenant } from '@/hooks/use-tenant';
 import { api } from '@/lib/api';
+import { DataTable, type ColumnDef } from '@/components/ui/data-table';
 import { LoadingTable } from '@/components/ui/loading';
 import { ErrorState } from '@/components/ui/error-state';
 import { NoTenantSelected, EmptyState } from '@/components/ui/empty-state';
@@ -294,6 +296,7 @@ const severityClasses: Record<VulnerabilitySeverity, string> = {
 };
 
 function VulnerabilitiesTab({ tenantId }: { tenantId: string }) {
+  const router = useRouter();
   const [severity, setSeverity] = useState<'all' | VulnerabilitySeverity>('all');
 
   const query = useQuery({
@@ -326,6 +329,7 @@ function VulnerabilitiesTab({ tenantId }: { tenantId: string }) {
               key={t.severity}
               onClick={() => setSeverity(severity === t.severity ? 'all' : t.severity)}
               aria-pressed={severity === t.severity}
+              title="Filtert serverseitig nach Schwere"
               className={clsx(
                 'rounded-full px-3 py-1 text-xs font-medium ring-offset-background focus:outline-none focus-visible:ring-2 focus-visible:ring-primary',
                 severityClasses[t.severity],
@@ -336,50 +340,67 @@ function VulnerabilitiesTab({ tenantId }: { tenantId: string }) {
             </button>
           ))}
         </div>
-        <span className="text-xs text-muted-foreground">
-          {items.length} CVEs{result.data.truncated ? ' (Stichprobe, Tenant hat mehr)' : ''}
-        </span>
+        {result.data.truncated && <span className="text-xs text-warning">Stichprobe — der Tenant hat mehr Schwachstellen als geladen</span>}
       </div>
 
       {items.length === 0 ? (
         <EmptyState title="Keine offenen Schwachstellen" description="Defender meldet fuer diesen Filter keine betroffenen Geraete." />
       ) : (
-        <div className="overflow-x-auto rounded-lg border">
-          <table className="w-full text-sm">
-            <thead className="border-b bg-muted/50">
-              <tr className="text-left">
-                <th className="px-3 py-2 font-medium">CVE</th>
-                <th className="px-3 py-2 font-medium">Schwere</th>
-                <th className="px-3 py-2 font-medium">Geraete</th>
-                <th className="px-3 py-2 font-medium">Produkte</th>
-                <th className="px-3 py-2 font-medium">Behebende KBs</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((v) => (
-                <tr key={v.cveId} className="border-b last:border-0 hover:bg-accent/50">
-                  <td className="px-3 py-2">
-                    <Link href={`/security/vulnerabilities/${encodeURIComponent(v.cveId)}`} className="font-mono text-xs text-primary hover:underline">
-                      {v.cveId}
-                    </Link>
-                  </td>
-                  <td className="px-3 py-2">
-                    <span className={clsx('rounded-full px-2 py-0.5 text-xs font-medium', severityClasses[v.severity])}>{v.severity}</span>
-                  </td>
-                  <td className="px-3 py-2 tabular-nums">{v.deviceCount}</td>
-                  <td className="max-w-[20rem] truncate px-3 py-2 text-xs text-muted-foreground" title={v.products.join(', ')}>
-                    {v.products.join(', ') || '—'}
-                  </td>
-                  <td className="px-3 py-2 font-mono text-xs">{v.fixingKbIds.map((kb) => `KB${kb}`).join(', ') || '—'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <DataTable
+          rows={items}
+          columns={vulnerabilityColumns}
+          getRowId={(v) => v.cveId}
+          storageKey="tenant-vulnerabilities"
+          initialSort={{ columnId: 'severity', direction: 'asc' }}
+          searchPlaceholder="CVE, Produkt, KB..."
+          onRowClick={(v) => router.push(`/security/vulnerabilities/${encodeURIComponent(v.cveId)}`)}
+          exportFileName="schwachstellen"
+          dense
+        />
       )}
     </div>
   );
 }
+
+const severityRank: Record<VulnerabilitySeverity, number> = { Critical: 0, High: 1, Medium: 2, Low: 3, Unknown: 4 };
+
+const vulnerabilityColumns: ColumnDef<TenantVulnerability>[] = [
+  {
+    id: 'cveId',
+    header: 'CVE',
+    accessor: (v) => v.cveId,
+    cell: (v) => (
+      <Link href={`/security/vulnerabilities/${encodeURIComponent(v.cveId)}`} className="font-mono text-xs text-primary hover:underline" onClick={(e) => e.stopPropagation()}>
+        {v.cveId}
+      </Link>
+    ),
+  },
+  {
+    id: 'severity',
+    header: 'Schwere',
+    accessor: (v) => v.severity,
+    sortValue: (v) => severityRank[v.severity],
+    filterOptions: (['Critical', 'High', 'Medium', 'Low'] as VulnerabilitySeverity[]).map((s) => ({ value: s, label: s })),
+    cell: (v) => <span className={clsx('rounded-full px-2 py-0.5 text-xs font-medium', severityClasses[v.severity])}>{v.severity}</span>,
+  },
+  { id: 'deviceCount', header: 'Geraete', accessor: (v) => v.deviceCount, align: 'right', className: 'tabular-nums' },
+  {
+    id: 'products',
+    header: 'Produkte',
+    accessor: (v) => v.products.join(', ') || null,
+    cell: (v) => (
+      <span className="block max-w-[20rem] truncate text-xs text-muted-foreground" title={v.products.join(', ')}>
+        {v.products.join(', ') || '—'}
+      </span>
+    ),
+  },
+  {
+    id: 'kbs',
+    header: 'Behebende KBs',
+    accessor: (v) => v.fixingKbIds.map((kb) => `KB${kb}`).join(', ') || null,
+    className: 'font-mono text-xs',
+  },
+];
 
 function Stat({ label, value, tone = 'default' }: { label: string; value: number; tone?: 'default' | 'warning' | 'destructive' }) {
   return (
