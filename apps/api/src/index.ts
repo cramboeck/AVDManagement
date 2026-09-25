@@ -54,8 +54,8 @@ app.get('/', (c) => {
 // Auth-Routen (ohne Auth-Middleware)
 app.route('/auth', authRouter);
 
-// Dev-Mode: Unauthenticated tenant list for testing
-if (process.env.NODE_ENV !== 'production') {
+// Nur mit aktivem Dev-Bypass: ungeschuetzte Tenant-Liste zur Diagnose
+if (process.env.DEV_AUTH_BYPASS === 'true') {
   app.get('/dev/tenants', async (c) => {
     const { db } = await import('./db/index.js');
     const tenants = await db.query.managedTenants.findMany({

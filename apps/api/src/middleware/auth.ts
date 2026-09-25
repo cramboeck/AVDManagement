@@ -34,20 +34,17 @@ declare module 'hono' {
   }
 }
 
+// Pseudo-Object-Id fuer den Dev-Bypass-Benutzer; kein echtes Entra-Objekt
+const DEV_USER_OBJECT_ID = 'dev-auth-bypass';
+
 export const authMiddleware = createMiddleware(async (c, next) => {
-  // Dev-Bypass fuer lokale Entwicklung
+  // Dev-Bypass: echter DB-Benutzer in der Default-MSP, damit Fremdschluessel
+  // (jobs.created_by, audit_entries.user_id) gueltig sind
   if (process.env.DEV_AUTH_BYPASS === 'true') {
-    // Feste UUIDs fuer Dev-Modus (reproduzierbar)
-    const devUser: SessionUser = {
-      id: '00000000-0000-0000-0000-000000000001' as UserId,
-      mspId: '00000000-0000-0000-0000-000000000000' as MspId,
-      email: 'dev@localhost',
-      displayName: 'Dev User',
-      role: 'owner',
-    };
+    const user = await findOrCreateUser(DEV_USER_OBJECT_ID, 'dev@localhost', 'Dev User', 'owner');
     c.set('auth', {
-      user: devUser,
-      mspId: devUser.mspId,
+      user,
+      mspId: user.mspId,
       accessToken: 'dev-token',
     });
     await next();
@@ -108,19 +105,18 @@ export const authMiddleware = createMiddleware(async (c, next) => {
 async function findOrCreateUser(
   entraObjectId: string,
   email: string,
-  displayName: string
+  displayName: string,
+  forcedRole?: UserRole
 ): Promise<SessionUser> {
   const existingUser = await db.query.mspUsers.findFirst({
     where: eq(mspUsers.entraObjectId, entraObjectId),
-    with: {
-      // Keine Relations definiert, daher manuell
-    },
   });
 
   if (existingUser) {
+    const role = forcedRole ?? (existingUser.role as UserRole);
     await db
       .update(mspUsers)
-      .set({ lastLoginAt: new Date() })
+      .set({ lastLoginAt: new Date(), role })
       .where(eq(mspUsers.id, existingUser.id));
 
     return {
@@ -128,7 +124,7 @@ async function findOrCreateUser(
       mspId: existingUser.mspId as MspId,
       email: existingUser.email,
       displayName: existingUser.displayName,
-      role: existingUser.role as UserRole,
+      role,
     };
   }
 
@@ -159,7 +155,7 @@ async function findOrCreateUser(
       entraObjectId,
       email,
       displayName,
-      role: isFirstUser ? 'owner' : 'readonly',
+      role: forcedRole ?? (isFirstUser ? 'owner' : 'readonly'),
       lastLoginAt: new Date(),
     })
     .returning();
