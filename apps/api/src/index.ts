@@ -20,7 +20,7 @@ import { authRouter } from './routes/auth.js';
 import { securityRouter } from './routes/security.js';
 import { tenantDashboardRouter, dashboardRouter } from './routes/dashboard.js';
 import { devicesRouter } from './routes/devices.js';
-import { getJobQueue } from './services/job-queue.js';
+import { getJobQueue, getJobHealth } from './services/job-queue.js';
 
 const app = new Hono();
 
@@ -43,7 +43,12 @@ app.onError(errorHandler);
 
 // Health-Check
 app.get('/health', (c) => {
-  return c.json({ status: 'ok', timestamp: new Date().toISOString() });
+  const jobs = getJobHealth();
+  return c.json({
+    status: jobs.worker && jobs.redis === 'ready' ? 'ok' : 'degraded',
+    timestamp: new Date().toISOString(),
+    jobs,
+  });
 });
 
 // API-Info

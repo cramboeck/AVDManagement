@@ -147,7 +147,12 @@ export default function DevicesPage() {
           ) : filtered.length === 0 ? (
             <NoResults query={search} />
           ) : (
-            <DeviceTable devices={filtered} onOpen={(d) => router.push(`/devices/${encodeURIComponent(d.id)}`)} />
+            <DeviceTable
+              devices={filtered}
+              intuneAvailable={inventory?.intune.available ?? true}
+              defenderAvailable={inventory?.defender.available ?? true}
+              onOpen={(d) => router.push(`/devices/${encodeURIComponent(d.id)}`)}
+            />
           )}
         </>
       )}
@@ -155,7 +160,17 @@ export default function DevicesPage() {
   );
 }
 
-function DeviceTable({ devices, onOpen }: { devices: Device[]; onOpen: (device: Device) => void }) {
+function DeviceTable({
+  devices,
+  intuneAvailable,
+  defenderAvailable,
+  onOpen,
+}: {
+  devices: Device[];
+  intuneAvailable: boolean;
+  defenderAvailable: boolean;
+  onOpen: (device: Device) => void;
+}) {
   return (
     <div className="overflow-x-auto rounded-lg border">
       <table className="w-full text-sm">
@@ -189,7 +204,11 @@ function DeviceTable({ devices, onOpen }: { devices: Device[]; onOpen: (device: 
                 <span className="block text-xs text-muted-foreground">{d.osVersion ?? ''}</span>
               </td>
               <td className="px-3 py-2">
-                {d.intune ? <ComplianceBadge state={d.intune.complianceState} /> : <span className="text-xs text-muted-foreground">nicht in Intune</span>}
+                {d.intune ? (
+                  <ComplianceBadge state={d.intune.complianceState} />
+                ) : (
+                  <span className="text-xs text-muted-foreground">{intuneAvailable ? 'nicht in Intune' : 'Intune nicht verfuegbar'}</span>
+                )}
               </td>
               <td className="px-3 py-2">
                 {d.defender ? (
@@ -198,7 +217,9 @@ function DeviceTable({ devices, onOpen }: { devices: Device[]; onOpen: (device: 
                     <RiskBadge score={d.defender.riskScore} />
                   </span>
                 ) : (
-                  <span className="text-xs text-muted-foreground">nicht onboarded</span>
+                  <span className="text-xs text-muted-foreground" title={defenderAvailable ? 'Kein Defender-Datensatz fuer dieses Geraet' : 'Defender-Quelle nicht verfuegbar, siehe Hinweis oben'}>
+                    {defenderAvailable ? 'nicht onboarded' : 'Defender nicht verfuegbar'}
+                  </span>
                 )}
               </td>
               <td className="px-3 py-2 text-muted-foreground" title={d.lastActivityAt ?? undefined}>

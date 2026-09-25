@@ -33,11 +33,22 @@ const statusColors: Record<JobStatus, string> = {
   cancelled: 'bg-muted text-muted-foreground',
 };
 
+interface HealthResponse {
+  status: 'ok' | 'degraded';
+  jobs: { redis: string; worker: boolean };
+}
+
 export default function JobsPage() {
   const { activeTenant, isLoading: tenantLoading } = useTenant();
   const queryClient = useQueryClient();
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   const [approveError, setApproveError] = useState<Error | null>(null);
+
+  const healthQuery = useQuery({
+    queryKey: ['health'],
+    queryFn: () => api.get<HealthResponse>('/health'),
+    refetchInterval: 15000,
+  });
 
   const {
     data,
@@ -78,6 +89,16 @@ export default function JobsPage() {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Jobs</h1>
       </div>
+
+      {healthQuery.data && healthQuery.data.status !== 'ok' && (
+        <div className="rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm" role="alert">
+          <p className="font-medium">Job-Worker nicht betriebsbereit</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Redis: {healthQuery.data.jobs.redis}, Worker: {healthQuery.data.jobs.worker ? 'laeuft' : 'gestoppt'}.
+            Freigegebene Jobs bleiben in der Warteschlange, bis Redis erreichbar ist (lokal: <span className="font-mono">docker-compose up -d</span>).
+          </p>
+        </div>
+      )}
 
       <ErrorBanner error={approveError} onDismiss={() => setApproveError(null)} />
 

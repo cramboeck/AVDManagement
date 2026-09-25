@@ -2,14 +2,19 @@
  * Job-Store Implementation mit Drizzle
  */
 
-import { eq, and, desc } from 'drizzle-orm';
-import { db, jobs } from '../db/index.js';
+import { eq, and, desc, lt, inArray } from 'drizzle-orm';
+import { db, jobs, mspUsers } from '../db/index.js';
 import type { JobStore } from '@zerostress/core';
 import type { Job, JobId, TenantId, JobStatus } from '@zerostress/types';
 
+type JobRow = typeof jobs.$inferSelect;
+
 export class DrizzleJobStore implements JobStore {
   async create(job: Job): Promise<void> {
+    // Die Queue vergibt die Id; sie muss in der DB identisch sein, sonst
+    // finden Preview-Update, Worker und Statusabfragen den Job nicht
     await db.insert(jobs).values({
+      id: job.id,
       mspId: job.mspId,
       tenantId: job.tenantId,
       type: job.type,
@@ -30,27 +35,27 @@ export class DrizzleJobStore implements JobStore {
   }
 
   async update(id: JobId, updates: Partial<Job>): Promise<void> {
-    const updateData: Record<string, unknown> = {};
+    const updateData: Partial<typeof jobs.$inferInsert> = {};
 
     if (updates.status !== undefined) updateData.status = updates.status;
-    if (updates.startedAt !== undefined) updateData.startedAt = updates.startedAt;
-    if (updates.completedAt !== undefined) updateData.completedAt = updates.completedAt;
+    if (updates.startedAt !== undefined) updateData.startedAt = updates.startedAt ? new Date(updates.startedAt) : null;
+    if (updates.completedAt !== undefined) updateData.completedAt = updates.completedAt ? new Date(updates.completedAt) : null;
     if (updates.result !== undefined) updateData.result = updates.result;
     if (updates.error !== undefined) updateData.error = updates.error;
     if (updates.retryCount !== undefined) updateData.retryCount = updates.retryCount;
     if (updates.preview !== undefined) updateData.preview = updates.preview;
 
+    if (Object.keys(updateData).length === 0) return;
+
     await db.update(jobs).set(updateData).where(eq(jobs.id, id));
   }
 
   async findById(id: JobId): Promise<Job | null> {
-    const row = await db.query.jobs.findFirst({
-      where: eq(jobs.id, id),
-    });
-
+    const row = await db.query.jobs.findFirst({ where: eq(jobs.id, id) });
     if (!row) return null;
 
-    return this.mapRowToJob(row);
+    const [job] = await this.withCreators([row]);
+    return job;
   }
 
   async findByTenant(
@@ -58,7 +63,6 @@ export class DrizzleJobStore implements JobStore {
     options?: { limit?: number; status?: JobStatus }
   ): Promise<Job[]> {
     const conditions = [eq(jobs.tenantId, tenantId)];
-
     if (options?.status) {
       conditions.push(eq(jobs.status, options.status));
     }
@@ -69,10 +73,53 @@ export class DrizzleJobStore implements JobStore {
       limit: options?.limit ?? 50,
     });
 
-    return rows.map(this.mapRowToJob);
+    return this.withCreators(rows);
   }
 
-  private mapRowToJob(row: typeof jobs.$inferSelect): Job {
+  // Freigaben, die niemand bestaetigt hat, nicht ewig offen lassen
+  async cancelExpiredPending(olderThan: Date): Promise<number> {
+    const cancelled = await db
+      .update(jobs)
+      .set({
+        status: 'cancelled',
+        completedAt: new Date(),
+        error: 'Preview expired without approval',
+      })
+      .where(and(eq(jobs.status, 'pending_approval'), lt(jobs.createdAt, olderThan)))
+      .returning({ id: jobs.id });
+
+    return cancelled.length;
+  }
+
+  // Jobs, die der Worker nie abgeschlossen hat (z. B. Neustart, Redis weg), nicht ewig "laufen" lassen
+  async failStaleActive(olderThan: Date): Promise<number> {
+    const failed = await db
+      .update(jobs)
+      .set({
+        status: 'failed',
+        completedAt: new Date(),
+        error: 'Job was not completed by the worker within the expected time',
+      })
+      .where(and(inArray(jobs.status, ['queued', 'running']), lt(jobs.createdAt, olderThan)))
+      .returning({ id: jobs.id });
+
+    return failed.length;
+  }
+
+  private async withCreators(rows: JobRow[]): Promise<Job[]> {
+    const creatorIds = Array.from(new Set(rows.map((r) => r.createdBy)));
+    const creators = creatorIds.length
+      ? await db
+          .select({ id: mspUsers.id, email: mspUsers.email })
+          .from(mspUsers)
+          .where(inArray(mspUsers.id, creatorIds))
+      : [];
+    const emailById = new Map(creators.map((c) => [c.id, c.email]));
+
+    return rows.map((row) => this.mapRowToJob(row, emailById.get(row.createdBy) ?? ''));
+  }
+
+  private mapRowToJob(row: JobRow, createdByEmail: string): Job {
     return {
       id: row.id as JobId,
       type: row.type,
@@ -82,7 +129,7 @@ export class DrizzleJobStore implements JobStore {
       status: row.status as JobStatus,
       priority: row.priority as Job['priority'],
       createdBy: row.createdBy as Job['createdBy'],
-      createdByEmail: '',
+      createdByEmail,
       targetCount: 1,
       createdAt: row.createdAt.toISOString(),
       startedAt: row.startedAt?.toISOString() ?? null,

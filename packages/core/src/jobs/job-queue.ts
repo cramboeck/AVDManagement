@@ -313,6 +313,25 @@ export class JobQueue {
         concurrency,
       }
     );
+
+    // Ohne Listener verschluckt BullMQ Verbindungsfehler; der Worker steht dann still
+    this.worker.on('error', (error: Error) => {
+      console.error('Job worker error:', error.message);
+    });
+    this.worker.on('failed', (bullJob, error: Error) => {
+      console.error(`Job ${bullJob?.id ?? 'unknown'} failed:`, error.message);
+    });
+  }
+
+  /**
+   * Zustand von Redis-Verbindung und Worker (fuer /health)
+   */
+  getHealth(): { redisStatus: string; workerRunning: boolean } {
+    const connection = this.queue.opts.connection as Redis;
+    return {
+      redisStatus: connection.status,
+      workerRunning: this.worker !== null && this.worker.isRunning(),
+    };
   }
 
   /**
