@@ -187,6 +187,38 @@ app.post(
   }
 );
 
+// Bibliotheksskript auf einem Geraet ausfuehren (nur Skript-Ids aus der Bibliothek)
+const runScriptSchema = z.object({
+  managedDeviceId: z.string().min(1),
+  deviceName: z.string().min(1),
+  scriptId: z.enum(['update-status', 'update-scan', 'system-info']),
+});
+
+app.post('/run-script', requireRole('engineer'), requireConnectedTenant, zValidator('json', runScriptSchema), async (c) => {
+  const auth = c.get('auth');
+  const tenant = c.get('tenant');
+  const body = c.req.valid('json');
+  const queue = getJobQueue();
+
+  const job = await queue.createJob({
+    type: 'device.run-script',
+    tenantId: tenant.id,
+    mspId: auth.mspId,
+    userId: auth.user.id,
+    userEmail: auth.user.email,
+    payload: {
+      managedDeviceId: body.managedDeviceId,
+      deviceName: body.deviceName,
+      scriptId: body.scriptId,
+      targetType: 'device',
+      targetId: body.managedDeviceId,
+      targetDisplayName: `${body.deviceName} - ${body.scriptId}`,
+    },
+  });
+
+  return c.json(job, 202);
+});
+
 // Job bestaetigen (nach Preview)
 app.post('/:jobId/approve', requireRole('engineer'), async (c) => {
   const auth = c.get('auth');

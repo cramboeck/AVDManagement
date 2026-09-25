@@ -456,6 +456,69 @@ export interface TenantVulnerabilitySet {
 
 export type TenantVulnerabilityList = CapabilityResult<TenantVulnerabilitySet> & { snapshot?: SnapshotMeta };
 
+// ============================================
+// Skriptbibliothek (Intune Remediations auf Abruf)
+// ============================================
+
+export type LibraryScriptId = 'update-status' | 'update-scan' | 'system-info';
+
+export interface ScriptLibraryEntry {
+  id: LibraryScriptId;
+  displayName: string;
+  description: string;
+  version: string;
+  // SHA-256 ueber Version, Erkennungs- und Behebungsskript
+  hash: string;
+  runAsAccount: 'system';
+  // true: das Skript veraendert etwas auf dem Geraet (Behebungsteil vorhanden)
+  hasRemediation: boolean;
+  // Was die Behebung tut, fuer die Preview
+  remediationSummary: string | null;
+  expectedDurationSeconds: number;
+}
+
+// in-sync: Tenant hat genau diese Version; outdated: aeltere Version im Tenant;
+// missing: wird beim ersten Lauf angelegt
+export type TenantScriptState = 'in-sync' | 'outdated' | 'missing';
+
+export interface TenantScriptStatus extends ScriptLibraryEntry {
+  tenantState: TenantScriptState;
+  tenantScriptId: string | null;
+  tenantHash: string | null;
+  tenantModifiedAt: string | null;
+}
+
+export type ScriptLibraryStatus = CapabilityResult<TenantScriptStatus[]>;
+
+export type RemediationRunState =
+  | 'unknown'
+  | 'success'
+  | 'fail'
+  | 'scriptError'
+  | 'pending'
+  | 'notApplicable'
+  | 'skipped'
+  | 'remediationFailed';
+
+export interface ScriptRunResult {
+  scriptId: LibraryScriptId;
+  version: string;
+  hash: string;
+  tenantScriptId: string;
+  managedDeviceId: string;
+  requestedAt: string;
+  completedAt: string;
+  detectionState: RemediationRunState;
+  remediationState: RemediationRunState;
+  // Ausgabe der Erkennung nach der Behebung, sonst davor
+  output: string | null;
+  // Ausgabe, wenn sie gueltiges JSON ist
+  outputJson: Record<string, unknown> | null;
+  detectionError: string | null;
+  remediationError: string | null;
+  deviceReportedAt: string | null;
+}
+
 export type VulnerabilitySeverity = 'Critical' | 'High' | 'Medium' | 'Low' | 'Unknown';
 
 export interface DeviceVulnerability {

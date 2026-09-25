@@ -68,6 +68,30 @@ Live bleiben: Scores, MFA-Report, Alerts, Anmelde- und Auditprotokolle,
 Wiederherstellungsschluessel, alle Jobs. `/health` meldet unter `inventory`,
 ob der Sync-Worker laeuft.
 
+## Skriptbibliothek (Geraet > Skripte)
+
+Befehle auf Geraeten laufen ohne eigenen Agenten ueber Intune Remediations
+auf Abruf. Die Skripte liegen als Dateien unter `packages/core/scripts`
+(PowerShell 5.1, ASCII, keine Aliase) und sind die einzige Quelle; Freitext
+gibt es nicht. Beim ersten Lauf legt die Konsole das Remediation-Objekt
+`ZSC-<skript>` im Kundentenant an, spaeter aktualisiert sie es, sobald der
+Hash in der Beschreibung nicht mehr zur Bibliothek passt. Jeder Lauf ist ein
+Job mit Preview; Name, Version und Hash stehen im Audit.
+
+| Skript | Wirkung | Ergebnis |
+|---|---|---|
+| Update-Stand | nur lesend, Update-Cache des Geraets | ausstehende Updates, Neustartbedarf, letzte Suche/Installation |
+| Update-Scan starten | Online-Scan gegen die konfigurierte Quelle, installiert nichts | Ergebnis des frischen Scans |
+| Systeminfo | nur lesend | OS, Laufzeit, Systemlaufwerk, TPM, Secure Boot, BitLocker, Defender |
+
+Voraussetzungen im Kundentenant: Windows 10/11 Pro oder Enterprise mit
+Intune Management Extension, Entra-joined oder hybrid, Lizenz Business
+Premium, E3/E5 oder Windows E3/E5 (Remediations). Das Ergebnis kommt, sobald
+das Geraet online ist; der Job wartet bis zu zehn Minuten, danach meldet er
+"kein Ergebnis" und das Ergebnis erscheint spaeter im Intune-Portal unter
+Geraet > Remediations. Intune begrenzt die Skriptausgabe auf 2048 Zeichen,
+die Skripte liefern deshalb kompaktes JSON.
+
 Integrationstest der Tenant-Isolation des Snapshot-Speichers:
 
 ```powershell
@@ -114,6 +138,7 @@ Secret ab (`AADSTS700025`).
 | `SecurityAlert.Read.All` | Offene Defender-Alerts | Karte "Berechtigung fehlt" |
 | `BitLockerKey.Read.All` | BitLocker-Wiederherstellungsschluessel (Geraet > Wiederherstellung) | Karte "Berechtigung fehlt" |
 | `DeviceLocalCredential.Read.All` | Windows-LAPS-Passwoerter; setzt LAPS mit Entra-Sicherung in der Intune-Richtlinie voraus | Karte "Berechtigung fehlt" |
+| `DeviceManagementConfiguration.ReadWrite.All` | Skriptbibliothek als Intune Remediations im Tenant anlegen und aktuell halten (Geraet > Skripte) | Karte "Berechtigung fehlt" im Tab Skripte |
 
 Schluessel und Passwoerter werden nie gelistet oder exportiert: Anzeige nur
 nach Begruendung (mindestens 10 Zeichen), Rolle Engineer, Audit-Eintrag mit

@@ -12,3 +12,4 @@ export * from './identity-provider.js';
 export * from './avd-provider.js';
 export * from './device-provider.js';
 export * from './security-provider.js';
+export * from './remediation-provider.js';
