@@ -4,11 +4,17 @@
 
 import { config } from 'dotenv';
 import { existsSync } from 'fs';
-import { resolve } from 'path';
+import { resolve, dirname } from 'path';
+import { fileURLToPath } from 'url';
 
-// .env.local hat Prioritaet, dann .env
-const envLocalPath = resolve(process.cwd(), '.env.local');
-const envPath = resolve(process.cwd(), '.env');
+// Monorepo-Root finden (von apps/api/src aus: 3 Ebenen hoch)
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const monorepoRoot = resolve(__dirname, '..', '..', '..');
+
+// .env.local hat Prioritaet, dann .env (im Monorepo-Root)
+const envLocalPath = resolve(monorepoRoot, '.env.local');
+const envPath = resolve(monorepoRoot, '.env');
 
 if (existsSync(envLocalPath)) {
   console.log('Loading .env.local from:', envLocalPath);
@@ -17,7 +23,7 @@ if (existsSync(envLocalPath)) {
   console.log('Loading .env from:', envPath);
   config({ path: envPath });
 } else {
-  console.log('No .env file found');
+  console.log('No .env file found in:', monorepoRoot);
 }
 
 console.log('DEV_AUTH_BYPASS:', process.env.DEV_AUTH_BYPASS);
