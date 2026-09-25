@@ -49,7 +49,10 @@ export const authMiddleware = createMiddleware(async (c, next) => {
     const jwksClient = await getJwks();
     const { payload } = await jose.jwtVerify(token, jwksClient, {
       issuer: `https://login.microsoftonline.com/${process.env.ENTRA_TENANT_ID}/v2.0`,
-      audience: process.env.ENTRA_CLIENT_ID,
+      audience: [
+        process.env.ENTRA_CLIENT_ID!,
+        'https://management.azure.com',
+      ],
     });
 
     const entraObjectId = payload.oid as string;

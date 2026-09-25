@@ -26,7 +26,7 @@ app.post('/token', async (c) => {
     code,
     redirect_uri,
     code_verifier: code_verifier ?? '',
-    scope: 'openid profile email offline_access User.Read https://management.azure.com/user_impersonation',
+    scope: 'openid profile email offline_access User.Read',
   });
 
   try {
@@ -70,7 +70,7 @@ app.post('/refresh', async (c) => {
     client_secret: CLIENT_SECRET,
     grant_type: 'refresh_token',
     refresh_token,
-    scope: 'openid profile email offline_access User.Read https://management.azure.com/user_impersonation',
+    scope: 'openid profile email offline_access User.Read',
   });
 
   try {
