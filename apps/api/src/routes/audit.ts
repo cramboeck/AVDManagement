@@ -51,8 +51,6 @@ app.get('/', async (c) => {
   const users = await db.query.mspUsers.findMany({
     where: (u, { inArray }) => inArray(u.id, userIds),
   });
-  const userMap = new Map(users.map((u) => [u.id, u.displayName]));
-
   const items: AuditEntry[] = rows.map((row) => {
     const user = users.find((u) => u.id === row.userId);
     return {
