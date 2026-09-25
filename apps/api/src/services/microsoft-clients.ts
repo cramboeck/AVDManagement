@@ -18,6 +18,7 @@ import {
   RemediationProvider,
   GroupProvider,
   MailProvider,
+  PolicyProvider,
   DEFENDER_API_BASE_URL,
   NotFoundError,
 } from '@zerostress/core';
@@ -117,6 +118,15 @@ export function getMailProvider(): MailProvider {
     mailProvider = new MailProvider(getGraphClient());
   }
   return mailProvider;
+}
+
+let policyProvider: PolicyProvider | null = null;
+
+export function getPolicyProvider(): PolicyProvider {
+  if (!policyProvider) {
+    policyProvider = new PolicyProvider(getGraphClient());
+  }
+  return policyProvider;
 }
 
 let securityProvider: SecurityProvider | null = null;

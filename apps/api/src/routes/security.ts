@@ -9,6 +9,7 @@ import { tenantContextMiddleware, requireConnectedTenant } from '../middleware/t
 import { getIdentityProvider } from '../services/microsoft-clients.js';
 import { DrizzleAuditLogger } from '../services/audit-logger.js';
 import { buildSecurityPosture } from '../services/posture.js';
+import { buildSecurityChecks } from '../services/checks.js';
 import type { CorrelationId } from '@zerostress/types';
 
 const app = new Hono();
@@ -26,6 +27,12 @@ function parseTop(value: string | undefined, fallback: number): number {
 app.get('/posture', requireConnectedTenant, async (c) => {
   const tenant = c.get('tenant');
   return c.json(await buildSecurityPosture(tenant));
+});
+
+// Best-Practice-Checks: Richtlinien, Einstellungen, Mail-Authentifizierung (nur Kennzahlen)
+app.get('/checks', requireConnectedTenant, async (c) => {
+  const tenant = c.get('tenant');
+  return c.json(await buildSecurityChecks(tenant));
 });
 
 // Anmeldungen im Tenant (Sicherheitsmonitoring: woher, womit, mit welchem Ergebnis)

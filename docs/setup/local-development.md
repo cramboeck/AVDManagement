@@ -79,6 +79,19 @@ Minuten), die Zaehlungen laufen ueber `$batch` mit zwei Anfragen je Gruppe.
 `resourceProvisioningOptions`, ein Teams-Scope ist nicht noetig. Das Detail
 laedt Besitzer und Mitglieder live (bis 2000).
 
+## Best-Practice-Checks (Sicherheit > Best Practices)
+
+Ein eigener Katalog aus oeffentlichen Microsoft-Empfehlungen, keine
+Vorlagen aus Fremdprojekten. Geprueft werden MFA fuer alle und fuer
+Administratoren, blockierte Legacy-Authentifizierung, risikobasierte
+Richtlinien, konformes Geraet, Nur-Bericht-Richtlinien, SMS/Sprachanruf,
+FIDO2, Nummernabgleich, App-Registrierung und Benutzer-Consent,
+Gasteinladungen und Gastrechte, Anzahl globaler Administratoren,
+Passwortablauf, Intune-Compliance-Richtlinien sowie SPF, DKIM und DMARC der
+primaeren Domaene per DNS. Jeder Check hat Befund, Empfehlung und Belege;
+Quellen ohne Berechtigung werden als "nicht pruefbar" gefuehrt, nie als
+Fehler. Der Erfuellungsgrad gewichtet wesentliche Checks dreifach.
+
 ## Exchange Online
 
 Die Seite **Exchange** liest vier Nutzungsberichte aus Graph
@@ -188,6 +201,7 @@ Secret ab (`AADSTS700025`).
 | `DeviceLocalCredential.Read.All` | Windows-LAPS-Passwoerter; setzt LAPS mit Entra-Sicherung in der Intune-Richtlinie voraus | Karte "Berechtigung fehlt" |
 | `DeviceManagementConfiguration.ReadWrite.All` | Skriptbibliothek als Intune Remediations im Tenant anlegen und aktuell halten (Geraet > Skripte) | Karte "Berechtigung fehlt" im Tab Skripte |
 | `Reports.Read.All` | Exchange-Nutzungsberichte: Postfachgroessen, Kontingente, Mailvolumen (Seite Exchange) | Karte "Berechtigung fehlt" |
+| `Policy.Read.All` | Best-Practice-Checks: Conditional Access, Sicherheitsstandards, Authentifizierungsmethoden, Autorisierungsrichtlinie (Sicherheit > Best Practices) | Betroffene Checks "nicht pruefbar" |
 
 Schluessel und Passwoerter werden nie gelistet oder exportiert: Anzeige nur
 nach Begruendung (mindestens 10 Zeichen), Rolle Engineer, Audit-Eintrag mit

@@ -538,6 +538,39 @@ export interface MailOverviewSet {
 export type MailOverview = CapabilityResult<MailOverviewSet> & { snapshot?: SnapshotMeta };
 
 // ============================================
+// Best-Practice-Checks je Tenant (eigener Katalog aus Microsoft-Doku)
+// ============================================
+
+export type SecurityCheckStatus = 'pass' | 'warn' | 'fail' | 'unknown' | 'not-applicable';
+export type SecurityCheckCategory = 'identity' | 'access' | 'governance' | 'devices' | 'mail';
+
+export interface SecurityCheck {
+  id: string;
+  category: SecurityCheckCategory;
+  title: string;
+  status: SecurityCheckStatus;
+  // Ein Satz zum Befund
+  summary: string;
+  // Was zu tun ist
+  recommendation: string;
+  // Belege, die der Admin nachvollziehen kann (Zahlen, Namen von Richtlinien)
+  evidence: Record<string, string | number | boolean | null>;
+  docsUrl: string | null;
+  // 1 = Hinweis, 3 = wesentlich
+  weight: 1 | 2 | 3;
+}
+
+export interface SecurityCheckReport {
+  checks: SecurityCheck[];
+  counts: Record<SecurityCheckStatus, number>;
+  // Punkte der bestandenen Checks relativ zu allen bewertbaren
+  scorePercent: number | null;
+  // Quellen, die nicht lesbar waren, mit Grund
+  unavailableSources: { source: string; reason: CapabilityUnavailableReason; missingPermission: string | null; detail: string | null }[];
+  generatedAt: string;
+}
+
+// ============================================
 // Gruppen (Teams, Microsoft 365, Sicherheit, Verteiler)
 // ============================================
 

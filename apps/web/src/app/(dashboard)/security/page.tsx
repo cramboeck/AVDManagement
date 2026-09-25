@@ -13,6 +13,7 @@ import { ErrorState } from '@/components/ui/error-state';
 import { NoTenantSelected, EmptyState } from '@/components/ui/empty-state';
 import { CapabilityNotice } from '@/components/identity/capability-notice';
 import { SnapshotStatus } from '@/components/inventory/snapshot-status';
+import { ChecksTab } from '@/components/security/checks-tab';
 import { SignInTable, isLegacyClient, formatLocation } from '@/components/identity/sign-in-table';
 import { AuditTable } from '@/components/identity/audit-table';
 import { ChartCard } from '@/components/charts/chart-card';
@@ -34,7 +35,7 @@ import type {
 } from '@zerostress/types';
 
 type Range = '24h' | '7d' | '30d';
-type Tab = 'overview' | 'sign-ins' | 'audit' | 'vulnerabilities';
+type Tab = 'overview' | 'checks' | 'sign-ins' | 'audit' | 'vulnerabilities';
 
 const rangeHours: Record<Range, number> = { '24h': 24, '7d': 24 * 7, '30d': 24 * 30 };
 const rangeLabels: Record<Range, string> = { '24h': '24 Stunden', '7d': '7 Tage', '30d': '30 Tage' };
@@ -195,6 +196,7 @@ export default function SecurityPage() {
       <div role="tablist" className="flex gap-1 border-b">
         {([
           { id: 'overview', label: 'Ueberblick' },
+          { id: 'checks', label: 'Best Practices' },
           { id: 'sign-ins', label: 'Anmeldungen' },
           { id: 'audit', label: 'Verzeichnisaenderungen' },
           { id: 'vulnerabilities', label: 'Schwachstellen' },
@@ -279,6 +281,12 @@ export default function SecurityPage() {
               )}
             </>
           )}
+        </div>
+      )}
+
+      {tab === 'checks' && (
+        <div role="tabpanel">
+          <ChecksTab tenantId={activeTenant.id} />
         </div>
       )}
 
