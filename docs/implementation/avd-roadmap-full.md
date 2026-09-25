@@ -97,36 +97,43 @@ interface ScheduleRule {
 
 ## Phase 4: Image Management
 
-### Optionen (Entscheidung ausstehend)
+### Empfehlung: Azure Image Builder (AIB)
 
-#### Option A: Azure Image Builder Integration
-**Vorteile:**
-- Native Azure-Loesung
-- ARM-Templates/Bicep-Integration
-- Automatische Verteilung in Shared Image Gallery
+Nach Recherche empfehle ich **Azure Image Builder** als primaere Loesung:
 
-**Nachteile:**
-- Weniger flexibel als Packer
-- Azure-Lock-in
+**Gruende:**
+- Native Azure-Loesung, keine externen Abhaengigkeiten
+- Volle REST-API fuer Automatisierung
+- Direkte Integration mit Azure Compute Gallery
+- Managed-Identity-Support (keine Secrets noetig!)
+- Packer bleibt Option fuer bestehende Templates
 
-#### Option B: Packer-Orchestrierung
-**Vorteile:**
-- Bereits im Einsatz
-- Multi-Cloud-faehig
-- Grosse Community
+**Wichtige Ueberlegungen:**
+- Ab Maerz 2026: Neue VNets haben default private Subnets (AIB outbound brechen)
+- Gallery-Sharing-Limit: 30 Subscriptions, 5 Tenants pro Gallery
+- API 2024-02-01+: Feldnamen sind case-sensitive
 
-**Nachteile:**
-- Erfordert Packer-Installation
-- Komplexere Pipeline
+### API-Endpunkte fuer Image Builder
 
-#### Option C: Hybrid (Empfohlen)
-- Packer fuer Image-Erstellung (bestehende Templates weiternutzen)
-- Azure Image Gallery fuer Verteilung
-- ZeroStress als Orchestrator:
-  - Packer-Build triggern (Azure DevOps/GitHub Actions)
-  - Build-Status ueberwachen
-  - Image in Gallery registrieren
-  - Host Pool mit neuem Image aktualisieren
+| Operation | Endpoint |
+|-----------|----------|
+| Image Templates | `Microsoft.VirtualMachineImages/imageTemplates` |
+| Build starten | `POST .../imageTemplates/{name}/run` |
+| Build-Status | `GET .../imageTemplates/{name}/runOutputs` |
+| Gallery-Sharing | `POST .../galleries/{name}/share` |
+| Image-Versionen | `Microsoft.Compute/galleries/.../imageVersions` |
+
+### Nerdio-Pattern nachbauen
+
+Nerdio's Staerke: "Set as Image" in einem Klick:
+1. VM einschalten
+2. Updates installieren
+3. Sysprep
+4. Capture
+5. In Gallery veroeffentlichen
+6. Auf Host Pool anwenden
+
+Wir abstrahieren diese 6 Schritte in **einen Job** mit Live-Status.
 
 ### 4.1 Image-Katalog
 - [ ] Liste aller Images pro Tenant
@@ -187,10 +194,29 @@ interface ScheduleRule {
 - [ ] MSIX-Pakete verwalten
 - [ ] App-Zuweisung an Host Pools
 
-### 6.3 Monitoring & Alerting
-- [ ] Performance-Metriken (CPU, Memory, Disk)
-- [ ] Session-Dauer-Analyse
-- [ ] Alerting bei Problemen
+### 6.3 Monitoring & Alerting (Differenzierung zu Nerdio/Hydra)
+
+**Was wir BESSER machen:**
+1. Multi-Tenant-First: Alle Kunden auf einen Blick
+2. Action-Oriented: Problem sehen → loesen im selben View
+3. Keine Zusatzkosten: Optional ohne Log Analytics nutzbar
+4. Echtzeit: ARM-API statt Log-basiert wo moeglich
+5. Keyboard-First: Power-User koennen ohne Maus arbeiten
+
+**Metriken nach Quelle:**
+| Daten | Quelle | Cache-TTL |
+|-------|--------|-----------|
+| Host-Status | ARM API | 30 Sek |
+| Session-Anzahl | ARM API | 30 Sek |
+| CPU/Memory | Azure Monitor | 1-2 Min |
+| Login-Zeiten | Log Analytics | 5 Min |
+| RTT/Input Delay | Log Analytics | 5 Min |
+
+**Alert-Schwellenwerte:**
+- RTT > 200ms = Warnung
+- Input Delay > 500ms = Kritisch
+- FSLogix Mount > 10s = Warnung
+- CPU > 90% (sustained) = Warnung
 
 ### 6.4 Cost Management
 - [ ] Kostenberechnung pro Host Pool
