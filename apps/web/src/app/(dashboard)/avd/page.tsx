@@ -2,6 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { useTenant } from '@/hooks/use-tenant';
+import { api } from '@/lib/api';
 import { LoadingTable } from '@/components/ui/loading';
 import { ErrorState } from '@/components/ui/error-state';
 import { NoTenantSelected, NoResults } from '@/components/ui/empty-state';
@@ -48,13 +49,8 @@ function HostPoolCard({ pool }: { pool: SyncedHostPool }) {
 
   const summaryQuery = useQuery<HostPoolSummary>({
     queryKey: ['hostPoolSummary', activeTenant?.id, pool.id],
-    queryFn: async () => {
-      const res = await fetch(
-        `/api/tenants/${activeTenant!.id}/avd/host-pools/${encodedId}/summary`
-      );
-      if (!res.ok) throw new Error('Failed to load summary');
-      return res.json();
-    },
+    queryFn: () =>
+      api.get<HostPoolSummary>(`/tenants/${activeTenant!.id}/avd/host-pools/${encodedId}/summary`),
     enabled: !!activeTenant,
     refetchInterval: 30000,
   });
@@ -130,11 +126,7 @@ export default function AvdPage() {
 
   const { data, isLoading, error, refetch } = useQuery<HostPoolsResponse>({
     queryKey: ['hostPools', activeTenant?.id],
-    queryFn: async () => {
-      const res = await fetch(`/api/tenants/${activeTenant!.id}/avd/host-pools`);
-      if (!res.ok) throw new Error('Failed to load host pools');
-      return res.json();
-    },
+    queryFn: () => api.get<HostPoolsResponse>(`/tenants/${activeTenant!.id}/avd/host-pools`),
     enabled: !!activeTenant,
     staleTime: 30 * 1000,
   });

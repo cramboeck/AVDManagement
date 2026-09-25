@@ -80,6 +80,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
 const navItems = [
   { href: '/', label: 'Dashboard', icon: HomeIcon },
+  { href: '/tenants', label: 'Tenants', icon: BuildingIcon },
   { href: '/avd', label: 'Virtual Desktop', icon: DesktopIcon },
   { href: '/users', label: 'Benutzer', icon: UsersIcon },
   { href: '/jobs', label: 'Jobs', icon: JobsIcon },
@@ -120,6 +121,21 @@ function HomeIcon({ className }: { className?: string }) {
     >
       <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
       <polyline points="9 22 9 12 15 12 15 22" />
+    </svg>
+  );
+}
+
+function BuildingIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      className={className}
+    >
+      <path d="M3 21h18M9 8h1M9 12h1M9 16h1M14 8h1M14 12h1M14 16h1M5 21V5a2 2 0 012-2h10a2 2 0 012 2v16" />
     </svg>
   );
 }

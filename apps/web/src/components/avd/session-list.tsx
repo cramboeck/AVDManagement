@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTenant } from '@/hooks/use-tenant';
+import { api } from '@/lib/api';
 import type { UserSession } from '@zerostress/types';
 
 interface SessionListProps {
@@ -58,25 +59,16 @@ function SendMessageDialog({
 
     setIsSubmitting(true);
     try {
-      const res = await fetch(
-        `/api/tenants/${activeTenant.id}/avd/actions/send-message`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            hostPoolId: hostPoolResourceId,
-            hostPoolName,
-            sessionHostId: sessionHostName,
-            sessionHostName,
-            sessionId: session.id,
-            userPrincipalName: session.userPrincipalName,
-            messageTitle: title,
-            messageBody: body,
-          }),
-        }
-      );
-
-      if (!res.ok) throw new Error('Failed to send message');
+      await api.post(`/tenants/${activeTenant.id}/avd/actions/send-message`, {
+        hostPoolId: hostPoolResourceId,
+        hostPoolName,
+        sessionHostId: sessionHostName,
+        sessionHostName,
+        sessionId: session.id,
+        userPrincipalName: session.userPrincipalName,
+        messageTitle: title,
+        messageBody: body,
+      });
 
       queryClient.invalidateQueries({ queryKey: ['jobs'] });
       onClose();
@@ -161,14 +153,10 @@ export function SessionList({
 
   const { data, isLoading, error } = useQuery<SessionsResponse>({
     queryKey: ['userSessions', activeTenant?.id, hostPoolResourceId, sessionHostName],
-    queryFn: async () => {
-      const encodedPool = encodeURIComponent(hostPoolResourceId);
-      const res = await fetch(
-        `/api/tenants/${activeTenant!.id}/avd/host-pools/${encodedPool}/session-hosts/${sessionHostName}/sessions`
-      );
-      if (!res.ok) throw new Error('Failed to load sessions');
-      return res.json();
-    },
+    queryFn: () =>
+      api.get<SessionsResponse>(
+        `/tenants/${activeTenant!.id}/avd/host-pools/${encodeURIComponent(hostPoolResourceId)}/session-hosts/${sessionHostName}/sessions`
+      ),
     enabled: !!activeTenant,
     refetchInterval: 15000,
   });
@@ -177,23 +165,14 @@ export function SessionList({
     if (!activeTenant) return;
 
     try {
-      const res = await fetch(
-        `/api/tenants/${activeTenant.id}/avd/actions/disconnect-session`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            hostPoolId: hostPoolResourceId,
-            hostPoolName,
-            sessionHostId: sessionHostName,
-            sessionHostName,
-            sessionId: session.id,
-            userPrincipalName: session.userPrincipalName,
-          }),
-        }
-      );
-
-      if (!res.ok) throw new Error('Disconnect failed');
+      await api.post(`/tenants/${activeTenant.id}/avd/actions/disconnect-session`, {
+        hostPoolId: hostPoolResourceId,
+        hostPoolName,
+        sessionHostId: sessionHostName,
+        sessionHostName,
+        sessionId: session.id,
+        userPrincipalName: session.userPrincipalName,
+      });
 
       queryClient.invalidateQueries({ queryKey: ['userSessions'] });
       queryClient.invalidateQueries({ queryKey: ['jobs'] });
@@ -210,24 +189,15 @@ export function SessionList({
     }
 
     try {
-      const res = await fetch(
-        `/api/tenants/${activeTenant.id}/avd/actions/logoff-session`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            hostPoolId: hostPoolResourceId,
-            hostPoolName,
-            sessionHostId: sessionHostName,
-            sessionHostName,
-            sessionId: session.id,
-            userPrincipalName: session.userPrincipalName,
-            force: false,
-          }),
-        }
-      );
-
-      if (!res.ok) throw new Error('Logoff failed');
+      await api.post(`/tenants/${activeTenant.id}/avd/actions/logoff-session`, {
+        hostPoolId: hostPoolResourceId,
+        hostPoolName,
+        sessionHostId: sessionHostName,
+        sessionHostName,
+        sessionId: session.id,
+        userPrincipalName: session.userPrincipalName,
+        force: false,
+      });
 
       queryClient.invalidateQueries({ queryKey: ['userSessions'] });
       queryClient.invalidateQueries({ queryKey: ['jobs'] });

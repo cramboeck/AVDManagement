@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTenant } from '@/hooks/use-tenant';
+import { api } from '@/lib/api';
 import { LoadingTable } from '@/components/ui/loading';
 import { ErrorState } from '@/components/ui/error-state';
 import { NoTenantSelected } from '@/components/ui/empty-state';
@@ -84,16 +85,7 @@ function ActionDialog({ isOpen, onClose, host, action, hostPoolName }: ActionDia
         payload.allowNewSession = action === 'drain-off';
       }
 
-      const res = await fetch(
-        `/api/tenants/${activeTenant.id}/avd/actions/${endpoint}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        }
-      );
-
-      if (!res.ok) throw new Error('Action failed');
+      await api.post(`/tenants/${activeTenant.id}/avd/actions/${endpoint}`, payload);
 
       queryClient.invalidateQueries({ queryKey: ['sessionHosts'] });
       queryClient.invalidateQueries({ queryKey: ['jobs'] });
@@ -372,16 +364,7 @@ function BulkActionBar({
             payload.allowNewSession = false;
           }
 
-          const res = await fetch(
-            `/api/tenants/${activeTenant.id}/avd/actions/${endpoint}`,
-            {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(payload),
-            }
-          );
-
-          if (!res.ok) throw new Error(`Failed for ${host.name}`);
+          await api.post(`/tenants/${activeTenant.id}/avd/actions/${endpoint}`, payload);
         })
       );
 
@@ -498,38 +481,29 @@ export default function HostPoolDetailPage({
 
   const poolQuery = useQuery<SyncedHostPool>({
     queryKey: ['hostPool', activeTenant?.id, resourceId],
-    queryFn: async () => {
-      const res = await fetch(
-        `/api/tenants/${activeTenant!.id}/avd/host-pools/${encodeURIComponent(resourceId)}`
-      );
-      if (!res.ok) throw new Error('Failed to load host pool');
-      return res.json();
-    },
+    queryFn: () =>
+      api.get<SyncedHostPool>(
+        `/tenants/${activeTenant!.id}/avd/host-pools/${encodeURIComponent(resourceId)}`
+      ),
     enabled: !!activeTenant,
   });
 
   const hostsQuery = useQuery<SessionHostsResponse>({
     queryKey: ['sessionHosts', activeTenant?.id, resourceId],
-    queryFn: async () => {
-      const res = await fetch(
-        `/api/tenants/${activeTenant!.id}/avd/host-pools/${encodeURIComponent(resourceId)}/session-hosts`
-      );
-      if (!res.ok) throw new Error('Failed to load session hosts');
-      return res.json();
-    },
+    queryFn: () =>
+      api.get<SessionHostsResponse>(
+        `/tenants/${activeTenant!.id}/avd/host-pools/${encodeURIComponent(resourceId)}/session-hosts`
+      ),
     enabled: !!activeTenant,
     refetchInterval: 30000,
   });
 
   const summaryQuery = useQuery<HostPoolSummary>({
     queryKey: ['hostPoolSummary', activeTenant?.id, resourceId],
-    queryFn: async () => {
-      const res = await fetch(
-        `/api/tenants/${activeTenant!.id}/avd/host-pools/${encodeURIComponent(resourceId)}/summary`
-      );
-      if (!res.ok) throw new Error('Failed to load summary');
-      return res.json();
-    },
+    queryFn: () =>
+      api.get<HostPoolSummary>(
+        `/tenants/${activeTenant!.id}/avd/host-pools/${encodeURIComponent(resourceId)}/summary`
+      ),
     enabled: !!activeTenant,
     refetchInterval: 30000,
   });

@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import clsx from 'clsx';
 
 interface EmptyStateProps {
@@ -45,7 +46,15 @@ export function NoTenantSelected() {
     <EmptyState
       icon={<BuildingIcon className="h-6 w-6" />}
       title="Kein Tenant ausgewaehlt"
-      description="Waehle einen Tenant aus der Dropdown-Liste oder verwende Cmd+K."
+      description="Waehle einen Tenant aus der Dropdown-Liste oder binde zuerst einen Kundentenant an."
+      action={
+        <Link
+          href="/tenants"
+          className="rounded-md border px-4 py-2 text-sm font-medium hover:bg-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+        >
+          Tenants verwalten
+        </Link>
+      }
     />
   );
 }
