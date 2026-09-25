@@ -70,11 +70,29 @@ Secret ab (`AADSTS700025`).
 
 ### API-Berechtigungen (Application Permissions, Microsoft Graph)
 
-Mindestens `Organization.Read.All` (Verbindungstest). Fuer die Module
-zusaetzlich die im jeweiligen Modul-Contract dokumentierten Scopes, z. B.
-`User.Read.All`, `Directory.Read.All` fuer Identity. Nach jeder Aenderung an
-den Berechtigungen muss der Admin-Consent im Kundentenant erneut erteilt
-werden.
+| Berechtigung | Wofuer | Fehlt sie |
+|---|---|---|
+| `Organization.Read.All` | Verbindungstest | Tenant bleibt `permissions-insufficient` |
+| `User.Read.All`, `Directory.Read.All` | Benutzerliste, Detail, Gruppen | Benutzer-Seite 403 |
+| `User.ReadWrite.All` | Deaktivieren/Aktivieren, Passwort-Reset, Sitzungen widerrufen, Lizenzen | Jobs schlagen fehl |
+| `UserAuthenticationMethod.Read.All` | MFA-Methoden im Benutzerdetail | Karte "Berechtigung fehlt" |
+| `AuditLog.Read.All` | Anmeldungen, Verzeichnisaudit, letzte Anmeldung | Karte "Berechtigung fehlt" |
+
+Anmelde- und Auditprotokolle setzen zusaetzlich **Entra ID P1** im
+Kundentenant voraus (enthalten in Business Premium, E3, E5). Ohne P1 zeigt
+die Konsole die Karte "Entra ID P1 erforderlich".
+
+**Passwort-Reset und Deaktivierung per App-Berechtigung:** Graph verlangt
+neben `User.ReadWrite.All`, dass der Service Principal der App im
+Kundentenant die Entra-Rolle **Benutzeradministrator** (oder
+Kennwortadministrator) hat. Ohne Rolle antwortet Graph mit 403
+`Authorization_RequestDenied`. Konten mit Administratorrollen koennen so
+nicht zurueckgesetzt werden; das ist von Microsoft so vorgesehen.
+Zuweisung: Entra ID > Rollen und Administratoren > Benutzeradministrator >
+Zuweisung hinzufuegen > die Enterprise-Anwendung auswaehlen.
+
+Nach jeder Aenderung an den Berechtigungen muss der Admin-Consent im
+Kundentenant erneut erteilt werden (Tenants > Consent starten).
 
 ## Tenant anbinden
 

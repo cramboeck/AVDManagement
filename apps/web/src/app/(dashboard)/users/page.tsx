@@ -75,7 +75,11 @@ export default function UsersPage() {
         <NoResults query={search} />
       ) : (
         <>
-          <UserTable users={data.items} onAssignLicense={setSelectedUser} />
+          <UserTable
+            users={data.items}
+            onAssignLicense={setSelectedUser}
+            onOpen={(user) => router.push(`/users/${encodeURIComponent(user.microsoftId)}`)}
+          />
           <Pagination
             hasNext={!!data.nextPageToken}
             onNext={() => setPageToken(data.nextPageToken)}
@@ -137,9 +141,11 @@ function SearchInput({
 function UserTable({
   users,
   onAssignLicense,
+  onOpen,
 }: {
   users: SyncedUser[];
   onAssignLicense: (user: SyncedUser) => void;
+  onOpen: (user: SyncedUser) => void;
 }) {
   return (
     <div className="overflow-x-auto rounded-lg border">
@@ -155,7 +161,15 @@ function UserTable({
         </thead>
         <tbody>
           {users.map((user) => (
-            <tr key={user.id} className="border-b last:border-0">
+            <tr
+              key={user.id}
+              tabIndex={0}
+              onClick={() => onOpen(user)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') onOpen(user);
+              }}
+              className="cursor-pointer border-b last:border-0 hover:bg-accent/50 focus:outline-none focus-visible:bg-accent"
+            >
               <td className="px-4 py-3">
                 <div className="flex items-center gap-3">
                   <UserAvatar name={user.displayName} />

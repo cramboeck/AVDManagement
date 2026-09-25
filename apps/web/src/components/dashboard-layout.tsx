@@ -37,7 +37,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                 className={clsx(
                   'flex items-center gap-3 rounded-md px-3 py-2 text-sm',
                   'transition-colors',
-                  pathname === item.href
+                  pathname === item.href || (item.href !== '/' && pathname.startsWith(`${item.href}/`))
                     ? 'bg-accent font-medium'
                     : 'hover:bg-accent/50'
                 )}
@@ -83,12 +83,15 @@ const navItems = [
   { href: '/tenants', label: 'Tenants', icon: BuildingIcon },
   { href: '/avd', label: 'Virtual Desktop', icon: DesktopIcon },
   { href: '/users', label: 'Benutzer', icon: UsersIcon },
+  { href: '/security', label: 'Sicherheit', icon: ShieldIcon },
   { href: '/jobs', label: 'Jobs', icon: JobsIcon },
   { href: '/audit', label: 'Audit-Log', icon: AuditIcon },
 ];
 
 function BreadcrumbNav({ pathname }: { pathname: string }) {
-  const currentItem = navItems.find((item) => item.href === pathname);
+  const currentItem = navItems.find(
+    (item) => item.href === pathname || (item.href !== '/' && pathname.startsWith(`${item.href}/`))
+  );
 
   return (
     <nav aria-label="Breadcrumb">
@@ -154,6 +157,22 @@ function UsersIcon({ className }: { className?: string }) {
       <circle cx="9" cy="7" r="4" />
       <path d="M23 21v-2a4 4 0 00-3-3.87" />
       <path d="M16 3.13a4 4 0 010 7.75" />
+    </svg>
+  );
+}
+
+function ShieldIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      className={className}
+    >
+      <path d="M12 3l8 3v6c0 5-3.5 8.5-8 9-4.5-.5-8-4-8-9V6l8-3z" />
+      <path d="M9 12l2 2 4-4" />
     </svg>
   );
 }
