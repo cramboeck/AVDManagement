@@ -101,8 +101,13 @@ Begruendung ins Audit.
 
 Entschieden: die Service-Queue ist im vorhandenen TeamViewer-Tarif enthalten,
 H2 (Ad-hoc-Sitzungscodes) ist damit moeglich. Offen: sollen Kunden-Geraete
-in einer TeamViewer-Gruppe je Tenant liegen? Ob Live Response im Defender-
-Portal aktiv ist, wird noch geprueft; R3 haengt davon ab.
+in einer TeamViewer-Gruppe je Tenant liegen? Live Response ist im
+Partnertenant (Defender for Business) verfuegbar, das Geraetemenue im Portal
+bietet "Initiate Live Response Session" an; R3 bleibt damit im Plan. Fuer die
+API braucht die App-Registrierung zusaetzlich die WindowsDefenderATP-Rolle
+`Machine.LiveResponse`, und die Skripte muessen vorher in die Live-Response-
+Bibliothek geladen werden (signiert, sonst muss "Ausfuehrung nicht signierter
+Skripts" aktiviert sein).
 
 ## Teil C: Bestands-Cache
 
