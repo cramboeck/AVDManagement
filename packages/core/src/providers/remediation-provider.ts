@@ -72,6 +72,9 @@ export interface RemediationRunState_ {
   detectionError: string | null;
   remediationError: string | null;
   updatedAt: string | null;
+  syncedAt: string | null;
+  // Woher der Zustand kam (Diagnose)
+  source: 'device' | 'script';
 }
 
 export interface WaitOptions {
@@ -79,6 +82,42 @@ export interface WaitOptions {
   pollMs?: number;
   sleep?: (ms: number) => Promise<void>;
   now?: () => number;
+  // Zustand vor dem Start; alles, was davon abweicht, gilt als neues Ergebnis
+  baseline?: RemediationRunState_ | null;
+}
+
+// Intune liefert fuer "nie" das Jahr 0001; solche Zeitstempel sind keine
+function validTime(value: string | null | undefined): number | null {
+  if (!value) return null;
+  const time = new Date(value).getTime();
+  if (!Number.isFinite(time) || time < Date.UTC(2000, 0, 1)) return null;
+  return time;
+}
+
+export function latestReportTime(state: RemediationRunState_): number | null {
+  const times = [validTime(state.updatedAt), validTime(state.syncedAt)].filter((t): t is number => t !== null);
+  return times.length ? Math.max(...times) : null;
+}
+
+/**
+ * Ist dieser Zustand das Ergebnis des Laufs, der um `since` gestartet wurde?
+ * Zeitstempel zaehlen mit zwei Minuten Toleranz; fehlen sie, zaehlt jede
+ * Abweichung vom Zustand vor dem Start.
+ */
+export function isFreshRunState(state: RemediationRunState_, since: Date, baseline: RemediationRunState_ | null | undefined): boolean {
+  const reported = latestReportTime(state);
+  if (reported !== null && reported >= since.getTime() - 2 * 60 * 1000) return true;
+  if (baseline === undefined) return false;
+  if (baseline === null) return true;
+  return (
+    state.preOutput !== baseline.preOutput ||
+    state.postOutput !== baseline.postOutput ||
+    state.detectionState !== baseline.detectionState ||
+    state.remediationState !== baseline.remediationState ||
+    state.remediationError !== baseline.remediationError ||
+    state.updatedAt !== baseline.updatedAt ||
+    state.syncedAt !== baseline.syncedAt
+  );
 }
 
 const RUN_STATES: RemediationRunState[] = ['unknown', 'success', 'fail', 'scriptError', 'pending', 'notApplicable', 'skipped', 'remediationFailed'];
@@ -107,6 +146,7 @@ function asUnavailable(error: unknown, permission: string): Unavailable | null {
 export interface RemediationOperations {
   ensureScript(ctx: ProviderContext, script: LoadedScript): Promise<EnsureScriptResult>;
   runOnDemand(ctx: ProviderContext, managedDeviceId: string, tenantScriptId: string): Promise<void>;
+  getRunState(ctx: ProviderContext, managedDeviceId: string, tenantScriptId: string): Promise<RemediationRunState_ | null>;
   waitForRunState(
     ctx: ProviderContext,
     managedDeviceId: string,
@@ -246,29 +286,39 @@ export class RemediationProvider extends BaseResourceProvider implements Remedia
 
   /**
    * Letzter gemeldeter Zustand dieses Skripts auf diesem Geraet.
+   * Erste Quelle: die Zustaende des Geraets; zweite Quelle: die
+   * Geraetezustaende des Skripts. Gibt es mehrere Eintraege, gewinnt der
+   * zuletzt gemeldete.
    */
   async getRunState(ctx: ProviderContext, managedDeviceId: string, tenantScriptId: string): Promise<RemediationRunState_ | null> {
     this.validateContext(ctx);
-    const response = await this.graphClient.get<GraphResponse<GraphDeviceHealthScriptPolicyState[]>>(
-      ctx.tenantId as string,
+    const tenantId = ctx.tenantId as string;
+    const wanted = tenantScriptId.toLowerCase();
+
+    const fromDevice = await this.graphClient.get<GraphResponse<GraphDeviceHealthScriptPolicyState[]>>(
+      tenantId,
       `${GRAPH_BETA}/deviceManagement/managedDevices/${encodeURIComponent(managedDeviceId)}/deviceHealthScriptStates`,
       this.stateScopes
     );
-    const state = response.value.find((s) => s.policyId === tenantScriptId);
-    if (!state) return null;
-    return {
-      detectionState: toRunState(state.detectionState),
-      remediationState: toRunState(state.remediationState),
-      preOutput: state.preRemediationDetectionScriptOutput,
-      postOutput: state.postRemediationDetectionScriptOutput,
-      detectionError: state.postRemediationDetectionScriptError || state.preRemediationDetectionScriptError || null,
-      remediationError: state.remediationScriptError || null,
-      updatedAt: state.lastStateUpdateDateTime,
-    };
+    const deviceStates = fromDevice.value.filter((s) => (s.policyId ?? '').toLowerCase() === wanted).map((s) => toRunStateRecord(s, 'device'));
+    if (deviceStates.length > 0) {
+      return pickLatest(deviceStates);
+    }
+
+    const fromScript = await this.graphClient.get<GraphResponse<GraphDeviceHealthScriptDeviceState[]>>(
+      tenantId,
+      `${GRAPH_BETA}/deviceManagement/deviceHealthScripts/${encodeURIComponent(tenantScriptId)}/deviceRunStates?$expand=managedDevice($select=id)`,
+      this.requiredScopes
+    );
+    const wantedDevice = managedDeviceId.toLowerCase();
+    const scriptStates = fromScript.value
+      .filter((s) => (s.managedDevice?.id ?? '').toLowerCase() === wantedDevice)
+      .map((s) => toRunStateRecord(s, 'script'));
+    return scriptStates.length > 0 ? pickLatest(scriptStates) : null;
   }
 
   /**
-   * Wartet, bis das Geraet einen Zustand nach dem Startzeitpunkt meldet.
+   * Wartet, bis das Geraet ein Ergebnis dieses Laufs meldet.
    * Null bei Zeitueberschreitung; der Aufrufer entscheidet, was das heisst.
    */
   async waitForRunState(
@@ -286,7 +336,7 @@ export class RemediationProvider extends BaseResourceProvider implements Remedia
 
     while (true) {
       const state = await this.getRunState(ctx, managedDeviceId, tenantScriptId);
-      if (state?.updatedAt && new Date(state.updatedAt).getTime() > since.getTime()) {
+      if (state && isFreshRunState(state, since, options.baseline)) {
         return state;
       }
       if (now() >= deadline) {
@@ -295,4 +345,39 @@ export class RemediationProvider extends BaseResourceProvider implements Remedia
       await sleep(pollMs);
     }
   }
+}
+
+interface GraphDeviceHealthScriptDeviceState {
+  id: string;
+  detectionState: string | null;
+  remediationState: string | null;
+  lastStateUpdateDateTime: string | null;
+  lastSyncDateTime: string | null;
+  preRemediationDetectionScriptOutput: string | null;
+  preRemediationDetectionScriptError: string | null;
+  remediationScriptError: string | null;
+  postRemediationDetectionScriptOutput: string | null;
+  postRemediationDetectionScriptError: string | null;
+  managedDevice?: { id: string } | null;
+}
+
+function toRunStateRecord(
+  state: GraphDeviceHealthScriptPolicyState | GraphDeviceHealthScriptDeviceState,
+  source: 'device' | 'script'
+): RemediationRunState_ {
+  return {
+    detectionState: toRunState(state.detectionState),
+    remediationState: toRunState(state.remediationState),
+    preOutput: state.preRemediationDetectionScriptOutput || null,
+    postOutput: state.postRemediationDetectionScriptOutput || null,
+    detectionError: state.postRemediationDetectionScriptError || state.preRemediationDetectionScriptError || null,
+    remediationError: state.remediationScriptError || null,
+    updatedAt: state.lastStateUpdateDateTime,
+    syncedAt: state.lastSyncDateTime,
+    source,
+  };
+}
+
+function pickLatest(states: RemediationRunState_[]): RemediationRunState_ {
+  return states.reduce((best, s) => ((latestReportTime(s) ?? -1) > (latestReportTime(best) ?? -1) ? s : best));
 }

@@ -577,6 +577,9 @@ export interface ScriptRunResult {
   detectionError: string | null;
   remediationError: string | null;
   deviceReportedAt: string | null;
+  // true: Wartezeit abgelaufen, gezeigt wird der letzte bekannte Zustand
+  possiblyStale: boolean;
+  stateSource: 'device' | 'script';
 }
 
 export type VulnerabilitySeverity = 'Critical' | 'High' | 'Medium' | 'Low' | 'Unknown';

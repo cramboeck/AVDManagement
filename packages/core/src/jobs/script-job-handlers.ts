@@ -9,7 +9,7 @@
 import type { LibraryScriptId, ScriptRunResult } from '@zerostress/types';
 import { registerJob, type JobContext, type JobResult, type PreviewContext, type PreviewResult } from './job-types.js';
 import { getLibraryScript, parseScriptOutput } from '../scripts/library.js';
-import type { RemediationOperations } from '../providers/remediation-provider.js';
+import type { RemediationOperations, RemediationRunState_ } from '../providers/remediation-provider.js';
 
 export interface RunScriptPayload {
   managedDeviceId: string;
@@ -52,6 +52,15 @@ export function registerScriptJobs(remediations: RemediationOperations, options:
         return failure('SCRIPT_PUBLISH_FAILED', error instanceof Error ? error.message : String(error));
       }
 
+      // Zustand vor dem Start merken: Intune fuehrt keine Lauf-Id, also gilt
+      // als Ergebnis, was nach dem Start neuer ist oder vom Vorzustand abweicht
+      let baseline: RemediationRunState_ | null = null;
+      try {
+        baseline = await remediations.getRunState(providerCtx, payload.managedDeviceId, tenantScriptId);
+      } catch {
+        baseline = null;
+      }
+
       const requestedAt = new Date();
       try {
         await remediations.runOnDemand(providerCtx, payload.managedDeviceId, tenantScriptId);
@@ -59,15 +68,23 @@ export function registerScriptJobs(remediations: RemediationOperations, options:
         return failure('SCRIPT_START_FAILED', error instanceof Error ? error.message : String(error));
       }
 
-      const state = await remediations.waitForRunState(providerCtx, payload.managedDeviceId, tenantScriptId, requestedAt, {
+      let state = await remediations.waitForRunState(providerCtx, payload.managedDeviceId, tenantScriptId, requestedAt, {
         timeoutMs: options.timeoutMs,
         pollMs: options.pollMs,
+        baseline,
       });
+      let possiblyStale = false;
       if (!state) {
-        return failure(
-          'SCRIPT_RESULT_TIMEOUT',
-          'Das Geraet hat innerhalb der Wartezeit kein Ergebnis gemeldet. Es ist vermutlich offline; das Ergebnis erscheint spaeter im Intune-Portal unter Geraet > Remediations.'
-        );
+        // Lieber der letzte bekannte Stand mit Hinweis als gar nichts
+        const last = await remediations.getRunState(providerCtx, payload.managedDeviceId, tenantScriptId).catch(() => null);
+        if (!last) {
+          return failure(
+            'SCRIPT_RESULT_TIMEOUT',
+            `Das Geraet hat innerhalb der Wartezeit kein Ergebnis gemeldet und Intune kennt fuer dieses Skript noch keinen Zustand des Geraets (Skript ${tenantScriptId}). Es ist vermutlich offline; das Ergebnis erscheint spaeter im Intune-Portal unter Geraet > Remediations.`
+          );
+        }
+        state = last;
+        possiblyStale = true;
       }
 
       const output = state.postOutput || state.preOutput || null;
@@ -85,7 +102,9 @@ export function registerScriptJobs(remediations: RemediationOperations, options:
         outputJson: parseScriptOutput(output),
         detectionError: state.detectionError,
         remediationError: state.remediationError,
-        deviceReportedAt: state.updatedAt,
+        deviceReportedAt: state.updatedAt ?? state.syncedAt,
+        possiblyStale,
+        stateSource: state.source,
       };
 
       if (state.detectionState === 'scriptError' || state.remediationState === 'scriptError' || state.remediationState === 'remediationFailed') {

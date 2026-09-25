@@ -77,9 +77,12 @@ export function ScriptsTab({ tenantId, device }: { tenantId: string; device: Dev
                   {script.hasRemediation ? <span className="rounded-full bg-warning/10 px-2 py-0.5 text-warning">Veraendert das Geraet</span> : <span className="rounded-full bg-muted px-2 py-0.5">Nur lesend</span>}
                 </p>
               </div>
-              <button onClick={() => setRunning(script)} className="rounded-md border px-3 py-1.5 text-sm hover:bg-accent">
-                Ausfuehren
-              </button>
+              <div className="flex gap-2">
+                {script.tenantScriptId && <IntuneStateButton tenantId={tenantId} scriptId={script.id} managedDeviceId={managedDeviceId} />}
+                <button onClick={() => setRunning(script)} className="rounded-md border px-3 py-1.5 text-sm hover:bg-accent">
+                  Ausfuehren
+                </button>
+              </div>
             </div>
 
             {latest && (
@@ -112,6 +115,53 @@ export function ScriptsTab({ tenantId, device }: { tenantId: string; device: Dev
         />
       )}
     </div>
+  );
+}
+
+interface IntuneStateResponse {
+  available: boolean;
+  data?: { tenantScriptId: string | null; state: Record<string, unknown> | null };
+}
+
+// Diagnose ohne Wartezeit: was Intune fuer dieses Skript auf diesem Geraet gerade meldet
+function IntuneStateButton({ tenantId, scriptId, managedDeviceId }: { tenantId: string; scriptId: string; managedDeviceId: string }) {
+  const [open, setOpen] = useState(false);
+  const query = useQuery({
+    queryKey: ['script-state', tenantId, scriptId, managedDeviceId],
+    queryFn: () => api.get<IntuneStateResponse>(`/tenants/${tenantId}/scripts/${scriptId}/state?managedDeviceId=${encodeURIComponent(managedDeviceId)}`),
+    enabled: open,
+    staleTime: 0,
+  });
+  return (
+    <>
+      <button
+        onClick={() => {
+          setOpen(true);
+          if (open) void query.refetch();
+        }}
+        className="rounded-md border px-3 py-1.5 text-sm text-muted-foreground hover:bg-accent"
+        title="Zeigt den aktuellen Zustand laut Intune, ohne einen Lauf zu starten"
+      >
+        Intune-Zustand
+      </button>
+      {open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setOpen(false)}>
+          <div className="max-h-[80vh] w-full max-w-2xl overflow-auto rounded-lg border bg-background p-4 shadow-lg" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-2 flex items-center justify-between">
+              <h3 className="font-medium">Zustand laut Intune</h3>
+              <button onClick={() => setOpen(false)} className="rounded-md border px-2 py-1 text-xs hover:bg-accent">
+                Schliessen
+              </button>
+            </div>
+            {query.isFetching && <LoadingTable rows={2} />}
+            {query.error && <p className="text-sm text-destructive">{(query.error as Error).message}</p>}
+            {query.data && !query.isFetching && (
+              <pre className="overflow-x-auto rounded-md bg-muted p-3 text-xs">{JSON.stringify(query.data, null, 2)}</pre>
+            )}
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 
@@ -189,6 +239,12 @@ export function ScriptResultView({ result, error }: { result: ScriptRunResult | 
         Vom Geraet gemeldet {dateText(result.deviceReportedAt)} · Erkennung {result.detectionState}
         {result.remediationState !== 'skipped' && result.remediationState !== 'unknown' && <> · Behebung {result.remediationState}</>}
       </p>
+      {result.possiblyStale && (
+        <p className="rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-sm">
+          Das Geraet hat innerhalb der Wartezeit nichts Neues gemeldet. Gezeigt wird der letzte Zustand, den Intune fuer dieses Skript kennt; er kann von
+          einem frueheren Lauf stammen.
+        </p>
+      )}
       {(result.detectionError || result.remediationError) && (
         <p className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">{result.remediationError || result.detectionError}</p>
       )}
