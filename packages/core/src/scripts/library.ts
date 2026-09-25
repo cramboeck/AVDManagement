@@ -110,6 +110,16 @@ const definitions: ScriptDefinition[] = [
     expectedDurationSeconds: 120,
     containsPersonalData: true,
   },
+  {
+    id: 'battery-info',
+    displayName: 'Akkuzustand',
+    description: 'Auslegungs- und Vollladekapazitaet, Gesundheit in Prozent, Ladezyklen, Ladestand und Status je Akku. Geraete ohne Akku melden das. Nur lesend.',
+    version: '1.0.0',
+    detectionFile: 'battery-info.detect.ps1',
+    remediationFile: null,
+    remediationSummary: null,
+    expectedDurationSeconds: 90,
+  },
 ];
 
 // Marker in der Beschreibung des Remediation-Objekts im Tenant

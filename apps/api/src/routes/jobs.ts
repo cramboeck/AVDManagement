@@ -195,7 +195,7 @@ app.post(
 const runScriptSchema = z.object({
   managedDeviceId: z.string().min(1),
   deviceName: z.string().min(1),
-  scriptId: z.enum(['update-status', 'update-scan', 'system-info', 'winget-updates', 'network-info', 'storage-info', 'local-admins']),
+  scriptId: z.enum(['update-status', 'update-scan', 'system-info', 'winget-updates', 'network-info', 'storage-info', 'local-admins', 'battery-info']),
 });
 
 app.post('/run-script', requireRole('engineer'), requireConnectedTenant, zValidator('json', runScriptSchema), async (c) => {
@@ -245,6 +245,52 @@ app.post('/:jobId/approve', requireRole('engineer'), async (c) => {
     }
     throw error;
   }
+});
+
+// Admin auf Zeit: Konto befristet in die lokale Administratorengruppe (Ersatz fuer EPM ohne Agent)
+const tempAdminSchema = z.object({
+  managedDeviceId: z.string().min(1),
+  deviceName: z.string().min(1),
+  account: z.string().min(1).max(200),
+  minutes: z.number().int().min(15).max(240),
+  reason: z.string().trim().min(10).max(500),
+});
+
+app.post('/temp-admin', requireRole('engineer'), requireConnectedTenant, zValidator('json', tempAdminSchema), async (c) => {
+  const auth = c.get('auth');
+  const tenant = c.get('tenant');
+  const body = c.req.valid('json');
+  const job = await getJobQueue().createJob({
+    type: 'device.temp-admin',
+    tenantId: tenant.id,
+    mspId: auth.mspId,
+    userId: auth.user.id,
+    userEmail: auth.user.email,
+    payload: { ...body, targetType: 'device', targetId: body.managedDeviceId, targetDisplayName: `${body.deviceName}: ${body.account} fuer ${body.minutes} Min` },
+  });
+  return c.json(job, 202);
+});
+
+const tempAdminRevokeSchema = z.object({
+  managedDeviceId: z.string().min(1),
+  deviceName: z.string().min(1),
+  account: z.string().min(1).max(200),
+  reason: z.string().trim().min(10).max(500),
+});
+
+app.post('/temp-admin-revoke', requireRole('engineer'), requireConnectedTenant, zValidator('json', tempAdminRevokeSchema), async (c) => {
+  const auth = c.get('auth');
+  const tenant = c.get('tenant');
+  const body = c.req.valid('json');
+  const job = await getJobQueue().createJob({
+    type: 'device.temp-admin-revoke',
+    tenantId: tenant.id,
+    mspId: auth.mspId,
+    userId: auth.user.id,
+    userEmail: auth.user.email,
+    payload: { ...body, targetType: 'device', targetId: body.managedDeviceId, targetDisplayName: `${body.deviceName}: ${body.account} entziehen` },
+  });
+  return c.json(job, 202);
 });
 
 // Versiegeltes Ergebnis anzeigen: Begruendung, Rolle Engineer, Audit; der Klartext verlaesst nie die Antwort

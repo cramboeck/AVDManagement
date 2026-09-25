@@ -21,6 +21,7 @@ function fakeRemediations(overrides: Partial<RemediationOperations> = {}): Remed
   return {
     ensureScript: vi.fn(async () => ({ tenantScriptId: 'remote-1', action: 'unchanged' as const })),
     runOnDemand: vi.fn(async () => undefined),
+    runTransient: vi.fn(async () => null),
     getRunState: vi.fn(async () => null),
     waitForRunState: vi.fn(async () => ({
       detectionState: 'success' as const,

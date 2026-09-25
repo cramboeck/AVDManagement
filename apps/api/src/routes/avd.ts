@@ -229,7 +229,7 @@ const runScriptSchema = z.object({
   sessionHostId: z.string(),
   sessionHostName: z.string(),
   vmResourceId: z.string().min(1),
-  scriptId: z.enum(['update-status', 'update-scan', 'system-info', 'winget-updates', 'network-info', 'storage-info', 'local-admins']),
+  scriptId: z.enum(['update-status', 'update-scan', 'system-info', 'winget-updates', 'network-info', 'storage-info', 'local-admins', 'battery-info']),
 });
 
 app.post('/actions/run-script', requireRole('engineer'), requireConnectedTenant, zValidator('json', runScriptSchema), async (c) => {

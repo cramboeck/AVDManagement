@@ -143,8 +143,15 @@ function asUnavailable(error: unknown, permission: string): Unavailable | null {
 /**
  * Was der Job braucht; die Klasse erfuellt es, Tests koennen es nachbilden.
  */
+export interface TransientRunOptions {
+  timeoutMs?: number;
+  pollMs?: number;
+}
+
 export interface RemediationOperations {
   ensureScript(ctx: ProviderContext, script: LoadedScript): Promise<EnsureScriptResult>;
+  // Einmalskript mit eingebetteten Parametern: anlegen, ausfuehren, warten, loeschen
+  runTransient(ctx: ProviderContext, managedDeviceId: string, name: string, detectionScript: string, options?: TransientRunOptions): Promise<RemediationRunState_ | null>;
   runOnDemand(ctx: ProviderContext, managedDeviceId: string, tenantScriptId: string): Promise<void>;
   getRunState(ctx: ProviderContext, managedDeviceId: string, tenantScriptId: string): Promise<RemediationRunState_ | null>;
   waitForRunState(
@@ -223,6 +230,39 @@ export class RemediationProvider extends BaseResourceProvider implements Remedia
       };
     });
     return { available: true, data: items };
+  }
+
+  async deleteScript(ctx: ProviderContext, tenantScriptId: string): Promise<void> {
+    this.validateContext(ctx);
+    await this.graphClient.delete(ctx.tenantId as string, `${GRAPH_BETA}/deviceManagement/deviceHealthScripts/${encodeURIComponent(tenantScriptId)}`, this.requiredScopes);
+  }
+
+  /**
+   * Einmalskript: eigenes Remediation-Objekt je Lauf, danach geloescht.
+   * Der Zustand vor dem Start ist immer leer, jede Rueckmeldung zaehlt.
+   */
+  async runTransient(ctx: ProviderContext, managedDeviceId: string, name: string, detectionScript: string, options: TransientRunOptions = {}): Promise<RemediationRunState_ | null> {
+    this.validateContext(ctx);
+    const tenantId = ctx.tenantId as string;
+    const created = await this.graphClient.post<{ id: string }>(tenantId, `${GRAPH_BETA}/deviceManagement/deviceHealthScripts`, this.requiredScopes, {
+      '@odata.type': '#microsoft.graph.deviceHealthScript',
+      displayName: `${SCRIPT_PREFIX}${name}`,
+      description: `Einmalskript von ${SCRIPT_PUBLISHER}; wird nach dem Lauf entfernt.`,
+      publisher: SCRIPT_PUBLISHER,
+      runAs32Bit: false,
+      runAsAccount: 'system',
+      enforceSignatureCheck: false,
+      detectionScriptContent: toBase64(detectionScript),
+      remediationScriptContent: null,
+      roleScopeTagIds: ['0'],
+    });
+    const since = new Date();
+    try {
+      await this.runOnDemand(ctx, managedDeviceId, created.id);
+      return await this.waitForRunState(ctx, managedDeviceId, created.id, since, { timeoutMs: options.timeoutMs, pollMs: options.pollMs, baseline: null });
+    } finally {
+      await this.deleteScript(ctx, created.id).catch((error: Error) => console.error(`Transient script ${created.id} could not be deleted:`, error.message));
+    }
   }
 
   /**

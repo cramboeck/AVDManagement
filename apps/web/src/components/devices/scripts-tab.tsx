@@ -187,6 +187,11 @@ function resultHeadline(job: Job): string {
       return `${Array.isArray(json.volumes) ? json.volumes.length : 0} Laufwerke, ${Array.isArray(json.disks) ? json.disks.length : 0} Datentraeger`;
     case 'zsc.local-admins/1':
       return `${text(json.memberCount)} Mitglieder in Administratoren`;
+    case 'zsc.battery-info/1': {
+      const list = Array.isArray(json.batteries) ? json.batteries.map(asRecord).filter((b): b is Record<string, unknown> => b !== null) : [];
+      if (json.hasBattery !== true || list.length === 0) return 'Kein Akku verbaut';
+      return list.map((b) => `${text(b.healthPercent)} % Gesundheit, ${text(b.cycleCount)} Zyklen`).join(' · ');
+    }
     default:
       return 'Ergebnis vorhanden';
   }
@@ -228,7 +233,7 @@ function LatestRun({ job, tenantId }: { job: Job; tenantId: string }) {
   );
 }
 
-const KNOWN_SCHEMAS = new Set(['zsc.update-status/1', 'zsc.update-scan/1', 'zsc.system-info/1', 'zsc.winget-updates/1', 'zsc.network-info/1', 'zsc.storage-info/1', 'zsc.local-admins/1']);
+const KNOWN_SCHEMAS = new Set(['zsc.update-status/1', 'zsc.update-scan/1', 'zsc.system-info/1', 'zsc.winget-updates/1', 'zsc.network-info/1', 'zsc.storage-info/1', 'zsc.local-admins/1', 'zsc.battery-info/1']);
 
 export interface WingetUpdate {
   name: string;
@@ -295,6 +300,7 @@ export function ScriptResultView({ result, error }: { result: ScriptRunResult | 
       {json && schema === 'zsc.network-info/1' && <NetworkInfoResult data={json} />}
       {json && schema === 'zsc.storage-info/1' && <StorageInfoResult data={json} />}
       {json && schema === 'zsc.local-admins/1' && <LocalAdminsResult data={json} />}
+      {json && schema === 'zsc.battery-info/1' && <BatteryResult data={json} />}
       {json && !KNOWN_SCHEMAS.has(schema ?? '') && <pre className="overflow-x-auto rounded-md bg-muted p-3 text-xs">{JSON.stringify(json, null, 2)}</pre>}
     </div>
   );
@@ -518,6 +524,64 @@ function StorageInfoResult({ data }: { data: Record<string, unknown> }) {
 }
 
 const sourceLabels: Record<string, string> = { Local: 'Lokal', AzureAD: 'Entra ID', Domain: 'Domaene', Unknown: 'Unbekannt' };
+
+function BatteryResult({ data }: { data: Record<string, unknown> }) {
+  const batteries = Array.isArray(data.batteries) ? data.batteries.map(asRecord).filter((b): b is Record<string, unknown> => b !== null) : [];
+  if (data.hasBattery !== true || batteries.length === 0) {
+    return <p className="text-sm text-muted-foreground">Kein Akku verbaut (Desktop oder virtuelle Maschine).</p>;
+  }
+  return (
+    <div className="space-y-3">
+      {typeof data.error === 'string' && data.error && <p className="text-sm text-destructive">{data.error}</p>}
+      {batteries.map((b, i) => {
+        const health = typeof b.healthPercent === 'number' ? b.healthPercent : null;
+        const tone = health === null ? 'bg-muted-foreground' : health >= 80 ? 'bg-success' : health >= 60 ? 'bg-warning' : 'bg-destructive';
+        return (
+          <div key={`${text(b.name)}-${i}`} className="rounded-md border p-3">
+            <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+              <span className="font-medium">
+                {text(b.name)}
+                {typeof b.manufacturer === 'string' && b.manufacturer && <span className="ml-2 text-xs text-muted-foreground">{b.manufacturer}</span>}
+              </span>
+              <span className={clsx('tabular-nums', health !== null && health < 60 && 'text-destructive', health !== null && health >= 60 && health < 80 && 'text-warning')}>
+                {health === null ? 'Gesundheit unbekannt' : `${health} % Gesundheit`}
+              </span>
+            </div>
+            <div className="mt-1 h-2 w-full overflow-hidden rounded-full bg-muted" role="progressbar" aria-valuenow={health ?? 0} aria-valuemin={0} aria-valuemax={100} aria-label="Akkugesundheit">
+              <div className={clsx('h-full rounded-full', tone)} style={{ width: `${health ?? 0}%` }} />
+            </div>
+            <dl className="mt-2 grid gap-x-4 gap-y-1 text-xs text-muted-foreground sm:grid-cols-3">
+              <div className="flex gap-2">
+                <dt>Auslegung</dt>
+                <dd>{b.designCapacityMwh === null || b.designCapacityMwh === undefined ? '—' : `${text(b.designCapacityMwh)} mWh`}</dd>
+              </div>
+              <div className="flex gap-2">
+                <dt>Vollladung</dt>
+                <dd>{b.fullChargeCapacityMwh === null || b.fullChargeCapacityMwh === undefined ? '—' : `${text(b.fullChargeCapacityMwh)} mWh`}</dd>
+              </div>
+              <div className="flex gap-2">
+                <dt>Zyklen</dt>
+                <dd>{text(b.cycleCount)}</dd>
+              </div>
+              <div className="flex gap-2">
+                <dt>Ladestand</dt>
+                <dd>{b.chargePercent === null || b.chargePercent === undefined ? '—' : `${text(b.chargePercent)} %`}</dd>
+              </div>
+              <div className="flex gap-2">
+                <dt>Status</dt>
+                <dd>{text(b.status)}</dd>
+              </div>
+              <div className="flex gap-2">
+                <dt>Netz</dt>
+                <dd>{yesNo(data.onAcPower)}</dd>
+              </div>
+            </dl>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 function LocalAdminsResult({ data }: { data: Record<string, unknown> }) {
   const members = Array.isArray(data.members) ? data.members.map(asRecord).filter((m): m is Record<string, unknown> => m !== null) : [];

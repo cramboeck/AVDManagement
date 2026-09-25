@@ -210,6 +210,20 @@ Job mit Preview; Name, Version und Hash stehen im Audit.
 | Netzwerkinfo | nur lesend | aktive Adapter mit IPv4, Praefix, Gateway, DNS, DHCP, MAC, Verbindungsart, SSID; Domaene, Proxy |
 | Speicherinfo | nur lesend | alle festen Laufwerke mit Belegung und Zustand, physische Datentraeger mit SSD/HDD, Bus, Groesse, Zustand, Firmware |
 | Lokale Administratoren | nur lesend, **personenbezogen** | Mitglieder der Gruppe Administratoren mit Herkunft, Klasse, SID, Status; Entra-Konten verlinkt |
+| Akkuzustand | nur lesend | Gesundheit (Vollladung zu Auslegung), Zyklen, Ladestand, Status je Akku; Desktops und VMs melden "kein Akku" |
+
+### Admin auf Zeit (Ersatz fuer Endpoint Privilege Management)
+
+Im Geraetekopf gewaehrt **Admin auf Zeit** einem Konto (Entra als
+`AzureAD\name@domain`, lokal per Name oder SID) fuer 15 bis 240 Minuten
+lokale Administratorrechte; **Admin entziehen** nimmt sie sofort zurueck.
+Beides sind Jobs mit Vorschau, Begruendung ab zehn Zeichen und Audit. Die
+Konsole fuellt eine geprueftes Vorlage mit Konto und Dauer, legt sie als
+Einmalskript in Intune an, fuehrt sie auf Abruf aus und loescht sie danach.
+Der Rueckbau laeuft als geplante Aufgabe (`ZSC-TempAdmin-<hash>`) als
+SYSTEM auf dem Geraet, auch nach Neustart oder Offline-Phase. Anders als
+EPM erhoeht das nicht einzelne Programme, sondern das Konto; danach das
+Skript "Lokale Administratoren" zur Kontrolle ausfuehren.
 
 **Personenbezogene Ergebnisse:** Skripte mit Kontonamen (Lokale
 Administratoren) speichern ihre Ausgabe nur verschluesselt
