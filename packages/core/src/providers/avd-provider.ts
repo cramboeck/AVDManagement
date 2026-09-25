@@ -10,6 +10,7 @@ import type {
   SyncedSessionHost,
   UserSession,
   HostPoolSummary,
+  AvdOverview,
   HostPoolId,
   SessionHostId,
   AzureResourceId,
@@ -136,6 +137,65 @@ export class AvdProvider extends BaseResourceProvider {
     _options: { pageSize?: number; pageToken?: string } = {}
   ): Promise<{ items: SyncedHostPool[]; nextPageToken: string | null; warnings: string[] }> {
     this.validateContext(ctx);
+
+    const { pools, warnings } = await this.collectHostPools(ctx);
+
+    return {
+      items: pools.map(({ pool, hosts }) => this.mapAzureHostPoolToSynced(ctx, pool, hosts.length)),
+      nextPageToken: null,
+      warnings,
+    };
+  }
+
+  /**
+   * Kennzahlen ueber alle Host Pools des Tenants (Dashboard)
+   */
+  async getAvdOverview(ctx: ProviderContext): Promise<AvdOverview> {
+    this.validateContext(ctx);
+
+    const { pools, warnings } = await this.collectHostPools(ctx);
+    const overview: AvdOverview = {
+      hostPools: pools.length,
+      totalHosts: 0,
+      availableHosts: 0,
+      unavailableHosts: 0,
+      shutdownHosts: 0,
+      drainingHosts: 0,
+      activeSessions: 0,
+      maxSessions: 0,
+      warnings,
+    };
+
+    for (const { pool, hosts } of pools) {
+      let available = 0;
+      for (const host of hosts) {
+        const status = host.properties.status;
+        overview.totalHosts += 1;
+        overview.activeSessions += host.properties.sessions ?? 0;
+        if (status === 'Available') {
+          available += 1;
+        } else if (status === 'Shutdown') {
+          overview.shutdownHosts += 1;
+        } else {
+          overview.unavailableHosts += 1;
+        }
+        if (!host.properties.allowNewSession) {
+          overview.drainingHosts += 1;
+        }
+      }
+      overview.availableHosts += available;
+      overview.maxSessions += available * (pool.properties.maxSessionLimit ?? 0);
+    }
+
+    return overview;
+  }
+
+  // Host Pools samt Hosts ueber alle erreichbaren Subscriptions einsammeln.
+  // Einzelne nicht erreichbare Subscriptions werden zu Warnungen; scheitern
+  // alle, ist es ein Fehler und kein Teilergebnis.
+  private async collectHostPools(
+    ctx: ProviderContext
+  ): Promise<{ pools: { pool: AzureHostPool; hosts: AzureSessionHost[] }[]; warnings: string[] }> {
     const tenantId = ctx.tenantId as string;
 
     const subscriptions = this.config.subscriptionIds?.length
@@ -146,29 +206,28 @@ export class AvdProvider extends BaseResourceProvider {
 
     if (subscriptions.length === 0) {
       return {
-        items: [],
-        nextPageToken: null,
+        pools: [],
         warnings: [
           'The service principal has no access to any Azure subscription. Assign Reader and Desktop Virtualization Contributor on the AVD subscription.',
         ],
       };
     }
 
-    const allHostPools: SyncedHostPool[] = [];
+    const pools: { pool: AzureHostPool; hosts: AzureSessionHost[] }[] = [];
     const warnings: string[] = [];
     const failures: unknown[] = [];
 
     for (const subscriptionId of subscriptions) {
       try {
-        const pools = await this.armClient.getAllPages<AzureHostPool>(
+        const subscriptionPools = await this.armClient.getAllPages<AzureHostPool>(
           tenantId,
           `/subscriptions/${subscriptionId}/providers/Microsoft.DesktopVirtualization/hostPools`,
           { apiVersion: AVD_API_VERSION }
         );
 
-        for (const pool of pools) {
-          const sessionHosts = await this.listSessionHostsForPool(ctx, pool.id);
-          allHostPools.push(this.mapAzureHostPoolToSynced(ctx, pool, sessionHosts.length));
+        for (const pool of subscriptionPools) {
+          const hosts = await this.listSessionHostsForPool(ctx, pool.id);
+          pools.push({ pool, hosts });
         }
       } catch (error) {
         failures.push(error);
@@ -177,16 +236,11 @@ export class AvdProvider extends BaseResourceProvider {
       }
     }
 
-    // Scheitern alle Subscriptions, ist es ein Fehler und kein Teilergebnis
     if (failures.length === subscriptions.length) {
       throw failures[0];
     }
 
-    return {
-      items: allHostPools,
-      nextPageToken: null,
-      warnings,
-    };
+    return { pools, warnings };
   }
 
   /**

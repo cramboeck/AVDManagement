@@ -12,39 +12,13 @@ import { authMiddleware, requireRole } from '../middleware/auth.js';
 import { DrizzleAuditLogger } from '../services/audit-logger.js';
 import { createConsentState } from '../services/consent-state.js';
 import { testTenantConnection, persistConnectionTestResult } from '../services/tenant-connection.js';
-import type {
-  TenantId,
-  MspId,
-  UserId,
-  CorrelationId,
-  ManagedTenant,
-  TenantAuthMethod,
-  TenantConnectionStatus,
-  MissingScope,
-} from '@zerostress/types';
-
-type TenantRow = typeof managedTenants.$inferSelect;
+import { toManagedTenant, type TenantRow } from '../services/tenant-mapper.js';
+import type { TenantId, MspId, UserId, CorrelationId } from '@zerostress/types';
 
 const app = new Hono();
 const audit = new DrizzleAuditLogger();
 
 app.use('*', authMiddleware);
-
-function toManagedTenant(row: TenantRow, mspId: MspId): ManagedTenant {
-  return {
-    id: row.id as TenantId,
-    mspId,
-    microsoftTenantId: row.microsoftTenantId,
-    displayName: row.displayName,
-    primaryDomain: row.primaryDomain,
-    authMethod: row.authMethod as TenantAuthMethod,
-    connectionStatus: row.connectionStatus as TenantConnectionStatus,
-    missingScopes: (row.missingScopes ?? []) as MissingScope[],
-    onboardedAt: row.onboardedAt,
-    lastSyncAt: row.lastSyncAt,
-    isActive: row.isActive,
-  };
-}
 
 async function findOwnTenant(tenantId: string, mspId: MspId): Promise<TenantRow | undefined> {
   return db.query.managedTenants.findFirst({
@@ -70,7 +44,7 @@ app.get('/', async (c) => {
     orderBy: (t, { asc }) => [asc(t.displayName)],
   });
 
-  return c.json({ items: tenants.map((t) => toManagedTenant(t, auth.mspId)) });
+  return c.json({ items: tenants.map(toManagedTenant) });
 });
 
 // Tenant-Details
@@ -83,7 +57,7 @@ app.get('/:tenantId', async (c) => {
     return c.json(notFound(tenantId), 404);
   }
 
-  return c.json(toManagedTenant(tenant, auth.mspId));
+  return c.json(toManagedTenant(tenant));
 });
 
 // Neuen Tenant onboarden
@@ -156,7 +130,7 @@ app.post('/', requireRole('engineer'), zValidator('json', createTenantSchema), a
     correlationId,
   });
 
-  return c.json(toManagedTenant(tenant, auth.mspId), 201);
+  return c.json(toManagedTenant(tenant), 201);
 });
 
 // Consent-URL generieren

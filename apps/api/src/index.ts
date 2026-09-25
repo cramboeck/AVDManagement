@@ -18,6 +18,7 @@ import { licensesRouter } from './routes/licenses.js';
 import { avdRouter } from './routes/avd.js';
 import { authRouter } from './routes/auth.js';
 import { securityRouter } from './routes/security.js';
+import { tenantDashboardRouter, dashboardRouter } from './routes/dashboard.js';
 import { getJobQueue } from './services/job-queue.js';
 
 const app = new Hono();
@@ -75,6 +76,8 @@ app.route('/tenants/:tenantId/licenses', licensesRouter);
 app.route('/tenants/:tenantId/audit', auditRouter);
 app.route('/tenants/:tenantId/avd', avdRouter);
 app.route('/tenants/:tenantId/security', securityRouter);
+app.route('/tenants/:tenantId/dashboard', tenantDashboardRouter);
+app.route('/dashboard', dashboardRouter);
 
 // Session-Info (fuer Frontend)
 app.get('/me', async (c) => {

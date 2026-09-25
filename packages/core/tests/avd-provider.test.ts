@@ -68,6 +68,47 @@ describe('AvdProvider', () => {
     });
   });
 
+  describe('getAvdOverview', () => {
+    it('aggregates hosts, sessions and capacity across pools', async () => {
+      mockArmClient.get.mockResolvedValueOnce({
+        value: [{ subscriptionId: 'sub-1', displayName: 'Prod', state: 'Enabled' }],
+      });
+      mockArmClient.getAllPages.mockImplementation(async (_tenant: string, path: string) => {
+        if (path.endsWith('/sessionHosts')) {
+          return [
+            { id: 'h1', name: 'pool/h1', type: 'sh', properties: { status: 'Available', allowNewSession: true, sessions: 3 } },
+            { id: 'h2', name: 'pool/h2', type: 'sh', properties: { status: 'Available', allowNewSession: false, sessions: 1 } },
+            { id: 'h3', name: 'pool/h3', type: 'sh', properties: { status: 'Shutdown', allowNewSession: true, sessions: 0 } },
+            { id: 'h4', name: 'pool/h4', type: 'sh', properties: { status: 'Unavailable', allowNewSession: true, sessions: 0 } },
+          ];
+        }
+        return [
+          {
+            id: '/subscriptions/sub-1/resourceGroups/rg/providers/Microsoft.DesktopVirtualization/hostPools/pool',
+            name: 'pool',
+            type: 'hp',
+            location: 'westeurope',
+            properties: { hostPoolType: 'Pooled', loadBalancerType: 'BreadthFirst', maxSessionLimit: 10, preferredAppGroupType: 'Desktop', validationEnvironment: false, startVMOnConnect: false },
+          },
+        ];
+      });
+
+      const overview = await provider.getAvdOverview(ctx);
+
+      expect(overview).toMatchObject({
+        hostPools: 1,
+        totalHosts: 4,
+        availableHosts: 2,
+        unavailableHosts: 1,
+        shutdownHosts: 1,
+        drainingHosts: 1,
+        activeSessions: 4,
+        maxSessions: 20,
+        warnings: [],
+      });
+    });
+  });
+
   describe('listHostPools', () => {
     const subscriptions = (...ids: string[]) => ({
       value: ids.map((id) => ({ subscriptionId: id, displayName: id, state: 'Enabled' })),

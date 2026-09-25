@@ -344,6 +344,64 @@ export interface DirectoryAuditQuery {
 }
 
 // ============================================
+// Dashboard
+// ============================================
+
+export type DashboardTileStatus = 'ok' | 'unavailable' | 'error';
+
+export interface DashboardTile<T> {
+  status: DashboardTileStatus;
+  data: T | null;
+  // Maschinenlesbarer Grund bei unavailable/error (z. B. premium-required, timeout)
+  reason: string | null;
+}
+
+export interface AvdOverview {
+  hostPools: number;
+  totalHosts: number;
+  availableHosts: number;
+  unavailableHosts: number;
+  shutdownHosts: number;
+  drainingHosts: number;
+  activeSessions: number;
+  maxSessions: number;
+  warnings: string[];
+}
+
+export interface UserStats {
+  total: number;
+  disabled: number;
+  guests: number;
+}
+
+export interface SecurityOverview {
+  windowHours: number;
+  signIns: number;
+  failures: number;
+  usersWithFailures: number;
+  legacyAuthSuccesses: number;
+  riskySuccesses: number;
+}
+
+export interface JobStats {
+  pendingApproval: number;
+  running: number;
+  failedLast24h: number;
+  completedLast24h: number;
+}
+
+export interface TenantDashboard {
+  tenant: ManagedTenant;
+  avd: DashboardTile<AvdOverview>;
+  users: DashboardTile<UserStats>;
+  security: DashboardTile<SecurityOverview>;
+  jobs: DashboardTile<JobStats>;
+  // Anzahl der Punkte, die Aufmerksamkeit brauchen (Sortierschluessel)
+  attention: number;
+  generatedAt: string;
+}
+
+// ============================================
 // AVD-Typen (Azure Virtual Desktop)
 // ============================================
 

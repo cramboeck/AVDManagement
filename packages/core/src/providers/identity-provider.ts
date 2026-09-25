@@ -24,6 +24,7 @@ import type {
   SignInQuery,
   DirectoryAuditEvent,
   DirectoryAuditQuery,
+  UserStats,
 } from '@zerostress/types';
 import {
   BaseResourceProvider,
@@ -512,6 +513,36 @@ export class IdentityProvider extends BaseResourceProvider {
       this.licenseWriteScopes,
       {}
     );
+  }
+
+  /**
+   * Benutzerkennzahlen (Dashboard). $count braucht ConsistencyLevel=eventual.
+   */
+  async getUserStats(ctx: ProviderContext): Promise<UserStats> {
+    this.validateContext(ctx);
+    const tenantId = ctx.tenantId as string;
+
+    const count = async (filter?: string): Promise<number> => {
+      const params = ['$count=true', '$top=1', '$select=id'];
+      if (filter) {
+        params.push(`$filter=${encodeURIComponent(filter)}`);
+      }
+      const response = await this.graphClient.get<GraphResponse<GraphUser[]>>(
+        tenantId,
+        `/users?${params.join('&')}`,
+        this.requiredScopes,
+        { headers: { ConsistencyLevel: 'eventual' } }
+      );
+      return response['@odata.count'] ?? response.value.length;
+    };
+
+    const [total, disabled, guests] = await Promise.all([
+      count(),
+      count('accountEnabled eq false'),
+      count("userType eq 'Guest'"),
+    ]);
+
+    return { total, disabled, guests };
   }
 
   /**

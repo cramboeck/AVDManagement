@@ -204,6 +204,24 @@ describe('IdentityProvider', () => {
     });
   });
 
+  describe('getUserStats', () => {
+    it('counts users with advanced queries and the eventual consistency header', async () => {
+      mockGraphClient.get
+        .mockResolvedValueOnce({ value: [{ id: 'u' }], '@odata.count': 120 })
+        .mockResolvedValueOnce({ value: [{ id: 'u' }], '@odata.count': 7 })
+        .mockResolvedValueOnce({ value: [{ id: 'u' }], '@odata.count': 3 });
+
+      const stats = await provider.getUserStats(ctx);
+
+      expect(stats).toEqual({ total: 120, disabled: 7, guests: 3 });
+      expect(mockGraphClient.get).toHaveBeenCalledTimes(3);
+      for (const call of mockGraphClient.get.mock.calls) {
+        expect(call[1]).toContain('$count=true');
+        expect(call[3]).toEqual({ headers: { ConsistencyLevel: 'eventual' } });
+      }
+    });
+  });
+
   describe('getUserDetail', () => {
     const detail = {
       id: 'user-001',
