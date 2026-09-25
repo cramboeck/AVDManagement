@@ -2,45 +2,75 @@
  * Tenant-Routen
  */
 
+import { randomUUID } from 'node:crypto';
 import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
 import { eq, and } from 'drizzle-orm';
 import { db, managedTenants } from '../db/index.js';
 import { authMiddleware, requireRole } from '../middleware/auth.js';
-import type { TenantId, ManagedTenant, TenantAuthMethod, TenantConnectionStatus } from '@zerostress/types';
+import { DrizzleAuditLogger } from '../services/audit-logger.js';
+import { createConsentState } from '../services/consent-state.js';
+import { testTenantConnection, persistConnectionTestResult } from '../services/tenant-connection.js';
+import type {
+  TenantId,
+  MspId,
+  UserId,
+  CorrelationId,
+  ManagedTenant,
+  TenantAuthMethod,
+  TenantConnectionStatus,
+  MissingScope,
+} from '@zerostress/types';
+
+type TenantRow = typeof managedTenants.$inferSelect;
 
 const app = new Hono();
+const audit = new DrizzleAuditLogger();
 
 app.use('*', authMiddleware);
+
+function toManagedTenant(row: TenantRow, mspId: MspId): ManagedTenant {
+  return {
+    id: row.id as TenantId,
+    mspId,
+    microsoftTenantId: row.microsoftTenantId,
+    displayName: row.displayName,
+    primaryDomain: row.primaryDomain,
+    authMethod: row.authMethod as TenantAuthMethod,
+    connectionStatus: row.connectionStatus as TenantConnectionStatus,
+    missingScopes: (row.missingScopes ?? []) as MissingScope[],
+    onboardedAt: row.onboardedAt,
+    lastSyncAt: row.lastSyncAt,
+    isActive: row.isActive,
+  };
+}
+
+async function findOwnTenant(tenantId: string, mspId: MspId): Promise<TenantRow | undefined> {
+  return db.query.managedTenants.findFirst({
+    where: and(eq(managedTenants.id, tenantId), eq(managedTenants.mspId, mspId)),
+  });
+}
+
+function notFound(tenantId: string) {
+  return {
+    type: 'https://api.zerostress.io/problems/not-found',
+    title: 'Tenant not found',
+    status: 404,
+    detail: `Tenant '${tenantId}' not found`,
+  };
+}
 
 // Alle Tenants auflisten
 app.get('/', async (c) => {
   const auth = c.get('auth');
 
   const tenants = await db.query.managedTenants.findMany({
-    where: and(
-      eq(managedTenants.mspId, auth.mspId),
-      eq(managedTenants.isActive, true)
-    ),
+    where: and(eq(managedTenants.mspId, auth.mspId), eq(managedTenants.isActive, true)),
     orderBy: (t, { asc }) => [asc(t.displayName)],
   });
 
-  const items: ManagedTenant[] = tenants.map((t) => ({
-    id: t.id as TenantId,
-    mspId: auth.mspId,
-    microsoftTenantId: t.microsoftTenantId,
-    displayName: t.displayName,
-    primaryDomain: t.primaryDomain,
-    authMethod: t.authMethod as TenantAuthMethod,
-    connectionStatus: t.connectionStatus as TenantConnectionStatus,
-    missingScopes: (t.missingScopes ?? []) as { scope: string; reason: string }[],
-    onboardedAt: t.onboardedAt,
-    lastSyncAt: t.lastSyncAt,
-    isActive: t.isActive,
-  }));
-
-  return c.json({ items });
+  return c.json({ items: tenants.map((t) => toManagedTenant(t, auth.mspId)) });
 });
 
 // Tenant-Details
@@ -48,40 +78,12 @@ app.get('/:tenantId', async (c) => {
   const auth = c.get('auth');
   const tenantId = c.req.param('tenantId');
 
-  const tenant = await db.query.managedTenants.findFirst({
-    where: and(
-      eq(managedTenants.id, tenantId),
-      eq(managedTenants.mspId, auth.mspId)
-    ),
-  });
-
+  const tenant = await findOwnTenant(tenantId, auth.mspId);
   if (!tenant) {
-    return c.json(
-      {
-        type: 'https://api.zerostress.io/problems/not-found',
-        title: 'Tenant not found',
-        status: 404,
-        detail: `Tenant '${tenantId}' not found`,
-      },
-      404
-    );
+    return c.json(notFound(tenantId), 404);
   }
 
-  const item: ManagedTenant = {
-    id: tenant.id as TenantId,
-    mspId: auth.mspId,
-    microsoftTenantId: tenant.microsoftTenantId,
-    displayName: tenant.displayName,
-    primaryDomain: tenant.primaryDomain,
-    authMethod: tenant.authMethod as TenantAuthMethod,
-    connectionStatus: tenant.connectionStatus as TenantConnectionStatus,
-    missingScopes: (tenant.missingScopes ?? []) as { scope: string; reason: string }[],
-    onboardedAt: tenant.onboardedAt,
-    lastSyncAt: tenant.lastSyncAt,
-    isActive: tenant.isActive,
-  };
-
-  return c.json(item);
+  return c.json(toManagedTenant(tenant, auth.mspId));
 });
 
 // Neuen Tenant onboarden
@@ -95,8 +97,8 @@ const createTenantSchema = z.object({
 app.post('/', requireRole('engineer'), zValidator('json', createTenantSchema), async (c) => {
   const auth = c.get('auth');
   const body = c.req.valid('json');
+  const correlationId = randomUUID() as CorrelationId;
 
-  // Pruefen ob Tenant bereits existiert
   const existing = await db.query.managedTenants.findFirst({
     where: and(
       eq(managedTenants.mspId, auth.mspId),
@@ -105,6 +107,19 @@ app.post('/', requireRole('engineer'), zValidator('json', createTenantSchema), a
   });
 
   if (existing) {
+    await audit.log({
+      mspId: auth.mspId,
+      tenantId: existing.id as TenantId,
+      userId: auth.user.id,
+      action: 'tenant.create',
+      targetType: 'tenant',
+      targetId: body.microsoftTenantId,
+      targetDisplayName: body.displayName,
+      result: 'failure',
+      errorMessage: 'Tenant already onboarded',
+      correlationId,
+    });
+
     return c.json(
       {
         type: 'https://api.zerostress.io/problems/conflict',
@@ -128,104 +143,81 @@ app.post('/', requireRole('engineer'), zValidator('json', createTenantSchema), a
     })
     .returning();
 
-  const item: ManagedTenant = {
-    id: tenant.id as TenantId,
+  await audit.log({
     mspId: auth.mspId,
-    microsoftTenantId: tenant.microsoftTenantId,
-    displayName: tenant.displayName,
-    primaryDomain: tenant.primaryDomain,
-    authMethod: tenant.authMethod as TenantAuthMethod,
-    connectionStatus: tenant.connectionStatus as TenantConnectionStatus,
-    missingScopes: [],
-    onboardedAt: tenant.onboardedAt,
-    lastSyncAt: tenant.lastSyncAt,
-    isActive: tenant.isActive,
-  };
+    tenantId: tenant.id as TenantId,
+    userId: auth.user.id,
+    action: 'tenant.create',
+    targetType: 'tenant',
+    targetId: tenant.microsoftTenantId,
+    targetDisplayName: tenant.displayName,
+    afterState: { connectionStatus: tenant.connectionStatus, authMethod: tenant.authMethod },
+    result: 'success',
+    correlationId,
+  });
 
-  return c.json(item, 201);
+  return c.json(toManagedTenant(tenant, auth.mspId), 201);
 });
 
 // Consent-URL generieren
-app.get('/:tenantId/consent-url', async (c) => {
+app.get('/:tenantId/consent-url', requireRole('engineer'), async (c) => {
   const tenantId = c.req.param('tenantId');
   const auth = c.get('auth');
 
-  const tenant = await db.query.managedTenants.findFirst({
-    where: and(
-      eq(managedTenants.id, tenantId),
-      eq(managedTenants.mspId, auth.mspId)
-    ),
-  });
-
+  const tenant = await findOwnTenant(tenantId, auth.mspId);
   if (!tenant) {
-    return c.json(
-      {
-        type: 'https://api.zerostress.io/problems/not-found',
-        title: 'Tenant not found',
-        status: 404,
-      },
-      404
-    );
+    return c.json(notFound(tenantId), 404);
   }
 
-  const clientId = process.env.ENTRA_CLIENT_ID;
-  const redirectUri = encodeURIComponent(`${process.env.API_URL}/auth/consent-callback`);
-  const scopes = encodeURIComponent([
-    'https://graph.microsoft.com/.default',
-  ].join(' '));
+  const state = await createConsentState({
+    tenantId: tenant.id as TenantId,
+    mspId: auth.mspId,
+    userId: auth.user.id as UserId,
+  });
 
-  const consentUrl = `https://login.microsoftonline.com/${tenant.microsoftTenantId}/adminconsent?client_id=${clientId}&redirect_uri=${redirectUri}&scope=${scopes}&state=${tenantId}`;
+  const apiUrl = process.env.API_URL ?? `http://localhost:${process.env.API_PORT ?? '3001'}`;
+  const params = new URLSearchParams({
+    client_id: process.env.ENTRA_CLIENT_ID!,
+    redirect_uri: `${apiUrl}/auth/consent-callback`,
+    scope: 'https://graph.microsoft.com/.default',
+    state,
+  });
+
+  const consentUrl = `https://login.microsoftonline.com/${tenant.microsoftTenantId}/v2.0/adminconsent?${params}`;
 
   return c.json({ consentUrl });
 });
 
 // Verbindung testen
-app.post('/:tenantId/test-connection', async (c) => {
+app.post('/:tenantId/test-connection', requireRole('engineer'), async (c) => {
   const tenantId = c.req.param('tenantId');
   const auth = c.get('auth');
+  const correlationId = randomUUID() as CorrelationId;
 
-  const tenant = await db.query.managedTenants.findFirst({
-    where: and(
-      eq(managedTenants.id, tenantId),
-      eq(managedTenants.mspId, auth.mspId)
-    ),
-  });
-
+  const tenant = await findOwnTenant(tenantId, auth.mspId);
   if (!tenant) {
-    return c.json(
-      {
-        type: 'https://api.zerostress.io/problems/not-found',
-        title: 'Tenant not found',
-        status: 404,
-      },
-      404
-    );
+    return c.json(notFound(tenantId), 404);
   }
 
-  // TODO: Echte Verbindungspruefung mit Graph API
-  // Hier nur Platzhalter
-  const connected = true;
-  const missingScopes: { scope: string; reason: string }[] = [];
+  const result = await testTenantConnection(tenant.microsoftTenantId);
+  await persistConnectionTestResult(tenant.id, result);
 
-  const newStatus: TenantConnectionStatus = connected
-    ? missingScopes.length > 0
-      ? 'permissions-insufficient'
-      : 'connected'
-    : 'consent-required';
-
-  await db
-    .update(managedTenants)
-    .set({
-      connectionStatus: newStatus,
-      missingScopes,
-      lastSyncAt: connected ? new Date() : null,
-    })
-    .where(eq(managedTenants.id, tenantId));
-
-  return c.json({
-    status: newStatus,
-    missingScopes,
+  await audit.log({
+    mspId: auth.mspId,
+    tenantId: tenant.id as TenantId,
+    userId: auth.user.id,
+    action: 'tenant.test-connection',
+    targetType: 'tenant',
+    targetId: tenant.microsoftTenantId,
+    targetDisplayName: tenant.displayName,
+    beforeState: { connectionStatus: tenant.connectionStatus },
+    afterState: { connectionStatus: result.status, missingScopes: result.missingScopes },
+    result: result.status === 'connected' ? 'success' : 'failure',
+    errorMessage: result.detail ?? undefined,
+    correlationId,
   });
+
+  return c.json(result);
 });
 
 export { app as tenantsRouter };

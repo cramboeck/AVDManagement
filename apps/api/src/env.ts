@@ -31,12 +31,16 @@ if (devAuthBypass && process.env.NODE_ENV === 'production') {
   throw new Error('DEV_AUTH_BYPASS must not be enabled in production');
 }
 
-const required = ['DATABASE_URL', 'ENTRA_CLIENT_ID', 'ENTRA_CLIENT_SECRET', 'ENTRA_TENANT_ID'];
+const required = ['DATABASE_URL', 'ENTRA_CLIENT_ID', 'ENTRA_CLIENT_SECRET', 'ENTRA_TENANT_ID', 'JWT_SECRET'];
 const missing = required.filter((name) => !process.env[name]);
 
 if (missing.length > 0) {
   const hint = envFile ? `loaded ${envFile}` : `no .env.local or .env found in ${monorepoRoot}`;
   throw new Error(`Missing environment variables: ${missing.join(', ')} (${hint})`);
+}
+
+if (process.env.NODE_ENV === 'production' && process.env.JWT_SECRET === 'dev-secret-change-in-production') {
+  throw new Error('JWT_SECRET still has the example value; generate one with: openssl rand -base64 32');
 }
 
 console.log(`Environment: ${envFile ?? 'process env only'}${devAuthBypass ? ' (DEV_AUTH_BYPASS active)' : ''}`);

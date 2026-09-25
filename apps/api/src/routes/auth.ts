@@ -1,10 +1,18 @@
 /**
- * Auth-Routen fuer OAuth Token Exchange
+ * Auth-Routen: OAuth Token Exchange und Admin-Consent-Rueckruf
  */
 
+import { randomUUID } from 'node:crypto';
 import { Hono } from 'hono';
+import { eq, and } from 'drizzle-orm';
+import { db, managedTenants } from '../db/index.js';
+import { DrizzleAuditLogger } from '../services/audit-logger.js';
+import { verifyConsentState, type ConsentStateClaims } from '../services/consent-state.js';
+import { testTenantConnection, persistConnectionTestResult } from '../services/tenant-connection.js';
+import type { CorrelationId } from '@zerostress/types';
 
 const app = new Hono();
+const audit = new DrizzleAuditLogger();
 
 // ENV-Variablen werden zur Laufzeit gelesen, nicht beim Import
 function getAuthConfig() {
@@ -116,6 +124,82 @@ app.post('/refresh', async (c) => {
     console.error('Token refresh error:', error);
     return c.json({ error: 'Token refresh failed' }, 500);
   }
+});
+
+// Rueckruf nach Admin-Consent. Kommt als Browser-Redirect von Microsoft,
+// daher ohne Auth-Middleware; der signierte State ersetzt die Session.
+app.get('/consent-callback', async (c) => {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3002';
+  const redirectToTenants = (params: Record<string, string>) =>
+    c.redirect(`${appUrl}/tenants?${new URLSearchParams(params)}`);
+
+  const state = c.req.query('state');
+  if (!state) {
+    return redirectToTenants({ consent: 'error', reason: 'missing-state' });
+  }
+
+  let claims: ConsentStateClaims;
+  try {
+    claims = await verifyConsentState(state);
+  } catch {
+    return redirectToTenants({ consent: 'error', reason: 'invalid-state' });
+  }
+
+  const tenant = await db.query.managedTenants.findFirst({
+    where: and(eq(managedTenants.id, claims.tenantId), eq(managedTenants.mspId, claims.mspId)),
+  });
+  if (!tenant) {
+    return redirectToTenants({ consent: 'error', reason: 'tenant-not-found' });
+  }
+
+  const correlationId = randomUUID() as CorrelationId;
+  const auditBase = {
+    mspId: claims.mspId,
+    tenantId: claims.tenantId,
+    userId: claims.userId,
+    action: 'tenant.consent',
+    targetType: 'tenant',
+    targetId: tenant.microsoftTenantId,
+    targetDisplayName: tenant.displayName,
+    beforeState: { connectionStatus: tenant.connectionStatus },
+    correlationId,
+  };
+
+  const errorParam = c.req.query('error');
+  if (errorParam) {
+    await audit.log({
+      ...auditBase,
+      result: 'failure',
+      errorMessage: `${errorParam}: ${c.req.query('error_description') ?? ''}`.trim(),
+    });
+    return redirectToTenants({ consent: 'error', reason: errorParam, tenantId: tenant.id });
+  }
+
+  const consentedTenant = c.req.query('tenant');
+  if (consentedTenant && consentedTenant.toLowerCase() !== tenant.microsoftTenantId.toLowerCase()) {
+    await audit.log({
+      ...auditBase,
+      result: 'failure',
+      errorMessage: 'Consent was granted in a different tenant than registered',
+    });
+    return redirectToTenants({ consent: 'error', reason: 'tenant-mismatch', tenantId: tenant.id });
+  }
+
+  const result = await testTenantConnection(tenant.microsoftTenantId);
+  await persistConnectionTestResult(tenant.id, result);
+
+  await audit.log({
+    ...auditBase,
+    afterState: { connectionStatus: result.status, missingScopes: result.missingScopes },
+    result: result.status === 'connected' ? 'success' : 'failure',
+    errorMessage: result.detail ?? undefined,
+  });
+
+  return redirectToTenants({
+    consent: result.status === 'connected' ? 'success' : 'incomplete',
+    status: result.status,
+    tenantId: tenant.id,
+  });
 });
 
 export { app as authRouter };
