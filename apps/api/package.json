@@ -21,6 +21,7 @@
     "@zerostress/core": "*",
     "@zerostress/types": "*",
     "@hono/node-server": "^1.8.0",
+    "dotenv": "^16.4.0",
     "@hono/zod-validator": "^0.2.0",
     "hono": "^4.0.0",
     "drizzle-orm": "^0.29.0",
