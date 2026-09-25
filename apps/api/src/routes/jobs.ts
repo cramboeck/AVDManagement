@@ -95,6 +95,54 @@ app.post(
   }
 );
 
+// Konto-Aktionen (deaktivieren, aktivieren, Sitzungen widerrufen, Passwort)
+const accountActionSchema = z.object({
+  userId: z.string().min(1),
+  userDisplayName: z.string().min(1),
+  userPrincipalName: z.string().min(1),
+  revokeSessions: z.boolean().optional(),
+});
+
+const accountActions: Record<string, { type: string; targetType: string }> = {
+  'disable-user': { type: 'identity.disable-user', targetType: 'user' },
+  'enable-user': { type: 'identity.enable-user', targetType: 'user' },
+  'revoke-sessions': { type: 'identity.revoke-sessions', targetType: 'user' },
+  'reset-password': { type: 'identity.reset-password', targetType: 'user' },
+};
+
+app.post(
+  '/:action{disable-user|enable-user|revoke-sessions|reset-password}',
+  requireRole('engineer'),
+  requireConnectedTenant,
+  zValidator('json', accountActionSchema),
+  async (c) => {
+    const auth = c.get('auth');
+    const tenant = c.get('tenant');
+    const body = c.req.valid('json');
+    const action = accountActions[c.req.param('action')];
+    const queue = getJobQueue();
+
+    const job = await queue.createJob({
+      type: action.type,
+      tenantId: tenant.id,
+      mspId: auth.mspId,
+      userId: auth.user.id,
+      userEmail: auth.user.email,
+      payload: {
+        userId: body.userId,
+        userDisplayName: body.userDisplayName,
+        userPrincipalName: body.userPrincipalName,
+        revokeSessions: body.revokeSessions ?? true,
+        targetType: action.targetType,
+        targetId: body.userId,
+        targetDisplayName: `${body.userDisplayName} (${body.userPrincipalName})`,
+      },
+    });
+
+    return c.json(job, 202);
+  }
+);
+
 // Job bestaetigen (nach Preview)
 app.post('/:jobId/approve', requireRole('engineer'), async (c) => {
   const auth = c.get('auth');

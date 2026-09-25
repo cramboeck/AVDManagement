@@ -204,6 +204,146 @@ export interface SessionUser {
 }
 
 // ============================================
+// Identity: Detail, Sicherheit, Protokolle
+// ============================================
+
+// Optionale Datenquelle (Lizenz oder Berechtigung koennen fehlen)
+export type CapabilityUnavailableReason = 'premium-required' | 'permission-missing';
+
+export type CapabilityResult<T> =
+  | { available: true; data: T }
+  | {
+      available: false;
+      reason: CapabilityUnavailableReason;
+      missingPermission: string | null;
+      detail: string | null;
+    };
+
+export interface UserSignInActivity {
+  lastSignInAt: string | null;
+  lastNonInteractiveSignInAt: string | null;
+}
+
+export interface UserDetail extends SyncedUser {
+  jobTitle: string | null;
+  department: string | null;
+  officeLocation: string | null;
+  mobilePhone: string | null;
+  businessPhones: string[];
+  city: string | null;
+  country: string | null;
+  usageLocation: string | null;
+  onPremisesSyncEnabled: boolean;
+  lastPasswordChangeAt: string | null;
+  // null, wenn AuditLog.Read.All oder Entra ID P1 fehlt
+  signInActivity: UserSignInActivity | null;
+}
+
+export type UserGroupKind = 'security' | 'microsoft365' | 'distribution' | 'mail-enabled-security';
+
+export interface UserGroup {
+  id: string;
+  displayName: string;
+  kind: UserGroupKind;
+}
+
+export type AuthenticationMethodKind =
+  | 'password'
+  | 'microsoft-authenticator'
+  | 'phone'
+  | 'fido2'
+  | 'windows-hello'
+  | 'software-oath'
+  | 'email'
+  | 'temporary-access-pass'
+  | 'unknown';
+
+export interface AuthenticationMethod {
+  id: string;
+  kind: AuthenticationMethodKind;
+  displayName: string | null;
+  detail: string | null;
+  isPhishingResistant: boolean;
+  countsAsMfa: boolean;
+}
+
+export interface AuthenticationMethodsSummary {
+  methods: AuthenticationMethod[];
+  mfaCapable: boolean;
+  phishingResistant: boolean;
+}
+
+export type SignInOutcome = 'success' | 'failure' | 'interrupted';
+
+export interface SignInEvent {
+  id: string;
+  createdAt: string;
+  userId: string;
+  userPrincipalName: string;
+  userDisplayName: string;
+  appDisplayName: string;
+  clientAppUsed: string | null;
+  ipAddress: string | null;
+  location: { city: string | null; state: string | null; countryOrRegion: string | null } | null;
+  outcome: SignInOutcome;
+  errorCode: number;
+  failureReason: string | null;
+  conditionalAccessStatus: 'success' | 'failure' | 'notApplied' | 'unknown';
+  authenticationRequirement: 'singleFactorAuthentication' | 'multiFactorAuthentication' | 'unknown';
+  riskLevel: 'none' | 'low' | 'medium' | 'high' | 'hidden' | 'unknown';
+  isInteractive: boolean;
+  device: {
+    operatingSystem: string | null;
+    browser: string | null;
+    isCompliant: boolean | null;
+    isManaged: boolean | null;
+    trustType: string | null;
+  } | null;
+}
+
+export interface SignInQuery {
+  userId?: string;
+  top?: number;
+  since?: string;
+  failuresOnly?: boolean;
+}
+
+export interface DirectoryAuditModifiedProperty {
+  name: string;
+  oldValue: string | null;
+  newValue: string | null;
+}
+
+export interface DirectoryAuditTarget {
+  id: string | null;
+  displayName: string | null;
+  type: string | null;
+  userPrincipalName: string | null;
+  modifiedProperties: DirectoryAuditModifiedProperty[];
+}
+
+export interface DirectoryAuditEvent {
+  id: string;
+  activityAt: string;
+  activity: string;
+  category: string;
+  result: 'success' | 'failure' | 'timeout' | 'unknown';
+  resultReason: string | null;
+  initiatedBy: {
+    kind: 'user' | 'app' | 'unknown';
+    displayName: string | null;
+    userPrincipalName: string | null;
+  };
+  targets: DirectoryAuditTarget[];
+}
+
+export interface DirectoryAuditQuery {
+  userId?: string;
+  top?: number;
+  since?: string;
+}
+
+// ============================================
 // AVD-Typen (Azure Virtual Desktop)
 // ============================================
 

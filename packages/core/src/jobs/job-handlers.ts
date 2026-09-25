@@ -142,10 +142,278 @@ export function createRemoveLicenseHandler(
   };
 }
 
+// Payload fuer Konto-Aktionen
+interface UserAccountPayload {
+  userId: string;
+  userDisplayName: string;
+  userPrincipalName: string;
+}
+
+interface DisableUserPayload extends UserAccountPayload {
+  revokeSessions: boolean;
+}
+
+function failure(code: string, error: unknown): JobResult {
+  return {
+    success: false,
+    error: {
+      code,
+      message: error instanceof Error ? error.message : String(error),
+      retryable: false,
+    },
+  };
+}
+
+function accountChange(
+  payload: UserAccountPayload,
+  action: 'update',
+  before: Record<string, unknown>,
+  after: Record<string, unknown>
+) {
+  return {
+    objectType: 'user',
+    objectId: payload.userId,
+    objectDisplayName: `${payload.userDisplayName} (${payload.userPrincipalName})`,
+    action,
+    before,
+    after,
+  };
+}
+
+/**
+ * Benutzer deaktivieren (Offboarding); optional alle Sitzungen widerrufen
+ */
+export function createDisableUserHandler(
+  identityProvider: IdentityProvider
+): (ctx: JobContext) => Promise<JobResult> {
+  return async (ctx) => {
+    const payload = ctx.payload as unknown as DisableUserPayload;
+    const providerCtx = { tenantId: ctx.tenantId, correlationId: ctx.correlationId };
+
+    try {
+      await identityProvider.disableUser(providerCtx, payload.userId);
+      if (payload.revokeSessions) {
+        await identityProvider.revokeSignInSessions(providerCtx, payload.userId);
+      }
+      return {
+        success: true,
+        data: {
+          userId: payload.userId,
+          accountEnabled: false,
+          sessionsRevoked: payload.revokeSessions,
+          disabledAt: new Date().toISOString(),
+        },
+      };
+    } catch (error) {
+      return failure('USER_DISABLE_FAILED', error);
+    }
+  };
+}
+
+export function createDisableUserPreviewGenerator(
+  identityProvider: IdentityProvider
+): (ctx: PreviewContext) => Promise<PreviewResult> {
+  return async (ctx) => {
+    const payload = ctx.payload as unknown as DisableUserPayload;
+    const user = await identityProvider.getUser(
+      { tenantId: ctx.tenantId, correlationId: crypto.randomUUID() },
+      payload.userId
+    );
+    const warnings: string[] = [];
+    if (user && !user.accountEnabled) {
+      warnings.push('Das Konto ist bereits deaktiviert.');
+    }
+    if (payload.revokeSessions) {
+      warnings.push('Alle aktiven Sitzungen und Token des Benutzers werden ungueltig; er wird ueberall abgemeldet.');
+    }
+    return {
+      changes: [
+        accountChange(
+          payload,
+          'update',
+          { accountEnabled: user?.accountEnabled ?? true },
+          { accountEnabled: false, sessionsRevoked: payload.revokeSessions }
+        ),
+      ],
+      warnings,
+      estimatedDurationSeconds: 5,
+    };
+  };
+}
+
+/**
+ * Benutzer aktivieren
+ */
+export function createEnableUserHandler(
+  identityProvider: IdentityProvider
+): (ctx: JobContext) => Promise<JobResult> {
+  return async (ctx) => {
+    const payload = ctx.payload as unknown as UserAccountPayload;
+    try {
+      await identityProvider.enableUser(
+        { tenantId: ctx.tenantId, correlationId: ctx.correlationId },
+        payload.userId
+      );
+      return {
+        success: true,
+        data: { userId: payload.userId, accountEnabled: true, enabledAt: new Date().toISOString() },
+      };
+    } catch (error) {
+      return failure('USER_ENABLE_FAILED', error);
+    }
+  };
+}
+
+export function createEnableUserPreviewGenerator(
+  identityProvider: IdentityProvider
+): (ctx: PreviewContext) => Promise<PreviewResult> {
+  return async (ctx) => {
+    const payload = ctx.payload as unknown as UserAccountPayload;
+    const user = await identityProvider.getUser(
+      { tenantId: ctx.tenantId, correlationId: crypto.randomUUID() },
+      payload.userId
+    );
+    return {
+      changes: [
+        accountChange(
+          payload,
+          'update',
+          { accountEnabled: user?.accountEnabled ?? false },
+          { accountEnabled: true }
+        ),
+      ],
+      warnings: user?.accountEnabled ? ['Das Konto ist bereits aktiv.'] : [],
+      estimatedDurationSeconds: 5,
+    };
+  };
+}
+
+/**
+ * Alle Sitzungen widerrufen (erzwingt Neuanmeldung auf allen Geraeten)
+ */
+export function createRevokeSessionsHandler(
+  identityProvider: IdentityProvider
+): (ctx: JobContext) => Promise<JobResult> {
+  return async (ctx) => {
+    const payload = ctx.payload as unknown as UserAccountPayload;
+    try {
+      await identityProvider.revokeSignInSessions(
+        { tenantId: ctx.tenantId, correlationId: ctx.correlationId },
+        payload.userId
+      );
+      return {
+        success: true,
+        data: { userId: payload.userId, sessionsRevokedAt: new Date().toISOString() },
+      };
+    } catch (error) {
+      return failure('SESSION_REVOKE_FAILED', error);
+    }
+  };
+}
+
+/**
+ * Passwort zuruecksetzen. Das temporaere Passwort steht nur im Job-Ergebnis
+ * und muss beim naechsten Login geaendert werden.
+ */
+export function createResetPasswordHandler(
+  identityProvider: IdentityProvider
+): (ctx: JobContext) => Promise<JobResult> {
+  return async (ctx) => {
+    const payload = ctx.payload as unknown as UserAccountPayload;
+    try {
+      const { temporaryPassword } = await identityProvider.resetPassword(
+        { tenantId: ctx.tenantId, correlationId: ctx.correlationId },
+        payload.userId
+      );
+      return {
+        success: true,
+        data: {
+          userId: payload.userId,
+          temporaryPassword,
+          forceChangeAtNextSignIn: true,
+          resetAt: new Date().toISOString(),
+        },
+      };
+    } catch (error) {
+      return failure('PASSWORD_RESET_FAILED', error);
+    }
+  };
+}
+
+function simpleAccountPreview(
+  action: string,
+  warnings: string[]
+): (ctx: PreviewContext) => Promise<PreviewResult> {
+  return async (ctx) => {
+    const payload = ctx.payload as unknown as UserAccountPayload;
+    return {
+      changes: [accountChange(payload, 'update', {}, { [action]: true })],
+      warnings,
+      estimatedDurationSeconds: 5,
+    };
+  };
+}
+
 /**
  * Job-Definitionen registrieren
  */
 export function registerIdentityJobs(identityProvider: IdentityProvider): void {
+  registerJob(
+    {
+      type: 'identity.disable-user',
+      displayName: 'Benutzer deaktivieren',
+      maxRetries: 1,
+      timeoutSeconds: 30,
+      concurrencyPerTenant: 5,
+      requiresPreview: true,
+    },
+    createDisableUserHandler(identityProvider),
+    createDisableUserPreviewGenerator(identityProvider)
+  );
+
+  registerJob(
+    {
+      type: 'identity.enable-user',
+      displayName: 'Benutzer aktivieren',
+      maxRetries: 1,
+      timeoutSeconds: 30,
+      concurrencyPerTenant: 5,
+      requiresPreview: true,
+    },
+    createEnableUserHandler(identityProvider),
+    createEnableUserPreviewGenerator(identityProvider)
+  );
+
+  registerJob(
+    {
+      type: 'identity.revoke-sessions',
+      displayName: 'Sitzungen widerrufen',
+      maxRetries: 1,
+      timeoutSeconds: 30,
+      concurrencyPerTenant: 5,
+      requiresPreview: true,
+    },
+    createRevokeSessionsHandler(identityProvider),
+    simpleAccountPreview('sessionsRevoked', [
+      'Der Benutzer wird auf allen Geraeten abgemeldet und muss sich neu anmelden.',
+    ])
+  );
+
+  registerJob(
+    {
+      type: 'identity.reset-password',
+      displayName: 'Passwort zuruecksetzen',
+      maxRetries: 0,
+      timeoutSeconds: 30,
+      concurrencyPerTenant: 5,
+      requiresPreview: true,
+    },
+    createResetPasswordHandler(identityProvider),
+    simpleAccountPreview('passwordReset', [
+      'Ein temporaeres Passwort wird erzeugt und einmalig im Job-Ergebnis angezeigt. Der Benutzer muss es beim naechsten Login aendern.',
+    ])
+  );
+
   registerJob(
     {
       type: 'identity.assign-license',
