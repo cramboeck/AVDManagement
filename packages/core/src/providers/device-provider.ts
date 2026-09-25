@@ -647,13 +647,43 @@ export class DeviceProvider extends BaseResourceProvider {
   }
 
   /**
+   * Softwareinventar laut Defender (Vulnerability Management), ohne Versionen.
+   */
+  async listDefenderSoftware(ctx: ProviderContext, machineId: string): Promise<CapabilityResult<DetectedApp[]>> {
+    this.validateContext(ctx);
+    try {
+      const response = await this.defenderClient.get<GraphResponse<{ id: string; name: string | null; vendor: string | null }[]>>(
+        ctx.tenantId as string,
+        `/api/machines/${encodeURIComponent(machineId)}/software`,
+        DEFENDER_SCOPES
+      );
+      return {
+        available: true,
+        data: response.value.map((s) => ({
+          id: `mde:${s.id}`,
+          displayName: s.name ?? s.id,
+          version: null,
+          publisher: s.vendor || null,
+          platform: null,
+          sizeBytes: null,
+          source: 'defender' as const,
+        })),
+      };
+    } catch (error) {
+      const unavailable = asUnavailable(error, 'Software.Read.All');
+      if (unavailable) return unavailable;
+      throw error;
+    }
+  }
+
+  /**
    * Vom Intune-Client erkannte Software eines Geraets (Inventar, nicht live).
    */
   async listDetectedApps(ctx: ProviderContext, managedDeviceId: string): Promise<CapabilityResult<DetectedApp[]>> {
     this.validateContext(ctx);
     const tenantId = ctx.tenantId as string;
     const apps: GraphDetectedApp[] = [];
-    let next: string | null = `/deviceManagement/managedDevices/${encodeURIComponent(managedDeviceId)}/detectedApps?$top=500`;
+    let next: string | null = `/deviceManagement/managedDevices/${encodeURIComponent(managedDeviceId)}/detectedApps`;
 
     try {
       while (next) {
@@ -677,6 +707,7 @@ export class DeviceProvider extends BaseResourceProvider {
           publisher: a.publisher || null,
           platform: a.platform ?? null,
           sizeBytes: typeof a.sizeInByte === 'number' ? a.sizeInByte : null,
+          source: 'intune' as const,
         }))
         .sort((a, b) => a.displayName.localeCompare(b.displayName, 'de')),
     };
@@ -928,6 +959,24 @@ function formatMac(mac: string | null): string | null {
   const clean = mac.replace(/[^0-9a-fA-F]/g, '').toUpperCase();
   if (clean.length !== 12) return mac;
   return clean.match(/.{2}/g)?.join(':') ?? mac;
+}
+
+/**
+ * Intune- und Defender-Inventar zusammenfuehren: gleicher Name (normalisiert) ist dieselbe Software,
+ * Intune liefert die Version, Defender kennt zusaetzlich Software ohne Installer-Eintrag.
+ */
+export function mergeSoftware(intune: DetectedApp[], defender: DetectedApp[]): DetectedApp[] {
+  const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '');
+  const seen = new Map<string, DetectedApp>();
+  for (const app of intune) seen.set(norm(app.displayName), app);
+  for (const app of defender) {
+    const key = norm(app.displayName);
+    const vendorKey = norm(`${app.publisher ?? ''}${app.displayName}`);
+    if (seen.has(key) || seen.has(vendorKey)) continue;
+    if (Array.from(seen.keys()).some((k) => k.includes(key) && key.length >= 5)) continue;
+    seen.set(key, app);
+  }
+  return Array.from(seen.values()).sort((a, b) => a.displayName.localeCompare(b.displayName, 'de'));
 }
 
 export function subnetOf(ip: string): string {

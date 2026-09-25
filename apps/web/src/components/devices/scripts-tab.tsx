@@ -9,6 +9,7 @@ import { ErrorState } from '@/components/ui/error-state';
 import { CapabilityNotice } from '@/components/identity/capability-notice';
 import { JobActionDialog } from '@/components/jobs/job-action-dialog';
 import { formatDateTime } from '@/components/identity/sign-in-table';
+import { Collapsible } from '@/components/ui/collapsible';
 import type { Device, Job, ScriptLibraryStatus, ScriptRunResult, TenantScriptStatus, TenantScriptState } from '@zerostress/types';
 
 const stateLabels: Record<TenantScriptState, { label: string; className: string }> = {
@@ -165,6 +166,27 @@ function IntuneStateButton({ tenantId, scriptId, managedDeviceId }: { tenantId: 
   );
 }
 
+function resultHeadline(job: Job): string {
+  const result = job.result as unknown as ScriptRunResult | null;
+  const json = result?.outputJson;
+  if (!json) return job.status === 'failed' ? (job.error ?? 'fehlgeschlagen') : 'Ergebnis vorhanden';
+  switch (json.schema) {
+    case 'zsc.update-status/1':
+    case 'zsc.update-scan/1':
+      return `${text(json.pendingCount)} ausstehende Updates${json.rebootRequired === true ? ', Neustart erforderlich' : ''}`;
+    case 'zsc.winget-updates/1':
+      return `${text(json.updateCount)} Software-Updates verfuegbar`;
+    case 'zsc.system-info/1':
+      return `${text(json.os)}, ${text(json.uptimeHours)} h Laufzeit${json.rebootRequired === true ? ', Neustart erforderlich' : ''}`;
+    case 'zsc.network-info/1':
+      return `${Array.isArray(json.adapters) ? json.adapters.length : 0} aktive Adapter, Domaene ${text(json.domain)}`;
+    case 'zsc.storage-info/1':
+      return `${Array.isArray(json.volumes) ? json.volumes.length : 0} Laufwerke, ${Array.isArray(json.disks) ? json.disks.length : 0} Datentraeger`;
+    default:
+      return 'Ergebnis vorhanden';
+  }
+}
+
 function LatestRun({ job }: { job: Job }) {
   const label =
     job.status === 'completed'
@@ -174,17 +196,26 @@ function LatestRun({ job }: { job: Job }) {
         : job.status === 'pending_approval'
           ? 'Wartet auf Freigabe'
           : 'Lauf aktiv';
-  return (
-    <div>
+  const finished = job.status === 'completed' || job.status === 'failed';
+  if (!finished) {
+    return (
       <p className="text-xs text-muted-foreground">
-        {label} · {formatDateTime(job.completedAt ?? job.createdAt)} · {job.createdByEmail}
+        {label} · {formatDateTime(job.createdAt)} · {job.createdByEmail}
       </p>
-      {(job.status === 'completed' || job.status === 'failed') && (
-        <div className="mt-2">
-          <ScriptResultView result={job.result as unknown as ScriptRunResult | null} error={job.error} />
-        </div>
-      )}
-    </div>
+    );
+  }
+  return (
+    <Collapsible
+      summary={
+        <span className={clsx(job.status === 'failed' && 'text-destructive')}>
+          {label}: {resultHeadline(job)}
+        </span>
+      }
+      aside={`${formatDateTime(job.completedAt ?? job.createdAt)} · ${job.createdByEmail}`}
+      defaultOpen={job.status === 'failed'}
+    >
+      <ScriptResultView result={job.result as unknown as ScriptRunResult | null} error={job.error} />
+    </Collapsible>
   );
 }
 

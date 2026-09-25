@@ -9,6 +9,7 @@ import { z } from 'zod';
 import { authMiddleware, requireRole } from '../middleware/auth.js';
 import { tenantContextMiddleware, requireConnectedTenant } from '../middleware/tenant-context.js';
 import { getDeviceProvider } from '../services/microsoft-clients.js';
+import { mergeSoftware } from '@zerostress/core';
 import { getDeviceInventory, findDevice } from '../services/inventory.js';
 import { DrizzleAuditLogger } from '../services/audit-logger.js';
 import type { CorrelationId, DeviceSecurityPosture, DeviceSoftwareInventory, TenantId } from '@zerostress/types';
@@ -101,7 +102,7 @@ app.get('/:deviceId/network', requireConnectedTenant, async (c) => {
   return c.json(await getDeviceProvider().getDeviceNetwork(ctx, device.defender.machineId));
 });
 
-// Softwareinventar aus Intune (erkannte Apps des Geraets)
+// Softwareinventar: Intune (erkannte Apps, mit Version) plus Defender (Vulnerability Management)
 app.get('/:deviceId/software', requireConnectedTenant, async (c) => {
   const tenant = c.get('tenant');
   const deviceId = c.req.param('deviceId');
@@ -111,17 +112,26 @@ app.get('/:deviceId/software', requireConnectedTenant, async (c) => {
   if (!device) {
     return c.json(notFound(deviceId), 404);
   }
-  if (!device.intune) {
-    const inventory: DeviceSoftwareInventory = {
-      available: false,
-      reason: 'not-onboarded',
-      missingPermission: null,
-      detail: 'Device is not managed by Intune',
-    };
+  const notOnboarded = { available: false as const, reason: 'not-onboarded' as const, missingPermission: null, detail: null };
+  const provider = getDeviceProvider();
+  const [intune, defender] = await Promise.all([
+    device.intune ? provider.listDetectedApps(ctx, device.intune.managedDeviceId) : Promise.resolve(notOnboarded),
+    device.defender ? provider.listDefenderSoftware(ctx, device.defender.machineId) : Promise.resolve(notOnboarded),
+  ]);
+  if (!intune.available && !defender.available) {
+    const inventory: DeviceSoftwareInventory = intune.reason === 'not-onboarded' ? defender : intune;
     return c.json(inventory);
   }
-
-  return c.json(await getDeviceProvider().listDetectedApps(ctx, device.intune.managedDeviceId));
+  const items = mergeSoftware(intune.available ? intune.data : [], defender.available ? defender.data : []);
+  const inventory: DeviceSoftwareInventory = {
+    available: true,
+    data: {
+      items,
+      intune: intune.available ? { available: true, data: { count: intune.data.length } } : intune,
+      defender: defender.available ? { available: true, data: { count: defender.data.length } } : defender,
+    },
+  };
+  return c.json(inventory);
 });
 
 // Wiederherstellung: nur Metadaten (welche Schluessel existieren)

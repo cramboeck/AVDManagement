@@ -59,6 +59,17 @@ const softwareColumns: ColumnDef<SoftwareRow>[] = [
       ),
   },
   { id: 'publisher', header: 'Hersteller', accessor: (a) => a.publisher },
+  {
+    id: 'source',
+    header: 'Quelle',
+    accessor: (a) => a.source,
+    filterOptions: [
+      { value: 'intune', label: 'Intune' },
+      { value: 'defender', label: 'Defender' },
+    ],
+    searchable: false,
+    cell: (a) => <span className="text-xs text-muted-foreground">{a.source === 'intune' ? 'Intune' : 'Defender'}</span>,
+  },
   { id: 'size', header: 'Groesse', accessor: (a) => a.sizeBytes, cell: (a) => <span className="text-muted-foreground">{formatSize(a.sizeBytes)}</span>, align: 'right' },
   { id: 'platform', header: 'Plattform', accessor: (a) => a.platform, defaultHidden: true },
 ];
@@ -100,20 +111,13 @@ export function SoftwareTab({ base, tenantId, device }: { base: string; tenantId
 
   const rows: SoftwareRow[] = useMemo(
     () =>
-      (softwareQuery.data?.available ? softwareQuery.data.data : []).map((app) => {
+      (softwareQuery.data?.available ? softwareQuery.data.data.items : []).map((app) => {
         const update = matchWingetUpdate(app, updates);
         return { ...app, update, wingetState: update ? 'update' : 'current' };
       }),
     [softwareQuery.data, updates]
   );
 
-  if (!managedDeviceId) {
-    return (
-      <p className="rounded-lg border border-dashed p-5 text-sm text-muted-foreground">
-        Das Softwareinventar kommt aus Intune. Dieses Geraet ist nicht in Intune verwaltet.
-      </p>
-    );
-  }
   if (softwareQuery.isLoading) return <LoadingTable rows={8} />;
   if (softwareQuery.error) return <ErrorState error={softwareQuery.error as Error} onRetry={softwareQuery.refetch} />;
   const inventory = softwareQuery.data;
@@ -122,7 +126,7 @@ export function SoftwareTab({ base, tenantId, device }: { base: string; tenantId
     return <CapabilityNotice what="das Softwareinventar" reason={inventory.reason} missingPermission={inventory.missingPermission} detail={inventory.detail} />;
   }
 
-  const apps = inventory.data;
+  const apps = inventory.data.items;
 
   return (
     <div className="space-y-4">
@@ -155,8 +159,15 @@ export function SoftwareTab({ base, tenantId, device }: { base: string; tenantId
         )}
       </section>
 
+      <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+        <span>Quellen:</span>
+        <span>{inventory.data.intune.available ? `Intune ${inventory.data.intune.data.count} Eintraege` : `Intune nicht verfuegbar (${inventory.data.intune.reason})`}</span>
+        <span>·</span>
+        <span>{inventory.data.defender.available ? `Defender ${inventory.data.defender.data.count} Eintraege` : `Defender nicht verfuegbar (${inventory.data.defender.reason})`}</span>
+      </div>
+
       {apps.length === 0 ? (
-        <EmptyState title="Noch kein Inventar" description="Intune hat fuer dieses Geraet noch keine erkannten Apps gemeldet. Der Client meldet das Inventar etwa woechentlich." />
+        <EmptyState title="Noch kein Inventar" description="Weder Intune noch Defender haben fuer dieses Geraet Software gemeldet. Der Intune-Client meldet das Inventar etwa woechentlich." />
       ) : (
         <DataTable
           rows={rows}

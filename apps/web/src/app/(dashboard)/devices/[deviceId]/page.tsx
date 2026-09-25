@@ -26,6 +26,7 @@ import type {
   CapabilityResult,
   Device,
   DeviceNetworkInfo,
+  DeviceNetworkInterface,
   DeviceSecurityPosture,
   DeviceVulnerability,
   MissingKb,
@@ -230,6 +231,34 @@ function StorageBar({ total, free }: { total: number | null; free: number | null
   );
 }
 
+function isNoise(i: DeviceNetworkInterface): boolean {
+  const ip = i.ipAddress.toLowerCase();
+  return ip === '::1' || ip.startsWith('127.') || ip.startsWith('fe80:') || ip.startsWith('169.254.') || (i.type ?? '').toLowerCase().includes('loopback');
+}
+
+interface AdapterRow {
+  key: string;
+  macAddress: string | null;
+  type: string | null;
+  status: string | null;
+  ipv4: string[];
+  ipv6: string[];
+}
+
+// Eine Zeile je Adapter (MAC), aktive zuerst; Loopback, Link-Local und APIPA bleiben im Ausklappmenue
+function groupAdapters(interfaces: DeviceNetworkInterface[]): AdapterRow[] {
+  const rows = new Map<string, AdapterRow>();
+  for (const i of interfaces) {
+    if (isNoise(i)) continue;
+    const key = i.macAddress ?? `${i.type ?? 'unknown'}-${i.status ?? ''}`;
+    const row = rows.get(key) ?? { key, macAddress: i.macAddress, type: i.type, status: i.status, ipv4: [], ipv6: [] };
+    (i.ipAddress.includes(':') ? row.ipv6 : row.ipv4).push(i.ipAddress);
+    if (i.status === 'Up') row.status = 'Up';
+    rows.set(key, row);
+  }
+  return Array.from(rows.values()).sort((a, b) => Number(b.status === 'Up') - Number(a.status === 'Up') || b.ipv4.length - a.ipv4.length);
+}
+
 function NetworkSection({ base, tenantId, device }: { base: string; tenantId: string; device: Device }) {
   const query = useQuery({
     queryKey: ['device-network', tenantId, device.id],
@@ -247,40 +276,63 @@ function NetworkSection({ base, tenantId, device }: { base: string; tenantId: st
   if (!result) return null;
   if (!result.available) return <CapabilityNotice what="die Netzwerkschnittstellen" reason={result.reason} missingPermission={result.missingPermission} detail={result.detail} compact />;
   const net = result.data;
+  const adapters = groupAdapters(net.interfaces);
+  const active = adapters.filter((a) => a.status === 'Up');
+  const inactive = adapters.filter((a) => a.status !== 'Up');
 
   return (
     <div className="space-y-3">
       <Fields
         fields={[
-          ['Letzte interne IP', net.lastIpAddress ?? '—'],
-          ['Oeffentliche IP (Standort)', net.lastExternalIpAddress ?? '—'],
+          ['Letzte interne IP', <span key="i" className="font-mono text-xs">{net.lastIpAddress ?? '—'}</span>],
+          ['Oeffentliche IP (Standort)', <span key="e" className="font-mono text-xs">{net.lastExternalIpAddress ?? '—'}</span>],
         ]}
       />
-      {net.interfaces.length > 0 ? (
-        <div className="overflow-x-auto rounded-md border">
-          <table className="w-full text-sm">
-            <thead className="border-b bg-muted/50 text-left">
-              <tr>
-                <th className="px-3 py-1.5 font-medium">Adresse</th>
-                <th className="px-3 py-1.5 font-medium">MAC</th>
-                <th className="px-3 py-1.5 font-medium">Typ</th>
-                <th className="px-3 py-1.5 font-medium">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {net.interfaces.map((i) => (
-                <tr key={`${i.ipAddress}-${i.macAddress ?? ''}`} className="border-b last:border-0">
-                  <td className="px-3 py-1.5 font-mono text-xs">{i.ipAddress}</td>
-                  <td className="px-3 py-1.5 font-mono text-xs">{i.macAddress ?? '—'}</td>
-                  <td className="px-3 py-1.5">{i.type ?? '—'}</td>
-                  <td className="px-3 py-1.5">{i.status ?? '—'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+      {active.length > 0 ? (
+        <ul className="divide-y rounded-md border">
+          {active.map((a) => (
+            <li key={a.key} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-sm">
+              <span>
+                <span className="font-mono text-xs">{a.ipv4.join(', ') || '—'}</span>
+                {a.ipv6.length > 0 && <span className="ml-2 text-xs text-muted-foreground">+{a.ipv6.length} IPv6</span>}
+              </span>
+              <span className="text-xs text-muted-foreground">
+                {a.type ?? '—'} · <span className="font-mono">{a.macAddress ?? '—'}</span>
+              </span>
+            </li>
+          ))}
+        </ul>
       ) : (
-        <p className="text-sm text-muted-foreground">Der Sensor hat keine Schnittstellen gemeldet.</p>
+        <p className="text-sm text-muted-foreground">Der Sensor hat keine aktive Schnittstelle mit Adresse gemeldet.</p>
+      )}
+      {(inactive.length > 0 || net.interfaces.length > active.length) && (
+        <details className="text-sm">
+          <summary className="cursor-pointer text-xs text-muted-foreground">
+            Alle Schnittstellen laut Sensor ({net.interfaces.length}), inklusive inaktiver, Loopback und Link-Local
+          </summary>
+          <div className="mt-2 overflow-x-auto rounded-md border">
+            <table className="w-full text-sm">
+              <thead className="border-b bg-muted/50 text-left">
+                <tr>
+                  <th className="px-3 py-1.5 font-medium">Adresse</th>
+                  <th className="px-3 py-1.5 font-medium">MAC</th>
+                  <th className="px-3 py-1.5 font-medium">Typ</th>
+                  <th className="px-3 py-1.5 font-medium">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {net.interfaces.map((i) => (
+                  <tr key={`${i.ipAddress}-${i.macAddress ?? ''}`} className="border-b last:border-0">
+                    <td className="px-3 py-1.5 font-mono text-xs">{i.ipAddress}</td>
+                    <td className="px-3 py-1.5 font-mono text-xs">{i.macAddress ?? '—'}</td>
+                    <td className="px-3 py-1.5">{i.type ?? '—'}</td>
+                    <td className={clsx('px-3 py-1.5', i.status !== 'Up' && 'text-muted-foreground')}>{i.status ?? '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </details>
       )}
       <p className="text-xs text-muted-foreground">Gateway, DNS und Verbindungsart liefert das Skript Netzwerkinfo im Tab Skripte.</p>
     </div>

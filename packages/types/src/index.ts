@@ -773,9 +773,16 @@ export interface DetectedApp {
   publisher: string | null;
   platform: string | null;
   sizeBytes: number | null;
+  source: 'intune' | 'defender';
 }
 
-export type DeviceSoftwareInventory = CapabilityResult<DetectedApp[]>;
+export interface DeviceSoftwareSet {
+  items: DetectedApp[];
+  intune: CapabilityResult<{ count: number }>;
+  defender: CapabilityResult<{ count: number }>;
+}
+
+export type DeviceSoftwareInventory = CapabilityResult<DeviceSoftwareSet>;
 
 export interface ScriptLibraryEntry {
   id: LibraryScriptId;
