@@ -6,10 +6,23 @@ import { Hono } from 'hono';
 
 const app = new Hono();
 
-const CLIENT_ID = process.env.ENTRA_CLIENT_ID ?? '';
-const CLIENT_SECRET = process.env.ENTRA_CLIENT_SECRET ?? '';
-const TENANT_ID = process.env.ENTRA_TENANT_ID ?? 'common';
-const TOKEN_ENDPOINT = `https://login.microsoftonline.com/${TENANT_ID}/oauth2/v2.0/token`;
+// ENV-Variablen werden zur Laufzeit gelesen, nicht beim Import
+function getAuthConfig() {
+  const clientId = process.env.ENTRA_CLIENT_ID;
+  const clientSecret = process.env.ENTRA_CLIENT_SECRET;
+  const tenantId = process.env.ENTRA_TENANT_ID ?? 'common';
+
+  if (!clientId || !clientSecret) {
+    throw new Error('ENTRA_CLIENT_ID and ENTRA_CLIENT_SECRET must be set');
+  }
+
+  return {
+    clientId,
+    clientSecret,
+    tenantId,
+    tokenEndpoint: `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`,
+  };
+}
 
 app.post('/token', async (c) => {
   const body = await c.req.json();
@@ -19,9 +32,11 @@ app.post('/token', async (c) => {
     return c.json({ error: 'Missing required parameters' }, 400);
   }
 
+  const config = getAuthConfig();
+
   const params = new URLSearchParams({
-    client_id: CLIENT_ID,
-    client_secret: CLIENT_SECRET,
+    client_id: config.clientId,
+    client_secret: config.clientSecret,
     grant_type: 'authorization_code',
     code,
     redirect_uri,
@@ -30,7 +45,7 @@ app.post('/token', async (c) => {
   });
 
   try {
-    const response = await fetch(TOKEN_ENDPOINT, {
+    const response = await fetch(config.tokenEndpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
@@ -65,16 +80,18 @@ app.post('/refresh', async (c) => {
     return c.json({ error: 'Missing refresh token' }, 400);
   }
 
+  const config = getAuthConfig();
+
   const params = new URLSearchParams({
-    client_id: CLIENT_ID,
-    client_secret: CLIENT_SECRET,
+    client_id: config.clientId,
+    client_secret: config.clientSecret,
     grant_type: 'refresh_token',
     refresh_token,
     scope: 'openid profile email offline_access User.Read',
   });
 
   try {
-    const response = await fetch(TOKEN_ENDPOINT, {
+    const response = await fetch(config.tokenEndpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',

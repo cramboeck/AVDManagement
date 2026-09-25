@@ -2,31 +2,8 @@
  * ZeroStress Cockpit API
  */
 
-import { config } from 'dotenv';
-import { existsSync } from 'fs';
-import { resolve, dirname } from 'path';
-import { fileURLToPath } from 'url';
-
-// Monorepo-Root finden (von apps/api/src aus: 3 Ebenen hoch)
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-const monorepoRoot = resolve(__dirname, '..', '..', '..');
-
-// .env.local hat Prioritaet, dann .env (im Monorepo-Root)
-const envLocalPath = resolve(monorepoRoot, '.env.local');
-const envPath = resolve(monorepoRoot, '.env');
-
-if (existsSync(envLocalPath)) {
-  console.log('Loading .env.local from:', envLocalPath);
-  config({ path: envLocalPath });
-} else if (existsSync(envPath)) {
-  console.log('Loading .env from:', envPath);
-  config({ path: envPath });
-} else {
-  console.log('No .env file found in:', monorepoRoot);
-}
-
-console.log('DEV_AUTH_BYPASS:', process.env.DEV_AUTH_BYPASS);
+// Muss der erste Import bleiben, siehe env.ts
+import './env.js';
 
 import { serve } from '@hono/node-server';
 import { Hono } from 'hono';
@@ -80,7 +57,7 @@ app.route('/auth', authRouter);
 // Dev-Mode: Unauthenticated tenant list for testing
 if (process.env.NODE_ENV !== 'production') {
   app.get('/dev/tenants', async (c) => {
-    const { db, managedTenants } = await import('./db/index.js');
+    const { db } = await import('./db/index.js');
     const tenants = await db.query.managedTenants.findMany({
       limit: 20,
     });

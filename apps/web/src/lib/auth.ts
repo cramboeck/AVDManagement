@@ -40,6 +40,10 @@ async function generateCodeChallenge(verifier: string): Promise<string> {
 }
 
 export async function startLogin(): Promise<void> {
+  if (!CLIENT_ID) {
+    throw new Error('NEXT_PUBLIC_ENTRA_CLIENT_ID is not set. Check .env.local in the monorepo root.');
+  }
+
   const codeVerifier = generateCodeVerifier();
   const codeChallenge = await generateCodeChallenge(codeVerifier);
   const state = crypto.randomUUID();
