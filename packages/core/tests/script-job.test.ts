@@ -145,3 +145,40 @@ describe('device.run-script', () => {
     expect(remediations.ensureScript).not.toHaveBeenCalled();
   });
 });
+
+describe('sealed results', () => {
+  it('seals personal output and refuses to store it without a sealer', async () => {
+    const { finalizeResult } = await import('../src/jobs/script-job-handlers.js');
+    const result = {
+      scriptId: 'local-admins' as const,
+      version: '1.0.0',
+      hash: 'h',
+      tenantScriptId: 't',
+      managedDeviceId: 'md-1',
+      requestedAt: 'r',
+      completedAt: 'c',
+      detectionState: 'success' as const,
+      remediationState: 'skipped' as const,
+      output: '{"schema":"zsc.local-admins/1","members":[{"name":"max"}]}',
+      outputJson: { schema: 'zsc.local-admins/1', members: [{ name: 'max' }] },
+      detectionError: null,
+      remediationError: null,
+      deviceReportedAt: null,
+      possiblyStale: false,
+      stateSource: 'device' as const,
+    };
+    const refused = await finalizeResult(result, true, null);
+    expect(refused.success).toBe(false);
+    expect(refused.error?.code).toBe('RESULT_SEAL_UNAVAILABLE');
+
+    const sealer = { seal: vi.fn(async () => ({ alg: 'aes-256-gcm' as const, keyId: 'k1', iv: 'iv', tag: 'tag', data: 'ciphertext' })) };
+    const sealed = await finalizeResult(result, true, sealer);
+    expect(sealed.success).toBe(true);
+    expect(sealed.data).toMatchObject({ sealed: true, output: null, outputJson: null, cipher: { keyId: 'k1', data: 'ciphertext' } });
+    expect(JSON.stringify(sealed.data)).not.toContain('max');
+    expect(sealer.seal).toHaveBeenCalledWith(expect.objectContaining({ output: expect.stringContaining('max') }));
+
+    const plain = await finalizeResult(result, false, null);
+    expect(plain.data).toMatchObject({ output: result.output });
+  });
+});

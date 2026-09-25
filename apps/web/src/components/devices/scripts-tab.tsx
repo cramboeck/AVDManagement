@@ -10,6 +10,8 @@ import { CapabilityNotice } from '@/components/identity/capability-notice';
 import { JobActionDialog } from '@/components/jobs/job-action-dialog';
 import { formatDateTime } from '@/components/identity/sign-in-table';
 import { Collapsible } from '@/components/ui/collapsible';
+import Link from 'next/link';
+import { SealedResult, entraObjectIdFromSid } from '@/components/devices/sealed-result';
 import type { Device, Job, ScriptLibraryStatus, ScriptRunResult, TenantScriptStatus, TenantScriptState } from '@zerostress/types';
 
 const stateLabels: Record<TenantScriptState, { label: string; className: string }> = {
@@ -88,7 +90,7 @@ export function ScriptsTab({ tenantId, device }: { tenantId: string; device: Dev
 
             {latest && (
               <div className="mt-3 border-t pt-3">
-                <LatestRun job={latest} />
+                <LatestRun job={latest} tenantId={tenantId} />
               </div>
             )}
           </section>
@@ -169,6 +171,7 @@ function IntuneStateButton({ tenantId, scriptId, managedDeviceId }: { tenantId: 
 function resultHeadline(job: Job): string {
   const result = job.result as unknown as ScriptRunResult | null;
   const json = result?.outputJson;
+  if (result?.sealed) return result.purged ? 'Klartext nach 30 Tagen geloescht' : 'Personenbezogen, verschluesselt gespeichert';
   if (!json) return job.status === 'failed' ? (job.error ?? 'fehlgeschlagen') : 'Ergebnis vorhanden';
   switch (json.schema) {
     case 'zsc.update-status/1':
@@ -182,12 +185,14 @@ function resultHeadline(job: Job): string {
       return `${Array.isArray(json.adapters) ? json.adapters.length : 0} aktive Adapter, Domaene ${text(json.domain)}`;
     case 'zsc.storage-info/1':
       return `${Array.isArray(json.volumes) ? json.volumes.length : 0} Laufwerke, ${Array.isArray(json.disks) ? json.disks.length : 0} Datentraeger`;
+    case 'zsc.local-admins/1':
+      return `${text(json.memberCount)} Mitglieder in Administratoren`;
     default:
       return 'Ergebnis vorhanden';
   }
 }
 
-function LatestRun({ job }: { job: Job }) {
+function LatestRun({ job, tenantId }: { job: Job; tenantId: string }) {
   const label =
     job.status === 'completed'
       ? 'Letztes Ergebnis'
@@ -214,12 +219,16 @@ function LatestRun({ job }: { job: Job }) {
       aside={`${formatDateTime(job.completedAt ?? job.createdAt)} · ${job.createdByEmail}`}
       defaultOpen={job.status === 'failed'}
     >
-      <ScriptResultView result={job.result as unknown as ScriptRunResult | null} error={job.error} />
+      {(job.result as unknown as ScriptRunResult | null)?.sealed ? (
+        <SealedResult tenantId={tenantId} jobId={job.id} result={job.result as unknown as ScriptRunResult} render={(r) => <ScriptResultView result={r} error={job.error} />} />
+      ) : (
+        <ScriptResultView result={job.result as unknown as ScriptRunResult | null} error={job.error} />
+      )}
     </Collapsible>
   );
 }
 
-const KNOWN_SCHEMAS = new Set(['zsc.update-status/1', 'zsc.update-scan/1', 'zsc.system-info/1', 'zsc.winget-updates/1', 'zsc.network-info/1', 'zsc.storage-info/1']);
+const KNOWN_SCHEMAS = new Set(['zsc.update-status/1', 'zsc.update-scan/1', 'zsc.system-info/1', 'zsc.winget-updates/1', 'zsc.network-info/1', 'zsc.storage-info/1', 'zsc.local-admins/1']);
 
 export interface WingetUpdate {
   name: string;
@@ -285,6 +294,7 @@ export function ScriptResultView({ result, error }: { result: ScriptRunResult | 
       {json && schema === 'zsc.winget-updates/1' && <WingetResult data={json} />}
       {json && schema === 'zsc.network-info/1' && <NetworkInfoResult data={json} />}
       {json && schema === 'zsc.storage-info/1' && <StorageInfoResult data={json} />}
+      {json && schema === 'zsc.local-admins/1' && <LocalAdminsResult data={json} />}
       {json && !KNOWN_SCHEMAS.has(schema ?? '') && <pre className="overflow-x-auto rounded-md bg-muted p-3 text-xs">{JSON.stringify(json, null, 2)}</pre>}
     </div>
   );
@@ -502,6 +512,63 @@ function StorageInfoResult({ data }: { data: Record<string, unknown> }) {
           </table>
         </div>
       )}
+      {data.truncated === true && <p className="text-xs text-muted-foreground">Es werden nur die ersten Eintraege gezeigt; Intune begrenzt die Ausgabe.</p>}
+    </div>
+  );
+}
+
+const sourceLabels: Record<string, string> = { Local: 'Lokal', AzureAD: 'Entra ID', Domain: 'Domaene', Unknown: 'Unbekannt' };
+
+function LocalAdminsResult({ data }: { data: Record<string, unknown> }) {
+  const members = Array.isArray(data.members) ? data.members.map(asRecord).filter((m): m is Record<string, unknown> => m !== null) : [];
+  return (
+    <div className="space-y-2">
+      {typeof data.error === 'string' && data.error && <p className="text-sm text-destructive">{data.error}</p>}
+      <div className="overflow-x-auto rounded-md border">
+        <table className="w-full text-sm">
+          <thead className="border-b bg-muted/50 text-left">
+            <tr>
+              <th className="px-3 py-1.5 font-medium">Konto</th>
+              <th className="px-3 py-1.5 font-medium">Herkunft</th>
+              <th className="px-3 py-1.5 font-medium">Klasse</th>
+              <th className="px-3 py-1.5 font-medium">Status</th>
+              <th className="px-3 py-1.5 font-medium">Hinweis</th>
+            </tr>
+          </thead>
+          <tbody>
+            {members.map((m, i) => {
+              const sid = text(m.sid);
+              const objectId = entraObjectIdFromSid(sid);
+              const localEnabledUser = m.source === 'Local' && m.class === 'User' && m.enabled === true && m.builtIn !== true;
+              return (
+                <tr key={`${sid}-${i}`} className="border-b last:border-0">
+                  <td className="px-3 py-1.5">
+                    {objectId ? (
+                      <Link href={`/users/${objectId}`} className="text-primary hover:underline">
+                        {text(m.name)}
+                      </Link>
+                    ) : (
+                      text(m.name)
+                    )}
+                    <span className="block font-mono text-[10px] text-muted-foreground">{sid}</span>
+                  </td>
+                  <td className="px-3 py-1.5">{sourceLabels[String(m.source)] ?? text(m.source)}</td>
+                  <td className="px-3 py-1.5">{text(m.class)}</td>
+                  <td className="px-3 py-1.5">
+                    {m.enabled === null || m.enabled === undefined ? '—' : m.enabled ? 'Aktiv' : 'Deaktiviert'}
+                    {typeof m.lastLogonAt === 'string' && m.lastLogonAt && <span className="block text-xs text-muted-foreground">Anmeldung {dateText(m.lastLogonAt)}</span>}
+                  </td>
+                  <td className="px-3 py-1.5 text-xs">
+                    {m.builtIn === true && <span className="text-muted-foreground">Eingebautes Administratorkonto{m.enabled === true ? ', aktiv: pruefen' : ''}</span>}
+                    {localEnabledUser && <span className="text-warning">Aktives lokales Konto: pruefen, ob es das LAPS-Konto oder unerwartet ist</span>}
+                    {m.source === 'Domain' && <span className="text-muted-foreground">Domaenenkonto</span>}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
       {data.truncated === true && <p className="text-xs text-muted-foreground">Es werden nur die ersten Eintraege gezeigt; Intune begrenzt die Ausgabe.</p>}
     </div>
   );

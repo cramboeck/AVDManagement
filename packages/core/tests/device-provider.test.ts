@@ -435,7 +435,7 @@ describe('DeviceProvider', () => {
     expect(result.data.map((a) => a.displayName)).toEqual(['Adobe Acrobat', 'Google Chrome']);
     expect(result.data[0]).toMatchObject({ version: '24.1', publisher: 'Adobe', sizeBytes: 1024 });
     expect(result.data[1].sizeBytes).toBeNull();
-    expect(graph.get.mock.calls[0][1]).toBe('/deviceManagement/managedDevices/md-1/detectedApps?$top=500');
+    expect(graph.get.mock.calls[0][1]).toBe('/deviceManagement/managedDevices/md-1/detectedApps');
   });
 
   it('reports a missing Intune read permission for detected apps', async () => {

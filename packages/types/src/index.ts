@@ -763,7 +763,7 @@ export type TenantVulnerabilityList = CapabilityResult<TenantVulnerabilitySet> &
 // Skriptbibliothek (Intune Remediations auf Abruf)
 // ============================================
 
-export type LibraryScriptId = 'update-status' | 'update-scan' | 'system-info' | 'winget-updates' | 'network-info' | 'storage-info';
+export type LibraryScriptId = 'update-status' | 'update-scan' | 'system-info' | 'winget-updates' | 'network-info' | 'storage-info' | 'local-admins';
 
 // Vom Intune-Client erkannte Software (Inventar, wird woechentlich gemeldet)
 export interface DetectedApp {
@@ -797,6 +797,8 @@ export interface ScriptLibraryEntry {
   // Was die Behebung tut, fuer die Preview
   remediationSummary: string | null;
   expectedDurationSeconds: number;
+  // true: Ausgabe enthaelt personenbezogene Daten; Ergebnis wird verschluesselt gespeichert
+  containsPersonalData: boolean;
 }
 
 // in-sync: Tenant hat genau diese Version; outdated: aeltere Version im Tenant;
@@ -842,6 +844,27 @@ export interface ScriptRunResult {
   // true: Wartezeit abgelaufen, gezeigt wird der letzte bekannte Zustand
   possiblyStale: boolean;
   stateSource: 'device' | 'script' | 'run-command';
+  // true: output, outputJson und Fehlertexte liegen verschluesselt in cipher
+  sealed?: boolean;
+  cipher?: SealedCipher | null;
+  // true: Klartext nach Aufbewahrungsfrist geloescht
+  purged?: boolean;
+}
+
+export interface SealedCipher {
+  alg: 'aes-256-gcm';
+  keyId: string;
+  iv: string;
+  tag: string;
+  data: string;
+}
+
+// Entschluesselter Teil eines versiegelten Ergebnisses
+export interface RevealedScriptResult {
+  output: string | null;
+  outputJson: Record<string, unknown> | null;
+  detectionError: string | null;
+  remediationError: string | null;
 }
 
 export type VulnerabilitySeverity = 'Critical' | 'High' | 'Medium' | 'Low' | 'Unknown';

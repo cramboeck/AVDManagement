@@ -24,6 +24,7 @@ interface ScriptDefinition {
   remediationFile: string | null;
   remediationSummary: string | null;
   expectedDurationSeconds: number;
+  containsPersonalData?: boolean;
 }
 
 export interface LoadedScript extends ScriptLibraryEntry {
@@ -97,6 +98,18 @@ const definitions: ScriptDefinition[] = [
     remediationSummary: null,
     expectedDurationSeconds: 120,
   },
+  {
+    id: 'local-admins',
+    displayName: 'Lokale Administratoren',
+    description:
+      'Mitglieder der lokalen Gruppe Administratoren mit Herkunft (lokal, Entra, Domaene), Klasse, SID und bei lokalen Konten Status und letzter Anmeldung. Personenbezogen: Ergebnis wird verschluesselt gespeichert, jede Anzeige protokolliert.',
+    version: '1.0.0',
+    detectionFile: 'local-admins.detect.ps1',
+    remediationFile: null,
+    remediationSummary: null,
+    expectedDurationSeconds: 120,
+    containsPersonalData: true,
+  },
 ];
 
 // Marker in der Beschreibung des Remediation-Objekts im Tenant
@@ -134,6 +147,7 @@ export function loadScriptLibrary(): LoadedScript[] {
       hasRemediation: remediationScript !== null,
       remediationSummary: def.remediationSummary,
       expectedDurationSeconds: def.expectedDurationSeconds,
+      containsPersonalData: def.containsPersonalData === true,
       detectionScript,
       remediationScript,
     };

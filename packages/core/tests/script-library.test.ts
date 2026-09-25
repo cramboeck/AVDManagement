@@ -24,7 +24,7 @@ describe('script library', () => {
   const scripts = loadScriptLibrary();
 
   it('loads the library scripts with stable hashes', () => {
-    expect(scripts.map((s) => s.id)).toEqual(['update-status', 'update-scan', 'system-info', 'winget-updates', 'network-info', 'storage-info']);
+    expect(scripts.map((s) => s.id)).toEqual(['update-status', 'update-scan', 'system-info', 'winget-updates', 'network-info', 'storage-info', 'local-admins']);
     for (const script of scripts) {
       expect(script.hash).toMatch(/^[0-9a-f]{64}$/);
       expect(script.hash).toBe(computeScriptHash(script.version, script.detectionScript, script.remediationScript));
@@ -43,8 +43,10 @@ describe('script library', () => {
         for (const pattern of ALIAS_PATTERNS) {
           expect(body, `${script.id} uses an alias matching ${pattern}`).not.toMatch(pattern);
         }
-        // Keine Benutzernamen: weder aus WMI noch aus der Umgebung
-        expect(body).not.toMatch(/\bUserName\b|\$env:USERNAME|Get-LocalUser|quser|query user/i);
+        // Keine Benutzernamen, ausser das Skript ist als personenbezogen markiert
+        if (!script.containsPersonalData) {
+          expect(body).not.toMatch(/\bUserName\b|\$env:USERNAME|Get-LocalUser|quser|query user/i);
+        }
         // Jede Erkennung endet mit einer JSON-Zeile
         expect(body).toMatch(/ConvertTo-Json/);
         expect(body).toMatch(/^exit [01]\s*$/m);

@@ -10,10 +10,13 @@ import { JobQueue, registerIdentityJobs, registerAvdJobs, registerDeviceJobs, re
 import { DrizzleJobStore } from './job-store.js';
 import { DrizzleAuditLogger } from './audit-logger.js';
 import { getIdentityProvider, getAvdProvider, getDeviceProvider, getRemediationProvider, getAppProvider } from './microsoft-clients.js';
+import { getResultSealer } from './result-crypto.js';
 
 // Freigaben verfallen nach der Preview-Gueltigkeit (5 Min) plus Puffer
 const PENDING_APPROVAL_TTL_MS = 10 * 60 * 1000;
 const ACTIVE_JOB_TTL_MS = 2 * 60 * 60 * 1000;
+// Versiegelte, personenbezogene Ergebnisse werden nach 30 Tagen geloescht
+const SEALED_RESULT_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 const SWEEP_INTERVAL_MS = 60 * 1000;
 
 let jobQueue: JobQueue | null = null;
@@ -32,8 +35,9 @@ export function getJobQueue(): JobQueue {
     registerIdentityJobs(getIdentityProvider());
     registerAvdJobs(getAvdProvider());
     registerDeviceJobs(getDeviceProvider());
-    registerScriptJobs(getRemediationProvider());
-    registerAvdScriptJobs(getAvdProvider());
+    const sealer = getResultSealer();
+    registerScriptJobs(getRemediationProvider(), { sealer });
+    registerAvdScriptJobs(getAvdProvider(), { sealer });
     registerAppJobs(getAppProvider());
 
     jobStore = new DrizzleJobStore();
@@ -46,10 +50,12 @@ export function getJobQueue(): JobQueue {
       Promise.all([
         store.cancelExpiredPending(new Date(Date.now() - PENDING_APPROVAL_TTL_MS)),
         store.failStaleActive(new Date(Date.now() - ACTIVE_JOB_TTL_MS)),
+        store.purgeSealedResults(new Date(Date.now() - SEALED_RESULT_RETENTION_MS)),
       ])
-        .then(([cancelled, failed]) => {
+        .then(([cancelled, failed, purged]) => {
           if (cancelled > 0) console.log(`Cancelled ${cancelled} expired pending job(s)`);
           if (failed > 0) console.log(`Marked ${failed} stale job(s) as failed`);
+          if (purged > 0) console.log(`Purged ${purged} sealed result(s) past retention`);
         })
         .catch((error: Error) => console.error('Job sweep failed:', error.message));
     }, SWEEP_INTERVAL_MS);

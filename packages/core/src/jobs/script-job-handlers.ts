@@ -6,7 +6,7 @@
  * Geraets. Name, Version und Hash landen ueber die Preview im Audit.
  */
 
-import type { LibraryScriptId, ScriptRunResult } from '@zerostress/types';
+import type { LibraryScriptId, RevealedScriptResult, ScriptRunResult, SealedCipher } from '@zerostress/types';
 import { registerJob, type JobContext, type JobResult, type PreviewContext, type PreviewResult } from './job-types.js';
 import { getLibraryScript, parseScriptOutput, type LoadedScript } from '../scripts/library.js';
 import { buildRunCommandScript, parseRunCommandOutput } from '../scripts/run-command.js';
@@ -20,14 +20,47 @@ export interface RunScriptPayload {
   scriptId: LibraryScriptId;
 }
 
+/**
+ * Versiegelt personenbezogene Ergebnisteile; die API liefert die Umsetzung
+ * mit Schluessel aus der Umgebung beziehungsweise dem Key Vault.
+ */
+export interface ResultSealer {
+  seal(payload: RevealedScriptResult): Promise<SealedCipher>;
+}
+
 export interface RunScriptOptions {
   // Wie lange auf das Geraet gewartet wird (Standard 10 Minuten)
   timeoutMs?: number;
   pollMs?: number;
+  sealer?: ResultSealer | null;
 }
 
 function failure(code: string, message: string): JobResult {
   return { success: false, error: { code, message, retryable: false } };
+}
+
+/**
+ * Ergebnis fuer die Ablage vorbereiten: ohne Personenbezug unveraendert, sonst
+ * Klartext raus und Chiffrat rein. Ohne Sealer darf so ein Lauf nicht abgelegt werden.
+ */
+export async function finalizeResult(result: ScriptRunResult, containsPersonalData: boolean, sealer: ResultSealer | null | undefined): Promise<JobResult> {
+  if (!containsPersonalData) {
+    return { success: true, data: result as unknown as Record<string, unknown> };
+  }
+  if (!sealer) {
+    return failure(
+      'RESULT_SEAL_UNAVAILABLE',
+      'Das Ergebnis enthaelt personenbezogene Daten, aber die Verschluesselung ist nicht eingerichtet (RESULT_ENCRYPTION_KEY). Ergebnis verworfen.'
+    );
+  }
+  const cipher = await sealer.seal({
+    output: result.output,
+    outputJson: result.outputJson,
+    detectionError: result.detectionError,
+    remediationError: result.remediationError,
+  });
+  const sealed: ScriptRunResult = { ...result, output: null, outputJson: null, detectionError: null, remediationError: null, sealed: true, cipher };
+  return { success: true, data: sealed as unknown as Record<string, unknown> };
 }
 
 export function registerScriptJobs(remediations: RemediationOperations, options: RunScriptOptions = {}): void {
@@ -121,7 +154,7 @@ export function registerScriptJobs(remediations: RemediationOperations, options:
         };
       }
 
-      return { success: true, data: result as unknown as Record<string, unknown> };
+      return finalizeResult(result, script.containsPersonalData, options.sealer);
     },
     async (ctx: PreviewContext): Promise<PreviewResult> => {
       const payload = ctx.payload as unknown as RunScriptPayload;
@@ -137,6 +170,9 @@ export function registerScriptJobs(remediations: RemediationOperations, options:
         warnings.push(`Aendert etwas auf dem Geraet: ${script.remediationSummary}`);
       } else {
         warnings.push('Nur lesend: das Skript veraendert nichts auf dem Geraet.');
+      }
+      if (script.containsPersonalData) {
+        warnings.push('Die Ausgabe enthaelt Kontonamen. Sie wird verschluesselt gespeichert, jede Anzeige braucht eine Begruendung und steht im Audit, nach 30 Tagen wird sie geloescht.');
       }
       return {
         changes: [
@@ -259,7 +295,7 @@ export function registerAvdScriptJobs(runner: VmCommandRunner, options: RunScrip
       if (detectionState === 'unknown' && !outcome.output) {
         return failure('RUN_COMMAND_NO_OUTPUT', outcome.stderr || 'Run Command returned no output; the VM may be stopped or the agent unresponsive');
       }
-      return { success: true, data: result as unknown as Record<string, unknown> };
+      return finalizeResult(result, script.containsPersonalData, options.sealer);
     },
     async (ctx: PreviewContext): Promise<PreviewResult> => {
       const payload = ctx.payload as unknown as AvdRunScriptPayload;

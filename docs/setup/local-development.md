@@ -141,6 +141,17 @@ Job mit Preview; Name, Version und Hash stehen im Audit.
 | Software-Updates mit winget pruefen | nur lesend, `winget upgrade` im Maschinenkontext, Quelle winget | verfuegbare Updates mit Id, installierter und neuer Version; markiert die Zeilen im Tab Software |
 | Netzwerkinfo | nur lesend | aktive Adapter mit IPv4, Praefix, Gateway, DNS, DHCP, MAC, Verbindungsart, SSID; Domaene, Proxy |
 | Speicherinfo | nur lesend | alle festen Laufwerke mit Belegung und Zustand, physische Datentraeger mit SSD/HDD, Bus, Groesse, Zustand, Firmware |
+| Lokale Administratoren | nur lesend, **personenbezogen** | Mitglieder der Gruppe Administratoren mit Herkunft, Klasse, SID, Status; Entra-Konten verlinkt |
+
+**Personenbezogene Ergebnisse:** Skripte mit Kontonamen (Lokale
+Administratoren) speichern ihre Ausgabe nur verschluesselt
+(AES-256-GCM, Schluessel aus `RESULT_ENCRYPTION_KEY`, 32 Bytes Base64,
+`openssl rand -base64 32`). Ohne Schluessel verwirft der Job das Ergebnis
+mit klarer Meldung. Anzeige nur mit Begruendung ab zehn Zeichen und Rolle
+Engineer, jeder Blick steht im Audit (`job.result.reveal`), der Klartext
+erlischt nach zehn Minuten in der Oberflaeche und wird nach 30 Tagen aus
+der Datenbank geloescht. In Produktion kommt der Schluessel aus dem Key
+Vault in die Prozessumgebung, nie in eine Datei im Repo.
 
 **AVD-Session-Hosts:** dieselbe Bibliothek laeuft dort ueber Azure Run
 Command (`RunPowerShellScript`), Knopf "Skript" in der Host-Liste. Ein

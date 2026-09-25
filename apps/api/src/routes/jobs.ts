@@ -7,10 +7,14 @@ import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
 import { authMiddleware, requireRole } from '../middleware/auth.js';
 import { tenantContextMiddleware, requireConnectedTenant } from '../middleware/tenant-context.js';
+import { randomUUID } from 'node:crypto';
 import { getJobQueue } from '../services/job-queue.js';
-import type { JobId, Job, JobStatus } from '@zerostress/types';
+import { unsealResult } from '../services/result-crypto.js';
+import { DrizzleAuditLogger } from '../services/audit-logger.js';
+import type { JobId, Job, JobStatus, CorrelationId, SealedCipher } from '@zerostress/types';
 
 const app = new Hono();
+const audit = new DrizzleAuditLogger();
 
 app.use('*', authMiddleware);
 app.use('*', tenantContextMiddleware);
@@ -191,7 +195,7 @@ app.post(
 const runScriptSchema = z.object({
   managedDeviceId: z.string().min(1),
   deviceName: z.string().min(1),
-  scriptId: z.enum(['update-status', 'update-scan', 'system-info', 'winget-updates', 'network-info', 'storage-info']),
+  scriptId: z.enum(['update-status', 'update-scan', 'system-info', 'winget-updates', 'network-info', 'storage-info', 'local-admins']),
 });
 
 app.post('/run-script', requireRole('engineer'), requireConnectedTenant, zValidator('json', runScriptSchema), async (c) => {
@@ -239,6 +243,48 @@ app.post('/:jobId/approve', requireRole('engineer'), async (c) => {
         409
       );
     }
+    throw error;
+  }
+});
+
+// Versiegeltes Ergebnis anzeigen: Begruendung, Rolle Engineer, Audit; der Klartext verlaesst nie die Antwort
+const revealSchema = z.object({ reason: z.string().trim().min(10).max(500) });
+
+app.post('/:jobId/reveal', requireRole('engineer'), requireConnectedTenant, zValidator('json', revealSchema), async (c) => {
+  const auth = c.get('auth');
+  const tenant = c.get('tenant');
+  const jobId = c.req.param('jobId') as JobId;
+  const { reason } = c.req.valid('json');
+  const correlationId = randomUUID() as CorrelationId;
+  const job = await getJobQueue().getJob(jobId);
+  if (!job || job.tenantId !== tenant.id) {
+    return c.json({ type: 'https://api.zerostress.io/problems/not-found', title: 'Job not found', status: 404 }, 404);
+  }
+  const result = job.result as { sealed?: boolean; cipher?: SealedCipher | null; purged?: boolean; scriptId?: string } | null;
+  const auditBase = {
+    mspId: auth.mspId,
+    tenantId: tenant.id,
+    userId: auth.user.id,
+    action: 'job.result.reveal',
+    targetType: 'job',
+    targetId: job.id,
+    targetDisplayName: String(job.payload.targetDisplayName ?? job.type),
+    afterState: { reason, scriptId: result?.scriptId ?? null },
+    correlationId,
+  };
+  if (!result?.sealed) {
+    return c.json({ type: 'https://api.zerostress.io/problems/validation', title: 'Result is not sealed', status: 400 }, 400);
+  }
+  if (result.purged || !result.cipher) {
+    await audit.log({ ...auditBase, result: 'failure', errorMessage: 'Result purged after retention' });
+    return c.json({ type: 'https://api.zerostress.io/problems/gone', title: 'Result purged', status: 410, detail: 'Der Klartext wurde nach 30 Tagen geloescht.' }, 410);
+  }
+  try {
+    const revealed = unsealResult(result.cipher);
+    await audit.log({ ...auditBase, result: 'success' });
+    return c.json(revealed);
+  } catch (error) {
+    await audit.log({ ...auditBase, result: 'failure', errorMessage: error instanceof Error ? error.message : String(error) });
     throw error;
   }
 });

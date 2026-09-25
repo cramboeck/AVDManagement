@@ -2,7 +2,7 @@
  * Job-Store Implementation mit Drizzle
  */
 
-import { eq, and, desc, lt, inArray } from 'drizzle-orm';
+import { eq, and, desc, lt, inArray, sql } from 'drizzle-orm';
 import { db, jobs, mspUsers } from '../db/index.js';
 import type { JobStore } from '@zerostress/core';
 import type { Job, JobId, TenantId, JobStatus } from '@zerostress/types';
@@ -74,6 +74,16 @@ export class DrizzleJobStore implements JobStore {
     });
 
     return this.withCreators(rows);
+  }
+
+  // Versiegelte Ergebnisse nach Ablauf der Aufbewahrung loeschen; Metadaten bleiben
+  async purgeSealedResults(olderThan: Date): Promise<number> {
+    const purged = await db
+      .update(jobs)
+      .set({ result: sql`(${jobs.result} - 'cipher') || '{"purged": true}'::jsonb` })
+      .where(and(sql`${jobs.result} ->> 'sealed' = 'true'`, sql`${jobs.result} ? 'cipher'`, lt(jobs.completedAt, olderThan)))
+      .returning({ id: jobs.id });
+    return purged.length;
   }
 
   // Freigaben, die niemand bestaetigt hat, nicht ewig offen lassen
