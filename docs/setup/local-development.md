@@ -223,6 +223,32 @@ Der erste Testtenant kann der eigene Partnertenant sein. Die
 App-Registrierung liegt dort bereits; der Consent erteilt ihr nur die
 Application Permissions.
 
+### Tenant entfernen
+
+**Tenants > Entfernen**, Rolle Owner, Anzeigename muss abgetippt werden.
+Der Tenant wird deaktiviert, nicht geloescht: Jobs und Audit-Eintraege
+bleiben nachvollziehbar, der Bestands-Snapshot wird geloescht, der Vorgang
+steht im Audit. Der Admin-Consent im Kundentenant bleibt bestehen; um ihn
+zu widerrufen, dort unter Entra ID > Enterprise-Anwendungen die Anwendung
+der Konsole loeschen. Ein erneutes Anlegen desselben Microsoft-Tenants
+wird abgelehnt, solange der alte Eintrag existiert (Konflikt); in dem Fall
+den Eintrag in `managed_tenants` reaktivieren statt neu anlegen.
+
+### Zweiter Tenant: was pro Tenant noetig ist
+
+Die App-Registrierung ist mandantenfaehig, aber jeder Kundentenant braucht
+seinen eigenen Consent, seine eigenen Rollen und seine eigenen Lizenzen.
+Die Konsole nutzt ausschliesslich Anwendungsberechtigungen (Application),
+delegierte Berechtigungen spielen fuer die Datenzugriffe keine Rolle.
+
+| Was fehlt | Woran man es sieht | Behebung |
+|---|---|---|
+| Consent aelter als die letzte Berechtigungsaenderung | Karten "Berechtigung fehlt: X" | Tenants > Consent erneuern |
+| Entra ID P1 | Karte "Entra ID P1 erforderlich" bei Anmeldungen, Audit, MFA-Report | Lizenz im Kundentenant |
+| Defender for Business / Endpoint P2 | Karte "Defender for Endpoint nicht lizenziert", Geraete nur aus Intune | Lizenz im Kundentenant |
+| Entra-Rolle Benutzeradministrator fuer den Service Principal | Passwort-Reset und Deaktivieren schlagen mit 403 fehl | Rolle im Kundentenant zuweisen |
+| Azure-RBAC (Reader, Desktop Virtualization Contributor, Virtual Machine Contributor) | "0 Azure-Subscription(s) sichtbar", keine Host Pools | Rollen auf Subscription oder Ressourcengruppe |
+
 ### Verbindungstest: was geprueft wird
 
 | Pruefung | Beweist | Bei Fehlschlag |

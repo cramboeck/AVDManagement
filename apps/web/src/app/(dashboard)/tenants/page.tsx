@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useState } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import clsx from 'clsx';
@@ -54,10 +54,11 @@ function TenantsView() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
-  const { tenants, isLoading, error, refetch, setActiveTenantId } = useTenant();
+  const { tenants, activeTenant, isLoading, error, refetch, setActiveTenantId } = useTenant();
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [testResults, setTestResults] = useState<Record<string, ConnectionTestResult>>({});
   const [actionError, setActionError] = useState<Error | null>(null);
+  const [removing, setRemoving] = useState<ManagedTenant | null>(null);
 
   const consentParam = searchParams.get('consent');
   const consentReason = searchParams.get('reason');
@@ -140,9 +141,22 @@ function TenantsView() {
               onStartConsent={() => consentMutation.mutate(tenant)}
               onTest={() => testMutation.mutate(tenant)}
               onSelect={() => setActiveTenantId(tenant.id)}
+              onRemove={() => setRemoving(tenant)}
             />
           ))}
         </ul>
+      )}
+
+      {removing && (
+        <RemoveTenantDialog
+          tenant={removing}
+          onClose={() => setRemoving(null)}
+          onRemoved={(id) => {
+            setRemoving(null);
+            if (activeTenant?.id === id) setActiveTenantId(null);
+            queryClient.invalidateQueries({ queryKey: ['tenants'] });
+          }}
+        />
       )}
 
       {showAddDialog && (
@@ -166,6 +180,7 @@ function TenantRow({
   onStartConsent,
   onTest,
   onSelect,
+  onRemove,
 }: {
   tenant: ManagedTenant;
   testResult?: ConnectionTestResult;
@@ -174,6 +189,7 @@ function TenantRow({
   onStartConsent: () => void;
   onTest: () => void;
   onSelect: () => void;
+  onRemove: () => void;
 }) {
   const isConnected = tenant.connectionStatus === 'connected';
 
@@ -207,6 +223,12 @@ function TenantRow({
           {tenant.connectionStatus === 'connected' && (
             <ActionButton onClick={onSelect}>Als aktiv setzen</ActionButton>
           )}
+          <button
+            onClick={onRemove}
+            className="rounded-md border border-destructive/40 px-3 py-1.5 text-sm text-destructive hover:bg-destructive/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-destructive"
+          >
+            Entfernen
+          </button>
         </div>
       </div>
 
@@ -334,5 +356,72 @@ function CloseIcon({ className }: { className?: string }) {
       <line x1="18" y1="6" x2="6" y2="18" />
       <line x1="6" y1="6" x2="18" y2="18" />
     </svg>
+  );
+}
+
+function RemoveTenantDialog({ tenant, onClose, onRemoved }: { tenant: ManagedTenant; onClose: () => void; onRemoved: (id: string) => void }) {
+  const [confirmName, setConfirmName] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
+  const remove = useMutation({
+    mutationFn: () => api.delete<{ removed: boolean; tenantId: string }>(`/tenants/${tenant.id}`, { confirmName }),
+    onSuccess: (result) => onRemoved(result.tenantId),
+  });
+
+  const matches = confirmName.trim() === tenant.displayName;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+      <div className="w-full max-w-md rounded-lg border bg-background shadow-lg" role="dialog" aria-modal="true" aria-labelledby="remove-tenant-title">
+        <div className="border-b px-4 py-3">
+          <h2 id="remove-tenant-title" className="font-medium">
+            Tenant entfernen
+          </h2>
+        </div>
+        <div className="space-y-3 p-4">
+          <ErrorBanner error={remove.error as Error | null} onDismiss={() => remove.reset()} />
+          <p className="text-sm">
+            <strong>{tenant.displayName}</strong> verschwindet aus der Konsole. Jobs und Audit-Eintraege bleiben nachvollziehbar erhalten, der
+            Bestands-Snapshot wird geloescht.
+          </p>
+          <p className="text-sm text-muted-foreground">
+            Der Admin-Consent im Kundentenant bleibt bestehen. Um ihn zu widerrufen, im Kundentenant unter Entra ID &gt; Enterprise-Anwendungen die
+            Anwendung der Konsole loeschen.
+          </p>
+          <label htmlFor="remove-tenant-confirm" className="block text-sm font-medium">
+            Zur Bestaetigung den Anzeigenamen eingeben
+          </label>
+          <input
+            ref={inputRef}
+            id="remove-tenant-confirm"
+            value={confirmName}
+            onChange={(e) => setConfirmName(e.target.value)}
+            placeholder={tenant.displayName}
+            className="w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-destructive"
+          />
+        </div>
+        <div className="flex justify-end gap-2 border-t px-4 py-3">
+          <button onClick={onClose} className="rounded-md border px-4 py-2 text-sm hover:bg-accent">
+            Abbrechen
+          </button>
+          <button
+            onClick={() => remove.mutate()}
+            disabled={!matches || remove.isPending}
+            className="rounded-md bg-destructive px-4 py-2 text-sm font-medium text-white hover:bg-destructive/90 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {remove.isPending ? 'Entferne...' : 'Endgueltig entfernen'}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }

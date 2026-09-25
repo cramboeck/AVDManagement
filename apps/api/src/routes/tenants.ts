@@ -13,6 +13,7 @@ import { DrizzleAuditLogger } from '../services/audit-logger.js';
 import { createConsentState } from '../services/consent-state.js';
 import { testTenantConnection, persistConnectionTestResult } from '../services/tenant-connection.js';
 import { toManagedTenant, type TenantRow } from '../services/tenant-mapper.js';
+import { DrizzleSnapshotStore } from '../services/inventory-store.js';
 import type { TenantId, MspId, UserId, CorrelationId } from '@zerostress/types';
 
 const app = new Hono();
@@ -131,6 +132,59 @@ app.post('/', requireRole('engineer'), zValidator('json', createTenantSchema), a
   });
 
   return c.json(toManagedTenant(tenant), 201);
+});
+
+// Tenant aus der Konsole entfernen. Bewusst kein harter Loeschvorgang:
+// Jobs und Audit-Eintraege verweisen auf den Tenant und bleiben nachvollziehbar.
+// Der Consent im Kundentenant bleibt bestehen, bis die Enterprise-Anwendung
+// dort entfernt wird; die Konsole kann ihn mit App-Berechtigungen nicht widerrufen.
+const removeTenantSchema = z.object({
+  // Der Anzeigename muss abgetippt werden, damit nichts versehentlich verschwindet
+  confirmName: z.string().min(1),
+});
+
+app.delete('/:tenantId', requireRole('owner'), zValidator('json', removeTenantSchema), async (c) => {
+  const auth = c.get('auth');
+  const tenantId = c.req.param('tenantId');
+  const { confirmName } = c.req.valid('json');
+  const correlationId = randomUUID() as CorrelationId;
+
+  const tenant = await findOwnTenant(tenantId, auth.mspId);
+  if (!tenant) {
+    return c.json(notFound(tenantId), 404);
+  }
+
+  const auditBase = {
+    mspId: auth.mspId,
+    tenantId: tenant.id as TenantId,
+    userId: auth.user.id,
+    action: 'tenant.remove',
+    targetType: 'tenant',
+    targetId: tenant.microsoftTenantId,
+    targetDisplayName: tenant.displayName,
+    beforeState: { connectionStatus: tenant.connectionStatus, isActive: true },
+    correlationId,
+  };
+
+  if (confirmName.trim() !== tenant.displayName) {
+    await audit.log({ ...auditBase, result: 'failure', errorMessage: 'Confirmation name did not match' });
+    return c.json(
+      {
+        type: 'https://api.zerostress.io/problems/validation',
+        title: 'Confirmation does not match',
+        status: 400,
+        detail: 'Der eingegebene Name stimmt nicht mit dem Anzeigenamen des Tenants ueberein',
+      },
+      400
+    );
+  }
+
+  await db.update(managedTenants).set({ isActive: false }).where(eq(managedTenants.id, tenant.id));
+  await new DrizzleSnapshotStore().deleteForTenant(tenant.id as TenantId);
+
+  await audit.log({ ...auditBase, afterState: { isActive: false }, result: 'success' });
+
+  return c.json({ removed: true, tenantId: tenant.id });
 });
 
 // Consent-URL generieren
