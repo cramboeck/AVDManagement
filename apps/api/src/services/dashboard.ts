@@ -20,6 +20,7 @@ import type {
 } from '@zerostress/types';
 import { db, jobs } from '../db/index.js';
 import { getAvdProvider, getIdentityProvider } from './microsoft-clients.js';
+import { getAlertStats } from './alerting.js';
 
 const SECURITY_WINDOW_HOURS = 24;
 const FAILURE_ATTENTION_THRESHOLD = 5;
@@ -62,7 +63,7 @@ export async function buildTenantDashboard(tenant: ManagedTenant): Promise<Tenan
   const ctx = { tenantId: tenant.id, correlationId: randomUUID() };
   const connected = tenant.connectionStatus === 'connected';
 
-  const [avd, users, security, jobStats] = await Promise.all([
+  const [avd, users, security, jobStats, alertStats] = await Promise.all([
     connected
       ? tile(() => withTimeout(getAvdProvider().getAvdOverview(ctx), 20000, 'avd').then(ok))
       : unavailable<AvdOverview>('tenant-not-connected'),
@@ -71,6 +72,7 @@ export async function buildTenantDashboard(tenant: ManagedTenant): Promise<Tenan
       : unavailable<UserStats>('tenant-not-connected'),
     connected ? tile(() => loadSecurity(ctx)) : unavailable<SecurityOverview>('tenant-not-connected'),
     tile(() => loadJobStats(tenant.id).then(ok)),
+    tile(() => getAlertStats(tenant.id).then(ok)),
   ]);
 
   const dashboard: TenantDashboard = {
@@ -79,6 +81,7 @@ export async function buildTenantDashboard(tenant: ManagedTenant): Promise<Tenan
     users,
     security,
     jobs: jobStats,
+    alerts: alertStats,
     attention: 0,
     generatedAt: new Date().toISOString(),
   };
@@ -149,9 +152,10 @@ async function loadJobStats(tenantId: string): Promise<JobStats> {
 function countAttention(d: TenantDashboard): number {
   let count = 0;
   if (d.tenant.connectionStatus !== 'connected') count += 1;
-  for (const t of [d.avd, d.users, d.security, d.jobs]) {
+  for (const t of [d.avd, d.users, d.security, d.jobs, d.alerts]) {
     if (t.status === 'error') count += 1;
   }
+  if (d.alerts.data && d.alerts.data.open > 0) count += 1;
   if (d.avd.data) {
     if (d.avd.data.unavailableHosts > 0) count += 1;
     if (d.avd.data.warnings.length > 0) count += 1;

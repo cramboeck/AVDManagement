@@ -150,6 +150,21 @@ export default function DashboardPage() {
             )}
           </TileCard>
 
+          <TileCard title="Alerts" href="/alerts" tile={dashboard?.alerts} loading={tenantQuery.isLoading}>
+            {(a) => (
+              <>
+                <Big value={String(a.open)} label="offene Alerts" tone={a.high > 0 ? 'destructive' : a.open > 0 ? 'warning' : undefined} />
+                <Rows
+                  rows={[
+                    ['Hoch', String(a.high), a.high > 0 ? 'destructive' : undefined],
+                    ['Mittel', String(a.medium), a.medium > 0 ? 'warning' : undefined],
+                    ['Niedrig', String(a.low)],
+                  ]}
+                />
+              </>
+            )}
+          </TileCard>
+
           <TileCard title="Jobs" href="/jobs" tile={dashboard?.jobs} loading={tenantQuery.isLoading}>
             {(jobs) => (
               <>

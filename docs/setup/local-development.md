@@ -51,7 +51,7 @@ Erwartete erste Zeile der API:
 
 Nach einem `git pull`, das `apps/api/src/db/schema.ts` aendert, einmal
 `npm run db:push` ausfuehren, damit neue Tabellen (z. B. `cve_explanations`,
-`inventory_snapshots`) angelegt werden.
+`inventory_snapshots`, `alerts`) angelegt werden.
 
 ## Bestands-Snapshot
 
@@ -97,6 +97,25 @@ Vorher und Nachher und warnt bei "erforderlich" fuer grosse Gruppen.
 verwendet bestehende Gruppen gleichen Namens wieder und weist sie auf
 Wunsch sofort zu. Paketkatalog, Upload und Build-Worker (Stufen C/D) sind
 im Plan `docs/implementation/apps-module-plan.md` beschrieben und offen.
+
+## Alerts (Anmelde-Anomalien)
+
+Ein festes Regelwerk wertet alle zehn Minuten die Anmeldungen der letzten
+zwei Stunden je verbundenem Tenant aus (braucht `AuditLog.Read.All` und
+Entra ID P1): gehaeufte Fehlversuche je Benutzer, Password Spray ueber
+viele Konten, Erfolg nach Fehlversuchen von anderer Adresse, zwei Laender
+in kurzer Zeit, erfolgreiche Legacy-Authentifizierung, riskante
+Anmeldungen laut Identity Protection. Jeder Vorfall hat einen stabilen
+Fingerabdruck je Regel, Benutzer und Tag; Wiederholungen schreiben den
+Alert fort statt neue anzulegen. Alerts lassen sich in Bearbeitung nehmen,
+schliessen und wieder oeffnen (mit Audit). Die Dashboard-Kachel zaehlt
+offene Alerts mit.
+
+Mail optional: `ALERT_MAIL_FROM` (Postfach im eigenen Partnertenant) und
+`ALERT_MAIL_TO` (Kommaliste). Die App-Registrierung braucht dafuer im
+Partnertenant `Mail.Send`; sinnvoll ist eine Exchange Application Access
+Policy, die den Versand auf dieses eine Postfach begrenzt. Die Mail enthaelt
+Kontonamen und geht deshalb nur an interne Adressen.
 
 ## Best-Practice-Checks (Sicherheit > Best Practices)
 

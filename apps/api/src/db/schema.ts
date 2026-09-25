@@ -2,7 +2,7 @@
  * Datenbank-Schema mit Drizzle ORM
  */
 
-import { pgTable, uuid, varchar, text, boolean, timestamp, jsonb, integer, primaryKey } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, varchar, text, boolean, timestamp, jsonb, integer, primaryKey, uniqueIndex } from 'drizzle-orm/pg-core';
 
 // MSP-Organisationen
 export const mspOrganizations = pgTable('msp_organizations', {
@@ -144,6 +144,38 @@ export const inventorySnapshots = pgTable(
   },
   (table) => ({
     pk: primaryKey({ columns: [table.tenantId, table.kind] }),
+  })
+);
+
+// Alerts aus dem Anmelde-Regelwerk. Ein Datensatz je Fingerabdruck und Tenant;
+// wiederholte Treffer erhoehen occurrences statt neue Zeilen anzulegen.
+export const alerts = pgTable(
+  'alerts',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    mspId: uuid('msp_id').notNull().references(() => mspOrganizations.id),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => managedTenants.id, { onDelete: 'cascade' }),
+    ruleId: varchar('rule_id', { length: 40 }).notNull(),
+    severity: varchar('severity', { length: 10 }).notNull(),
+    status: varchar('status', { length: 20 }).notNull().default('open'),
+    fingerprint: varchar('fingerprint', { length: 64 }).notNull(),
+    title: varchar('title', { length: 255 }).notNull(),
+    summary: text('summary').notNull(),
+    userId: varchar('user_id', { length: 36 }),
+    userPrincipalName: varchar('user_principal_name', { length: 255 }),
+    evidence: jsonb('evidence').notNull().default({}),
+    firstSeenAt: timestamp('first_seen_at', { withTimezone: true }).notNull(),
+    lastSeenAt: timestamp('last_seen_at', { withTimezone: true }).notNull(),
+    occurrences: integer('occurrences').notNull().default(1),
+    notifiedAt: timestamp('notified_at', { withTimezone: true }),
+    acknowledgedBy: uuid('acknowledged_by').references(() => mspUsers.id),
+    acknowledgedAt: timestamp('acknowledged_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    uniqueFingerprint: uniqueIndex('alerts_tenant_fingerprint').on(table.tenantId, table.fingerprint),
   })
 );
 

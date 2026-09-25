@@ -629,6 +629,50 @@ export interface MailOverviewSet {
 export type MailOverview = CapabilityResult<MailOverviewSet> & { snapshot?: SnapshotMeta };
 
 // ============================================
+// Alerts: Auffaelligkeiten bei Anmeldungen (Regelwerk, kein ML)
+// ============================================
+
+export type AlertSeverity_ = 'high' | 'medium' | 'low';
+export type AlertStatus = 'open' | 'acknowledged' | 'resolved';
+
+export type AnomalyRuleId = 'failed-burst' | 'password-spray' | 'success-after-failures' | 'country-hop' | 'legacy-auth-success' | 'risky-success';
+
+export interface AnomalyFinding {
+  ruleId: AnomalyRuleId;
+  severity: AlertSeverity_;
+  // Stabil je Regel, Benutzer und Tag, damit derselbe Vorfall nicht mehrfach alarmiert
+  fingerprint: string;
+  title: string;
+  summary: string;
+  userId: string | null;
+  userPrincipalName: string | null;
+  firstSeenAt: string;
+  lastSeenAt: string;
+  occurrences: number;
+  evidence: Record<string, string | number | string[] | null>;
+}
+
+export interface Alert {
+  id: string;
+  tenantId: TenantId;
+  ruleId: AnomalyRuleId;
+  severity: AlertSeverity_;
+  status: AlertStatus;
+  title: string;
+  summary: string;
+  userId: string | null;
+  userPrincipalName: string | null;
+  evidence: Record<string, unknown>;
+  firstSeenAt: string;
+  lastSeenAt: string;
+  occurrences: number;
+  notifiedAt: string | null;
+  acknowledgedBy: string | null;
+  acknowledgedAt: string | null;
+  createdAt: string;
+}
+
+// ============================================
 // Best-Practice-Checks je Tenant (eigener Katalog aus Microsoft-Doku)
 // ============================================
 
@@ -1182,12 +1226,20 @@ export interface JobStats {
   completedLast24h: number;
 }
 
+export interface AlertStats {
+  open: number;
+  high: number;
+  medium: number;
+  low: number;
+}
+
 export interface TenantDashboard {
   tenant: ManagedTenant;
   avd: DashboardTile<AvdOverview>;
   users: DashboardTile<UserStats>;
   security: DashboardTile<SecurityOverview>;
   jobs: DashboardTile<JobStats>;
+  alerts: DashboardTile<AlertStats>;
   // Anzahl der Punkte, die Aufmerksamkeit brauchen (Sortierschluessel)
   attention: number;
   generatedAt: string;

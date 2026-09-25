@@ -27,8 +27,10 @@ import { networkRouter } from './routes/network.js';
 import { groupsRouter } from './routes/groups.js';
 import { mailRouter } from './routes/mail.js';
 import { appsRouter } from './routes/apps.js';
+import { alertsRouter } from './routes/alerts.js';
 import { getJobQueue, getJobHealth } from './services/job-queue.js';
 import { startInventorySync, getInventoryHealth } from './services/inventory.js';
+import { startAlerting, getAlertingHealth } from './services/alerting.js';
 
 const app = new Hono();
 
@@ -53,11 +55,13 @@ app.onError(errorHandler);
 app.get('/health', (c) => {
   const jobs = getJobHealth();
   const inventory = getInventoryHealth();
+  const alerting = getAlertingHealth();
   return c.json({
-    status: jobs.worker && jobs.redis === 'ready' && inventory.worker ? 'ok' : 'degraded',
+    status: jobs.worker && jobs.redis === 'ready' && inventory.worker && alerting.worker ? 'ok' : 'degraded',
     timestamp: new Date().toISOString(),
     jobs,
     inventory,
+    alerting,
   });
 });
 
@@ -101,6 +105,7 @@ app.route('/tenants/:tenantId/network', networkRouter);
 app.route('/tenants/:tenantId/groups', groupsRouter);
 app.route('/tenants/:tenantId/mail', mailRouter);
 app.route('/tenants/:tenantId/apps', appsRouter);
+app.route('/tenants/:tenantId/alerts', alertsRouter);
 app.route('/dashboard', dashboardRouter);
 
 // Session-Info (fuer Frontend)
@@ -135,4 +140,9 @@ getJobQueue();
 // Bestands-Sync: erster Takt sofort, danach alle fuenf Minuten
 startInventorySync().catch((error: Error) => {
   console.error('Inventory sync could not start:', error.message);
+});
+
+// Anmelde-Alerts: alle zehn Minuten
+startAlerting().catch((error: Error) => {
+  console.error('Alerting could not start:', error.message);
 });

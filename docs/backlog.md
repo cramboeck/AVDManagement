@@ -48,7 +48,7 @@ vor dem Bau klar sind.
 | AVD Image-Management B: Versions-Lifecycle als Jobs | ARM Gallery Image Versions | Contributor auf Gallery-RG | Preview zwingend |
 | AVD Image-Management C: Builds ueber Azure VM Image Builder | ARM Image Templates | Managed Identity im Kundentenant | Statt eigenem Packer-Container: kein Secret verlaesst den Tenant |
 | AVD Image-Management D: Rollout auf Host Pool | AVD + Compute | wie oben | Drain -> Sessions -> Reimage -> Validierung -> Undrain, Batches |
-| Alerts: Anmelde-Anomalien | Graph signIns (P1) | AuditLog.Read.All | Regeln: n Fehlversuche/Benutzer/Zeitfenster, neues Land, Legacy-Auth, Risiko. Kanal: E-Mail/Teams. Regel-Engine als Job |
+| Alerts: Anmelde-Anomalien | Graph signIns (P1) | AuditLog.Read.All, optional Mail.Send im Partnertenant | Umgesetzt: sechs Regeln, Takt 10 Min, Seite Alerts, Dashboard-Kachel, Mail optional. Offen: Teams-Kanal, Schwellwerte je Tenant, Regeln fuer Verzeichnisaenderungen |
 | Intune-Geraete | Graph deviceManagement/managedDevices | DeviceManagementManagedDevices.Read.All | Beta-Scope: Sync, Compliance, Neustart, Suche, Wipe/Retire |
 | Apps (Application Management) | Graph deviceAppManagement, eigener Paketkatalog, Windows-Build-Worker | DeviceManagementApps.ReadWrite.All, Group.ReadWrite.All, Azure Storage EU | A und B umgesetzt: Seite Apps, Detail mit Geraetestatus, Jobs assign/unassign/create-deployment-groups. C Katalog + Upload und D Build-Worker offen (Entscheidungen im Plan) |
 | Defender | Graph security/alerts_v2, incidents; Defender for Endpoint API | SecurityAlert.Read.All, eigene Consent fuer MDE | Zweite API-Welt, eigener Consent-Flow |
