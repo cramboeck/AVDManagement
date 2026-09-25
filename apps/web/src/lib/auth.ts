@@ -4,12 +4,12 @@
 
 const CLIENT_ID = process.env.NEXT_PUBLIC_ENTRA_CLIENT_ID ?? '';
 const TENANT_ID = process.env.NEXT_PUBLIC_ENTRA_TENANT_ID ?? 'common';
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 const REDIRECT_URI = typeof window !== 'undefined'
   ? `${window.location.origin}/auth/callback`
   : '';
 
 const AUTH_ENDPOINT = `https://login.microsoftonline.com/${TENANT_ID}/oauth2/v2.0/authorize`;
-const TOKEN_ENDPOINT = `https://login.microsoftonline.com/${TENANT_ID}/oauth2/v2.0/token`;
 
 const SCOPES = [
   'openid',
@@ -74,23 +74,20 @@ export async function handleCallback(code: string, state: string): Promise<boole
   sessionStorage.removeItem('auth_code_verifier');
 
   try {
-    const response = await fetch(TOKEN_ENDPOINT, {
+    const response = await fetch(`${API_URL}/auth/token`, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
+        'Content-Type': 'application/json',
       },
-      body: new URLSearchParams({
-        client_id: CLIENT_ID,
-        grant_type: 'authorization_code',
+      body: JSON.stringify({
         code,
         redirect_uri: REDIRECT_URI,
         code_verifier: codeVerifier,
-        scope: SCOPES,
       }),
     });
 
     if (!response.ok) {
-      const error = await response.text();
+      const error = await response.json();
       console.error('Token exchange failed:', error);
       return false;
     }

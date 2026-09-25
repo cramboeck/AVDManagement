@@ -13,6 +13,7 @@ import { jobsRouter } from './routes/jobs.js';
 import { auditRouter } from './routes/audit.js';
 import { licensesRouter } from './routes/licenses.js';
 import { avdRouter } from './routes/avd.js';
+import { authRouter } from './routes/auth.js';
 
 const app = new Hono();
 
@@ -46,6 +47,9 @@ app.get('/', (c) => {
     docs: '/docs',
   });
 });
+
+// Auth-Routen (ohne Auth-Middleware)
+app.route('/auth', authRouter);
 
 // Dev-Mode: Unauthenticated tenant list for testing
 if (process.env.NODE_ENV !== 'production') {
