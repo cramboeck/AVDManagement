@@ -35,11 +35,11 @@ npm run dev --workspace=@zerostress/api     # Fenster 1, Port 3001
 npm run dev --workspace=@zerostress/web     # Fenster 2, Port 3002
 ```
 
-Die API laedt `@zerostress/core` und `@zerostress/types` aus deren `dist/`
-(nicht im Git). **Nach jedem `git pull`, das `packages/` beruehrt, den
-Build-Befehl wiederholen**, sonst laeuft die API mit altem Core-Code.
-Wer an Core arbeitet, startet zusaetzlich
-`npm run dev --workspace=@zerostress/core` (tsc im Watch-Modus).
+Im Dev-Modus laedt die API `@zerostress/core` und `@zerostress/types`
+direkt aus `packages/*/src` (`apps/api/tsconfig.dev.json`), Aenderungen an
+Core wirken also sofort ohne Build. Der Build-Befehl ist fuer `npm start`
+(laeuft gegen `dist/`) und fuer das Web noetig, das `@zerostress/types`
+ueber `dist/` aufloest.
 
 Erwartete erste Zeile der API:
 `Environment: <pfad>\.env.local (DEV_AUTH_BYPASS active)`

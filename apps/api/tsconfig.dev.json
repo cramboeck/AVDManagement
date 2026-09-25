@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "../..",
+    "paths": {
+      "@zerostress/core": ["../../packages/core/src/index.ts"],
+      "@zerostress/types": ["../../packages/types/src/index.ts"]
+    }
+  }
+}
