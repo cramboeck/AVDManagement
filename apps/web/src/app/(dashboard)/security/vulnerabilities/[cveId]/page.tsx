@@ -49,7 +49,9 @@ function derivePriority(detail: CveDetail): { priority: Priority; reasons: strin
   if (d?.publicExploit) reasons.push(d.exploitVerified ? 'Oeffentlicher, verifizierter Exploit' : 'Oeffentlicher Exploit');
   if (d?.exploitInKit) reasons.push('In Exploit-Kits enthalten');
   if (epss >= 0.5) reasons.push(`EPSS ${(epss * 100).toFixed(0)} %: hohe Ausnutzungswahrscheinlichkeit`);
-  if (d && d.exposedMachines > 0) reasons.push(`${d.exposedMachines} betroffene Geraete in diesem Tenant`);
+  if (d && d.exposedMachines > 0) {
+    reasons.push(d.exposedMachines === 1 ? '1 betroffenes Geraet in diesem Tenant' : `${d.exposedMachines} betroffene Geraete in diesem Tenant`);
+  }
 
   if (kev || (d?.publicExploit && (severity === 'Critical' || severity === 'High'))) return { priority: 'sofort', reasons };
   if (severity === 'Critical' || epss >= 0.5 || d?.publicExploit) return { priority: 'hoch', reasons };
@@ -93,9 +95,11 @@ export default function CveDetailPage({ params }: { params: { cveId: string } })
   const kev = detail.enrichment.kev;
   const epss = detail.enrichment.epss.data;
   const { priority, reasons } = derivePriority(detail);
-  const title = defender?.name ?? nvd?.description?.slice(0, 120) ?? cveId;
   const severity = defender?.severity ?? 'Unknown';
   const description = nvd?.description ?? defender?.description ?? null;
+  // Defender nennt als Namen oft nur die CVE-Nummer; dann traegt der erste Satz der Beschreibung mehr
+  const defenderName = defender?.name && defender.name.toUpperCase() !== cveId ? defender.name : null;
+  const title = defenderName ?? firstSentence(description) ?? cveId;
 
   return (
     <div className="space-y-6">
@@ -202,7 +206,7 @@ export default function CveDetailPage({ params }: { params: { cveId: string } })
                       </td>
                       <td className="py-1.5 pr-3 text-muted-foreground">{m.osPlatform ?? '—'}</td>
                       <td className="py-1.5 pr-3 text-muted-foreground">{m.rbacGroupName ?? '—'}</td>
-                      <td className="py-1.5 text-xs text-muted-foreground">{m.detectedAt ? formatDateTime(m.detectedAt) : '—'}</td>
+                      <td className="py-1.5 text-xs text-muted-foreground">{formatDate(m.detectedAt)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -215,9 +219,9 @@ export default function CveDetailPage({ params }: { params: { cveId: string } })
           <section className="rounded-lg border p-4">
             <h2 className="mb-2 font-medium">Fakten</h2>
             <dl className="space-y-2 text-sm">
-              <Fact label="Veroeffentlicht" value={defender?.publishedAt ?? nvd?.publishedAt ? formatDateTime((defender?.publishedAt ?? nvd?.publishedAt) as string) : '—'} />
-              <Fact label="Zuletzt geaendert" value={nvd?.lastModifiedAt ? formatDateTime(nvd.lastModifiedAt) : defender?.updatedAt ? formatDateTime(defender.updatedAt) : '—'} />
-              <Fact label="Erstmals im Tenant" value={defender?.firstDetectedAt ? formatDateTime(defender.firstDetectedAt) : '—'} />
+              <Fact label="Veroeffentlicht" value={formatDate(defender?.publishedAt ?? nvd?.publishedAt ?? null)} />
+              <Fact label="Zuletzt geaendert" value={formatDate(nvd?.lastModifiedAt ?? defender?.updatedAt ?? null)} />
+              <Fact label="Erstmals im Tenant" value={formatDate(defender?.firstDetectedAt ?? null)} />
               <Fact label="CVSS-Vektor" value={defender?.cvssVector ?? nvd?.cvssVector ?? '—'} mono />
               {kev.status === 'ok' && kev.data && (
                 <>
@@ -351,6 +355,18 @@ function ExplanationSection({
       )}
     </section>
   );
+}
+
+function formatDate(value: string | null): string {
+  if (!value) return '—';
+  return new Intl.DateTimeFormat('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(value));
+}
+
+function firstSentence(text: string | null): string | null {
+  if (!text) return null;
+  const match = /^(.+?[.!?])(\s|$)/.exec(text.trim());
+  const sentence = (match ? match[1] : text).trim();
+  return sentence.length > 140 ? `${sentence.slice(0, 137)}...` : sentence;
 }
 
 function CopyButton({ text }: { text: string }) {
