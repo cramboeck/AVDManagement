@@ -27,25 +27,29 @@ AVD-Ressourcen sind Azure-Ressourcen, keine Graph-Objekte. Wir brauchen:
 
 ## Implementierungsreihenfolge (Beta-Scope)
 
-### Phase 1: Infrastruktur (2-3 Tage)
+### Phase 1: Infrastruktur (ABGESCHLOSSEN)
 - [x] ARM-Client erstellen (`packages/core/src/providers/arm-client.ts`)
 - [x] AVD-Provider erstellen (`packages/core/src/providers/avd-provider.ts`)
 - [x] Datenbank-Schema erweitern (Host Pools, Session Hosts)
-- [x] Typen definieren (`packages/types/src/avd.ts`)
+- [x] Typen definieren (`packages/types/src/index.ts` - AVD-Typen hinzugefuegt)
+- [x] Job-Handler erstellen (`packages/core/src/jobs/avd-job-handlers.ts`)
+- [x] API-Routen erstellen (`apps/api/src/routes/avd.ts`)
 
-### Phase 2: Lese-Operationen (1-2 Tage)
-- [ ] Host-Pool-Liste abrufen
-- [ ] Session-Host-Status abrufen
-- [ ] Aktive Sessions pro Host
-- [ ] API-Routen erstellen
-- [ ] Frontend: Host-Pool-Uebersicht
+### Phase 2: Lese-Operationen (ABGESCHLOSSEN)
+- [x] Host-Pool-Liste abrufen
+- [x] Session-Host-Status abrufen
+- [x] Aktive Sessions pro Host
+- [x] API-Routen erstellen
+- [ ] Frontend: Host-Pool-Uebersicht (AUSSTEHEND)
 
-### Phase 3: Schreib-Operationen als Jobs (2-3 Tage)
-- [ ] Job: Session-Host starten (`avd.start-session-host`)
-- [ ] Job: Session-Host stoppen (`avd.stop-session-host`)
-- [ ] Job: Benutzer-Session trennen (`avd.disconnect-session`)
-- [ ] Job: Drain-Mode setzen (`avd.set-drain-mode`)
-- [ ] Preview-Generatoren fuer alle Jobs
+### Phase 3: Schreib-Operationen als Jobs (ABGESCHLOSSEN)
+- [x] Job: Session-Host starten (`avd.start-session-host`)
+- [x] Job: Session-Host stoppen (`avd.stop-session-host`)
+- [x] Job: Benutzer-Session trennen (`avd.disconnect-session`)
+- [x] Job: Benutzer-Session abmelden (`avd.logoff-session`)
+- [x] Job: Drain-Mode setzen (`avd.set-drain-mode`)
+- [x] Job: Nachricht senden (`avd.send-message`)
+- [x] Preview-Generatoren fuer Start/Stop Jobs
 
 ### Phase 4: Frontend (2-3 Tage)
 - [ ] Host-Pool-Dashboard
