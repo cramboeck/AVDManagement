@@ -24,6 +24,7 @@ import { vulnerabilitiesRouter } from './routes/vulnerabilities.js';
 import { inventoryRouter } from './routes/inventory.js';
 import { scriptsRouter } from './routes/scripts.js';
 import { networkRouter } from './routes/network.js';
+import { groupsRouter } from './routes/groups.js';
 import { getJobQueue, getJobHealth } from './services/job-queue.js';
 import { startInventorySync, getInventoryHealth } from './services/inventory.js';
 
@@ -95,6 +96,7 @@ app.route('/tenants/:tenantId/vulnerabilities', vulnerabilitiesRouter);
 app.route('/tenants/:tenantId/inventory', inventoryRouter);
 app.route('/tenants/:tenantId/scripts', scriptsRouter);
 app.route('/tenants/:tenantId/network', networkRouter);
+app.route('/tenants/:tenantId/groups', groupsRouter);
 app.route('/dashboard', dashboardRouter);
 
 // Session-Info (fuer Frontend)

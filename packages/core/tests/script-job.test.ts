@@ -45,7 +45,7 @@ describe('device.run-script', () => {
   it('previews script identity, hash and read-only nature', async () => {
     const registered = getRegisteredJob('device.run-script')!;
     const preview = await registered.previewGenerator!({ ...base, payload: { managedDeviceId: 'md-1', deviceName: 'PC-1', scriptId: 'system-info' } });
-    expect(preview.changes[0]).toMatchObject({ objectId: 'md-1', after: { scriptId: 'system-info', version: '1.0.0', runAs: 'system', remediation: false } });
+    expect(preview.changes[0]).toMatchObject({ objectId: 'md-1', after: { scriptId: 'system-info', version: '1.0.1', runAs: 'system', remediation: false } });
     expect(String(preview.changes[0].after?.hash)).toMatch(/^[0-9a-f]{64}$/);
     expect(preview.warnings.some((w) => w.startsWith('Nur lesend'))).toBe(true);
   });

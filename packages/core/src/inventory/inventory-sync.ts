@@ -17,6 +17,7 @@ import type { Redis } from 'ioredis';
 import type {
   CapabilityResult,
   DeviceInventory,
+  GroupInventorySet,
   InventoryKind,
   MspId,
   SnapshotMeta,
@@ -26,12 +27,13 @@ import type {
 import type { ProviderContext } from '../providers/resource-provider.js';
 import type { InventorySnapshotStore, SnapshotRecord } from './snapshot-store.js';
 
-export const INVENTORY_KINDS: InventoryKind[] = ['devices', 'vulnerabilities'];
+export const INVENTORY_KINDS: InventoryKind[] = ['devices', 'vulnerabilities', 'groups'];
 
 // Zielintervalle: Geraete aendern sich oefter als die CVE-Zuordnung
 export const DEFAULT_SYNC_INTERVALS: Record<InventoryKind, number> = {
   devices: 15 * 60 * 1000,
   vulnerabilities: 60 * 60 * 1000,
+  groups: 60 * 60 * 1000,
 };
 
 // Ein Sync, der laenger als das laeuft, gilt als abgebrochen (Prozessneustart)
@@ -48,6 +50,7 @@ export interface SyncTarget {
 export interface InventoryPayloads {
   devices: DeviceInventory;
   vulnerabilities: CapabilityResult<TenantVulnerabilitySet>;
+  groups: CapabilityResult<GroupInventorySet>;
 }
 
 export type InventoryLoaders = {
@@ -141,17 +144,13 @@ function countItems<K extends InventoryKind>(kind: K, payload: InventoryPayloads
   if (kind === 'devices') {
     return (payload as DeviceInventory).items.length;
   }
-  const vulns = payload as CapabilityResult<TenantVulnerabilitySet>;
-  return vulns.available ? vulns.data.items.length : 0;
+  const result = payload as CapabilityResult<{ items: unknown[] }>;
+  return result.available ? result.data.items.length : 0;
 }
 
 // Snapshot-Metadaten gehoeren nicht in den gespeicherten Stand
-function stripMeta<K extends InventoryKind>(kind: K, payload: InventoryPayloads[K]): InventoryPayloads[K] {
-  if (kind === 'devices') {
-    const { snapshot: _snapshot, ...rest } = payload as DeviceInventory;
-    return rest as InventoryPayloads[K];
-  }
-  const { snapshot: _snapshot, ...rest } = payload as CapabilityResult<TenantVulnerabilitySet> & { snapshot?: SnapshotMeta };
+function stripMeta<K extends InventoryKind>(payload: InventoryPayloads[K]): InventoryPayloads[K] {
+  const { snapshot: _snapshot, ...rest } = payload as InventoryPayloads[K] & { snapshot?: SnapshotMeta };
   return rest as InventoryPayloads[K];
 }
 
@@ -175,6 +174,7 @@ export class InventorySyncEngine {
     this.intervals = {
       devices: options.intervals?.devices ?? DEFAULT_SYNC_INTERVALS.devices,
       vulnerabilities: options.intervals?.vulnerabilities ?? DEFAULT_SYNC_INTERVALS.vulnerabilities,
+      groups: options.intervals?.groups ?? DEFAULT_SYNC_INTERVALS.groups,
     };
     this.now = options.now ?? (() => new Date());
   }
@@ -222,7 +222,7 @@ export class InventorySyncEngine {
       await this.store.markRunning(snapshotKey, startedAt);
       try {
         const ctx: ProviderContext = { tenantId: target.tenantId, correlationId: crypto.randomUUID() };
-        const payload = stripMeta(kind, await this.loaders[kind](ctx));
+        const payload = stripMeta<K>(await this.loaders[kind](ctx));
         const syncedAt = this.now();
         await this.store.complete(snapshotKey, {
           payload,

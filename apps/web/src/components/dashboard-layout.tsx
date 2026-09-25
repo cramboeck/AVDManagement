@@ -83,6 +83,7 @@ const navItems = [
   { href: '/tenants', label: 'Tenants', icon: BuildingIcon },
   { href: '/avd', label: 'Virtual Desktop', icon: DesktopIcon },
   { href: '/users', label: 'Benutzer', icon: UsersIcon },
+  { href: '/groups', label: 'Gruppen', icon: GroupsIcon },
   { href: '/devices', label: 'Geraete', icon: DeviceIcon },
   { href: '/network', label: 'Netzwerk', icon: NetworkIcon },
   { href: '/security', label: 'Sicherheit', icon: ShieldIcon },
@@ -175,6 +176,16 @@ function DeviceIcon({ className }: { className?: string }) {
     >
       <rect x="3" y="4" width="18" height="12" rx="2" />
       <path d="M7 20h10M12 16v4" />
+    </svg>
+  );
+}
+
+function GroupsIcon({ className }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={className}>
+      <circle cx="9" cy="8" r="3" />
+      <circle cx="17" cy="9" r="2.5" />
+      <path d="M3 19a6 6 0 0 1 12 0M14.5 18a4.5 4.5 0 0 1 6.5 0" />
     </svg>
   );
 }

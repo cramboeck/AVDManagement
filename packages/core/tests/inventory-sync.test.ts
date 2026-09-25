@@ -57,9 +57,17 @@ function engineFor(store: InMemorySnapshotStore, loaders?: Partial<ConstructorPa
   const enqueue = vi.fn(async () => undefined);
   const devices = vi.fn(async (ctx: { tenantId: TenantId }) => inventory([`dev-of-${ctx.tenantId}`]));
   const vulnerabilities = vi.fn(async () => ({ available: true as const, data: { items: [], truncated: false } }));
+  const groups = vi.fn(async () => ({
+    available: true as const,
+    data: {
+      items: [],
+      stats: { total: 0, teams: 0, microsoft365: 0, security: 0, distribution: 0, ownerless: 0, withGuests: 0, publicTeams: 0, dynamic: 0 },
+      countsTruncated: false,
+    },
+  }));
   const engine = new InventorySyncEngine({
     store,
-    loaders: { devices, vulnerabilities, ...loaders },
+    loaders: { devices, vulnerabilities, groups, ...loaders },
     listTargets: async () => [
       { tenantId: TENANT_A, mspId: MSP },
       { tenantId: TENANT_B, mspId: MSP },
@@ -72,25 +80,28 @@ function engineFor(store: InMemorySnapshotStore, loaders?: Partial<ConstructorPa
 
 describe('planSync', () => {
   it('schedules every kind when nothing is stored', () => {
-    expect(planSync([], NOW, DEFAULT_SYNC_INTERVALS)).toEqual(['devices', 'vulnerabilities']);
+    expect(planSync([], NOW, DEFAULT_SYNC_INTERVALS)).toEqual(['devices', 'vulnerabilities', 'groups']);
   });
 
   it('leaves fresh snapshots alone and picks up stale ones', () => {
     const fresh = record({ kind: 'devices', syncedAt: new Date(NOW.getTime() - 60_000) });
     const stale = record({ kind: 'vulnerabilities', syncedAt: new Date(NOW.getTime() - DEFAULT_SYNC_INTERVALS.vulnerabilities) });
-    expect(planSync([fresh, stale], NOW, DEFAULT_SYNC_INTERVALS)).toEqual(['vulnerabilities']);
+    const freshGroups = record({ kind: 'groups', syncedAt: NOW });
+    expect(planSync([fresh, stale, freshGroups], NOW, DEFAULT_SYNC_INTERVALS)).toEqual(['vulnerabilities']);
   });
 
   it('does not restart a running sync unless it is stuck', () => {
     const running = record({ status: 'running', startedAt: new Date(NOW.getTime() - 60_000) });
     const stuck = record({ kind: 'vulnerabilities', status: 'running', startedAt: new Date(NOW.getTime() - RUNNING_STUCK_MS) });
-    expect(planSync([running, stuck], NOW, DEFAULT_SYNC_INTERVALS)).toEqual(['vulnerabilities']);
+    const groups = record({ kind: 'groups', syncedAt: NOW });
+    expect(planSync([running, stuck, groups], NOW, DEFAULT_SYNC_INTERVALS)).toEqual(['vulnerabilities']);
   });
 
   it('retries a failed sync only after the backoff', () => {
     const recent = record({ status: 'error', error: 'boom', startedAt: new Date(NOW.getTime() - 1000) });
     const old = record({ kind: 'vulnerabilities', status: 'error', error: 'boom', startedAt: new Date(NOW.getTime() - ERROR_RETRY_MS) });
-    expect(planSync([recent, old], NOW, DEFAULT_SYNC_INTERVALS)).toEqual(['vulnerabilities']);
+    const groups = record({ kind: 'groups', syncedAt: NOW });
+    expect(planSync([recent, old, groups], NOW, DEFAULT_SYNC_INTERVALS)).toEqual(['vulnerabilities']);
   });
 });
 
@@ -175,6 +186,7 @@ describe('InventorySyncEngine', () => {
 
     await engine.sync({ tenantId: TENANT_B, mspId: MSP }, 'devices');
     await engine.sync({ tenantId: TENANT_B, mspId: MSP }, 'vulnerabilities');
+    await engine.sync({ tenantId: TENANT_B, mspId: MSP }, 'groups');
     const statusA = await engine.getStatus(TENANT_A);
     expect(statusA.every((m) => m.status === 'missing')).toBe(true);
 
@@ -196,8 +208,8 @@ describe('InventorySyncEngine', () => {
 
     const queued = await engine.runTick();
 
-    expect(queued).toBe(3);
-    expect(enqueue).toHaveBeenCalledWith({ tenantId: TENANT_A, mspId: MSP }, ['vulnerabilities'], 'scheduled');
-    expect(enqueue).toHaveBeenCalledWith({ tenantId: TENANT_B, mspId: MSP }, ['devices', 'vulnerabilities'], 'scheduled');
+    expect(queued).toBe(5);
+    expect(enqueue).toHaveBeenCalledWith({ tenantId: TENANT_A, mspId: MSP }, ['vulnerabilities', 'groups'], 'scheduled');
+    expect(enqueue).toHaveBeenCalledWith({ tenantId: TENANT_B, mspId: MSP }, ['devices', 'vulnerabilities', 'groups'], 'scheduled');
   });
 });

@@ -13,3 +13,4 @@ export * from './avd-provider.js';
 export * from './device-provider.js';
 export * from './security-provider.js';
 export * from './remediation-provider.js';
+export * from './group-provider.js';

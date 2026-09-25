@@ -470,7 +470,73 @@ export interface DeviceInventory {
 // Bestands-Snapshot (Cache je Tenant)
 // ============================================
 
-export type InventoryKind = 'devices' | 'vulnerabilities';
+export type InventoryKind = 'devices' | 'vulnerabilities' | 'groups';
+
+// ============================================
+// Gruppen (Teams, Microsoft 365, Sicherheit, Verteiler)
+// ============================================
+
+export type GroupKind = 'team' | 'microsoft365' | 'security' | 'distribution' | 'mail-enabled-security';
+export type GroupVisibility = 'Public' | 'Private' | 'HiddenMembership' | 'unknown';
+
+// Auffaelligkeiten, die ein Admin sehen will
+export type GroupFlag = 'ownerless' | 'single-owner' | 'public-team' | 'has-guests' | 'dynamic' | 'empty';
+
+export interface GroupSummary {
+  id: string;
+  displayName: string;
+  description: string | null;
+  kind: GroupKind;
+  visibility: GroupVisibility;
+  mail: string | null;
+  createdAt: string | null;
+  renewedAt: string | null;
+  isDynamic: boolean;
+  onPremisesSynced: boolean;
+  ownerCount: number;
+  // null: Zaehlung nicht moeglich (Throttling, Berechtigung)
+  memberCount: number | null;
+  guestCount: number | null;
+  flags: GroupFlag[];
+}
+
+export interface GroupStats {
+  total: number;
+  teams: number;
+  microsoft365: number;
+  security: number;
+  distribution: number;
+  ownerless: number;
+  withGuests: number;
+  publicTeams: number;
+  dynamic: number;
+}
+
+export interface GroupInventorySet {
+  items: GroupSummary[];
+  stats: GroupStats;
+  // Zaehlungen fehlen bei sehr grossen Tenants ab einer Obergrenze
+  countsTruncated: boolean;
+}
+
+export type GroupInventory = CapabilityResult<GroupInventorySet> & { snapshot?: SnapshotMeta };
+
+export type GroupMemberType = 'user' | 'guest' | 'group' | 'servicePrincipal' | 'device' | 'other';
+
+export interface GroupMember {
+  id: string;
+  displayName: string;
+  userPrincipalName: string | null;
+  type: GroupMemberType;
+  accountEnabled: boolean | null;
+}
+
+export interface GroupDetail {
+  group: GroupSummary;
+  owners: GroupMember[];
+  members: GroupMember[];
+  membersTruncated: boolean;
+}
 
 // missing: noch nie geladen; running: Sync laeuft; ready: Stand vorhanden;
 // error: letzter Sync fehlgeschlagen (ein aelterer Stand kann trotzdem vorliegen)

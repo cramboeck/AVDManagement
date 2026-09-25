@@ -68,6 +68,17 @@ Live bleiben: Scores, MFA-Report, Alerts, Anmelde- und Auditprotokolle,
 Wiederherstellungsschluessel, alle Jobs. `/health` meldet unter `inventory`,
 ob der Sync-Worker laeuft.
 
+## Gruppen
+
+Die Seite **Gruppen** zeigt Teams, Microsoft 365-, Sicherheits- und
+Verteilergruppen mit Besitzern, Mitglieder- und Gastzahlen und
+Auffaelligkeiten (ohne Besitzer, ein Besitzer, oeffentliches Team, Gaeste,
+dynamisch, leer). Die Liste kommt aus dem Bestands-Snapshot (Intervall 60
+Minuten), die Zaehlungen laufen ueber `$batch` mit zwei Anfragen je Gruppe.
+`Directory.Read.All` reicht; ob eine M365-Gruppe ein Team ist, steht in
+`resourceProvisioningOptions`, ein Teams-Scope ist nicht noetig. Das Detail
+laedt Besitzer und Mitglieder live (bis 2000).
+
 ## Skriptbibliothek (Geraet > Skripte)
 
 Befehle auf Geraeten laufen ohne eigenen Agenten ueber Intune Remediations

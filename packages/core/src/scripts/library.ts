@@ -59,7 +59,7 @@ const definitions: ScriptDefinition[] = [
     displayName: 'Systeminfo',
     description:
       'Technischer Zustand: Betriebssystem, Laufzeit, Neustartbedarf, Systemlaufwerk, Speicher, Firmware, TPM, Secure Boot, BitLocker- und Defender-Status. Ohne Benutzerdaten.',
-    version: '1.0.0',
+    version: '1.0.1',
     detectionFile: 'system-info.detect.ps1',
     remediationFile: null,
     remediationSummary: null,

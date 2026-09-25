@@ -16,6 +16,7 @@ import {
   DeviceProvider,
   SecurityProvider,
   RemediationProvider,
+  GroupProvider,
   DEFENDER_API_BASE_URL,
   NotFoundError,
 } from '@zerostress/core';
@@ -97,6 +98,15 @@ export function getRemediationProvider(): RemediationProvider {
     remediationProvider = new RemediationProvider(getGraphClient());
   }
   return remediationProvider;
+}
+
+let groupProvider: GroupProvider | null = null;
+
+export function getGroupProvider(): GroupProvider {
+  if (!groupProvider) {
+    groupProvider = new GroupProvider(getGraphClient());
+  }
+  return groupProvider;
 }
 
 let securityProvider: SecurityProvider | null = null;

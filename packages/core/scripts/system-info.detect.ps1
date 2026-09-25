@@ -92,9 +92,13 @@ try {
 
 try {
     $result.secureBoot = [bool](Confirm-SecureBootUEFI)
-} catch {
-    # Legacy-BIOS oder nicht unterstuetzt: Secure Boot ist dann aus
+} catch [System.PlatformNotSupportedException] {
+    # Legacy-BIOS: Secure Boot gibt es dort nicht
     $result.secureBoot = $false
+} catch {
+    # Abfrage nicht moeglich (z. B. fehlende Rechte): unbekannt statt Nein
+    $result.secureBoot = $null
+    Add-Problem -Area 'secureboot' -Message $_.Exception.Message
 }
 
 try {

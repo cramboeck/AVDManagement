@@ -10,6 +10,7 @@ import type { InventoryKind, SnapshotMeta, TenantInventoryStatus } from '@zerost
 const kindLabels: Record<InventoryKind, string> = {
   devices: 'Geraete',
   vulnerabilities: 'Schwachstellen',
+  groups: 'Gruppen',
 };
 
 export function formatAge(iso: string | null, now = Date.now()): string {
