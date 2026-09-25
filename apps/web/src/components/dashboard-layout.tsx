@@ -83,6 +83,7 @@ const navItems = [
   { href: '/tenants', label: 'Tenants', icon: BuildingIcon },
   { href: '/avd', label: 'Virtual Desktop', icon: DesktopIcon },
   { href: '/users', label: 'Benutzer', icon: UsersIcon },
+  { href: '/devices', label: 'Geraete', icon: DeviceIcon },
   { href: '/security', label: 'Sicherheit', icon: ShieldIcon },
   { href: '/jobs', label: 'Jobs', icon: JobsIcon },
   { href: '/audit', label: 'Audit-Log', icon: AuditIcon },
@@ -157,6 +158,22 @@ function UsersIcon({ className }: { className?: string }) {
       <circle cx="9" cy="7" r="4" />
       <path d="M23 21v-2a4 4 0 00-3-3.87" />
       <path d="M16 3.13a4 4 0 010 7.75" />
+    </svg>
+  );
+}
+
+function DeviceIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      className={className}
+    >
+      <rect x="3" y="4" width="18" height="12" rx="2" />
+      <path d="M7 20h10M12 16v4" />
     </svg>
   );
 }

@@ -208,7 +208,11 @@ export interface SessionUser {
 // ============================================
 
 // Optionale Datenquelle (Lizenz oder Berechtigung koennen fehlen)
-export type CapabilityUnavailableReason = 'premium-required' | 'permission-missing';
+export type CapabilityUnavailableReason =
+  | 'premium-required'
+  | 'permission-missing'
+  | 'not-licensed'
+  | 'not-onboarded';
 
 export type CapabilityResult<T> =
   | { available: true; data: T }
@@ -341,6 +345,104 @@ export interface DirectoryAuditQuery {
   userId?: string;
   top?: number;
   since?: string;
+}
+
+// ============================================
+// Geraete (Intune + Defender for Endpoint)
+// ============================================
+
+export type DeviceComplianceState =
+  | 'compliant'
+  | 'noncompliant'
+  | 'inGracePeriod'
+  | 'conflict'
+  | 'error'
+  | 'notApplicable'
+  | 'unknown';
+
+export type DeviceExposureLevel = 'None' | 'Low' | 'Medium' | 'High' | 'Unknown';
+export type DeviceRiskScore = 'None' | 'Informational' | 'Low' | 'Medium' | 'High' | 'Unknown';
+export type DeviceHealthStatus =
+  | 'Active'
+  | 'Inactive'
+  | 'ImpairedCommunication'
+  | 'NoSensorData'
+  | 'NoSensorDataImpairedCommunication'
+  | 'Unknown';
+
+export interface DeviceIntuneInfo {
+  managedDeviceId: string;
+  complianceState: DeviceComplianceState;
+  lastSyncAt: string | null;
+  enrolledAt: string | null;
+  ownerType: string | null;
+  isEncrypted: boolean | null;
+  model: string | null;
+  manufacturer: string | null;
+  serialNumber: string | null;
+  managementAgent: string | null;
+}
+
+export interface DeviceDefenderInfo {
+  machineId: string;
+  healthStatus: DeviceHealthStatus;
+  exposureLevel: DeviceExposureLevel;
+  riskScore: DeviceRiskScore;
+  onboardingStatus: string | null;
+  lastSeenAt: string | null;
+  lastIpAddress: string | null;
+  osPlatform: string | null;
+  osBuild: string | null;
+  isAadJoined: boolean | null;
+  tags: string[];
+}
+
+// Zusammengefuehrtes Geraet; id ist die Entra-Geraete-ID oder ein Quell-Praefix
+export interface Device {
+  id: string;
+  name: string;
+  azureAdDeviceId: string | null;
+  operatingSystem: string | null;
+  osVersion: string | null;
+  primaryUser: string | null;
+  lastActivityAt: string | null;
+  intune: DeviceIntuneInfo | null;
+  defender: DeviceDefenderInfo | null;
+}
+
+export interface DeviceInventory {
+  items: Device[];
+  intune: CapabilityResult<{ count: number }>;
+  defender: CapabilityResult<{ count: number }>;
+}
+
+export type VulnerabilitySeverity = 'Critical' | 'High' | 'Medium' | 'Low' | 'Unknown';
+
+export interface DeviceVulnerability {
+  cveId: string;
+  name: string;
+  severity: VulnerabilitySeverity;
+  cvssScore: number | null;
+  publishedAt: string | null;
+  updatedAt: string | null;
+  publicExploit: boolean;
+  exploitVerified: boolean;
+  description: string | null;
+}
+
+export interface MissingKb {
+  id: string;
+  name: string;
+  osBuild: string | null;
+  products: string[];
+  url: string | null;
+  cveAddressed: number;
+  missingSince: string | null;
+}
+
+export interface DeviceSecurityPosture {
+  vulnerabilities: CapabilityResult<DeviceVulnerability[]>;
+  missingKbs: CapabilityResult<MissingKb[]>;
 }
 
 // ============================================

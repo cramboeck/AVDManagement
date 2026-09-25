@@ -9,3 +9,4 @@ export * from './job-queue.js';
 export * from './job-types.js';
 export * from './job-handlers.js';
 export * from './avd-job-handlers.js';
+export * from './device-job-handlers.js';

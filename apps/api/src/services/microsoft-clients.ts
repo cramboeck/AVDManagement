@@ -13,6 +13,8 @@ import {
   ArmClient,
   IdentityProvider,
   AvdProvider,
+  DeviceProvider,
+  DEFENDER_API_BASE_URL,
   NotFoundError,
 } from '@zerostress/core';
 import { db, managedTenants } from '../db/index.js';
@@ -61,9 +63,30 @@ async function getAccessTokenForManagedTenant(tenantId: string, scopes: string[]
 }
 
 let graphClient: GraphClient | null = null;
+let defenderClient: GraphClient | null = null;
 let armClient: ArmClient | null = null;
 let identityProvider: IdentityProvider | null = null;
 let avdProvider: AvdProvider | null = null;
+let deviceProvider: DeviceProvider | null = null;
+
+// Defender-for-Endpoint-API spricht dasselbe OData-Protokoll wie Graph;
+// EU-Datenresidenz optional ueber DEFENDER_API_BASE_URL (api-eu.securitycenter.microsoft.com)
+export function getDefenderClient(): GraphClient {
+  if (!defenderClient) {
+    defenderClient = new GraphClient({
+      getAccessToken: getAccessTokenForManagedTenant,
+      baseUrl: process.env.DEFENDER_API_BASE_URL ?? DEFENDER_API_BASE_URL,
+    });
+  }
+  return defenderClient;
+}
+
+export function getDeviceProvider(): DeviceProvider {
+  if (!deviceProvider) {
+    deviceProvider = new DeviceProvider(getGraphClient(), getDefenderClient());
+  }
+  return deviceProvider;
+}
 
 export function getGraphClient(): GraphClient {
   if (!graphClient) {

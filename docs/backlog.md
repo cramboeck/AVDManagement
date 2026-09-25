@@ -20,6 +20,12 @@ vor dem Bau klar sind.
 - Sicherheitsseite: fehlgeschlagene Anmeldungen, Herkunft, Risiko, Legacy-Auth
 - Offen: temporaeres Passwort liegt im Job-Ergebnis (DB). Folgeaufgabe: Einmal-Secret ueber Key Vault.
 
+## In Arbeit: Geraete (Intune + Defender for Business)
+
+- Bestand beider Quellen zusammengefuehrt ueber Entra-Geraete-ID, Detail mit Schwachstellen und fehlenden KBs
+- Aktionen als Jobs: Sync, Neustart, Defender-Schnellscan
+- Offen: Inventar-Cache (jeder Detailaufruf laedt heute den ganzen Bestand), Isolieren/Freigeben ueber Defender (`Machine.Isolate`), Retire/Wipe mit verschaerfter Preview, Softwareinventar, tenant-uebergreifende Sicht "kritische Luecken aelter als 30 Tage"
+
 ## Naechste Module
 
 | Thema | Datenquelle | Voraussetzung | Notiz |

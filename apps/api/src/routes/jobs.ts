@@ -143,6 +143,50 @@ app.post(
   }
 );
 
+// Geraete-Aktionen (Intune)
+const deviceActionSchema = z.object({
+  managedDeviceId: z.string().min(1),
+  deviceName: z.string().min(1),
+  quickScan: z.boolean().optional(),
+});
+
+const deviceActions: Record<string, string> = {
+  'sync-device': 'device.sync',
+  'restart-device': 'device.restart',
+  'defender-scan': 'device.defender-scan',
+};
+
+app.post(
+  '/:action{sync-device|restart-device|defender-scan}',
+  requireRole('engineer'),
+  requireConnectedTenant,
+  zValidator('json', deviceActionSchema),
+  async (c) => {
+    const auth = c.get('auth');
+    const tenant = c.get('tenant');
+    const body = c.req.valid('json');
+    const queue = getJobQueue();
+
+    const job = await queue.createJob({
+      type: deviceActions[c.req.param('action')],
+      tenantId: tenant.id,
+      mspId: auth.mspId,
+      userId: auth.user.id,
+      userEmail: auth.user.email,
+      payload: {
+        managedDeviceId: body.managedDeviceId,
+        deviceName: body.deviceName,
+        quickScan: body.quickScan ?? true,
+        targetType: 'device',
+        targetId: body.managedDeviceId,
+        targetDisplayName: body.deviceName,
+      },
+    });
+
+    return c.json(job, 202);
+  }
+);
+
 // Job bestaetigen (nach Preview)
 app.post('/:jobId/approve', requireRole('engineer'), async (c) => {
   const auth = c.get('auth');

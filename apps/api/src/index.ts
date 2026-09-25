@@ -19,6 +19,7 @@ import { avdRouter } from './routes/avd.js';
 import { authRouter } from './routes/auth.js';
 import { securityRouter } from './routes/security.js';
 import { tenantDashboardRouter, dashboardRouter } from './routes/dashboard.js';
+import { devicesRouter } from './routes/devices.js';
 import { getJobQueue } from './services/job-queue.js';
 
 const app = new Hono();
@@ -77,6 +78,7 @@ app.route('/tenants/:tenantId/audit', auditRouter);
 app.route('/tenants/:tenantId/avd', avdRouter);
 app.route('/tenants/:tenantId/security', securityRouter);
 app.route('/tenants/:tenantId/dashboard', tenantDashboardRouter);
+app.route('/tenants/:tenantId/devices', devicesRouter);
 app.route('/dashboard', dashboardRouter);
 
 // Session-Info (fuer Frontend)

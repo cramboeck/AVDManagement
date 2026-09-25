@@ -77,6 +77,23 @@ Secret ab (`AADSTS700025`).
 | `User.ReadWrite.All` | Deaktivieren/Aktivieren, Passwort-Reset, Sitzungen widerrufen, Lizenzen | Jobs schlagen fehl |
 | `UserAuthenticationMethod.Read.All` | MFA-Methoden im Benutzerdetail | Karte "Berechtigung fehlt" |
 | `AuditLog.Read.All` | Anmeldungen, Verzeichnisaudit, letzte Anmeldung | Karte "Berechtigung fehlt" |
+| `DeviceManagementManagedDevices.Read.All` | Geraeteliste (Intune) | Karte "Berechtigung fehlt", Defender-Geraete bleiben sichtbar |
+| `DeviceManagementManagedDevices.PrivilegedOperations.All` | Sync, Neustart, Defender-Scan | Geraete-Jobs schlagen fehl |
+
+### Defender-for-Endpoint-API (WindowsDefenderATP)
+
+Exposure, Risiko, Schwachstellen und fehlende Sicherheitsupdates kommen aus
+der Defender-API, nicht aus Graph. In der App-Registrierung unter
+**API-Berechtigungen > Berechtigung hinzufuegen > APIs, die meine
+Organisation verwendet > "WindowsDefenderATP"** als Anwendungsberechtigungen:
+`Machine.Read.All`, `Vulnerability.Read.All`. Danach Consent erneuern.
+
+Voraussetzung im Kundentenant: Defender for Business (in Microsoft 365
+Business Premium) oder Defender for Endpoint P2. Ohne Lizenz existiert die
+API-Ressource im Tenant nicht (`AADSTS500011`); die Konsole zeigt dann
+"Defender for Endpoint nicht lizenziert" und arbeitet mit Intune-Daten
+weiter. Fuer EU-Datenresidenz kann `DEFENDER_API_BASE_URL` auf
+`https://api-eu.securitycenter.microsoft.com` gesetzt werden.
 
 Anmelde- und Auditprotokolle setzen zusaetzlich **Entra ID P1** im
 Kundentenant voraus (enthalten in Business Premium, E3, E5). Ohne P1 zeigt
