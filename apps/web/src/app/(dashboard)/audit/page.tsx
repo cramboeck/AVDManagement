@@ -15,6 +15,12 @@ interface AuditResponse {
   nextPageToken: string | null;
 }
 
+interface AuditFiltersState {
+  action: string;
+  outcome: AuditOutcome | '';
+  search: string;
+}
+
 const outcomeColors: Record<AuditOutcome, string> = {
   success: 'bg-success/10 text-success',
   failure: 'bg-destructive/10 text-destructive',
@@ -103,8 +109,8 @@ function AuditFilters({
   filters,
   onChange,
 }: {
-  filters: { action: string; outcome: AuditOutcome | ''; search: string };
-  onChange: (filters: typeof filters) => void;
+  filters: AuditFiltersState;
+  onChange: (filters: AuditFiltersState) => void;
 }) {
   return (
     <div className="flex flex-wrap items-center gap-3">
