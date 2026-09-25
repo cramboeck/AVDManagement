@@ -34,7 +34,7 @@ app.post('/evaluate', requireRole('engineer'), requireConnectedTenant, async (c)
 async function transition(c: Context, status: AlertStatus) {
   const tenant = c.get('tenant');
   const auth = c.get('auth');
-  const alertId = c.req.param('alertId');
+  const alertId = c.req.param('alertId') ?? '';
   const updated = await setAlertStatus(tenant.id, alertId, status, auth.user.id);
   await audit.log({
     mspId: auth.mspId,
