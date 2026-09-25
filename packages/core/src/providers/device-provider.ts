@@ -25,6 +25,7 @@ import type {
   VulnerabilityMachineRef,
   TenantVulnerability,
   VulnerableSoftware,
+  ExposureScoreSummary,
 } from '@zerostress/types';
 import { BaseResourceProvider, type ProviderContext } from './resource-provider.js';
 import { GraphClient, type GraphResponse } from './graph-client.js';
@@ -242,6 +243,23 @@ export class DeviceProvider extends BaseResourceProvider {
       return { available: true, data: response.value };
     } catch (error) {
       const unavailable = asUnavailable(error, 'Vulnerability.Read.All');
+      if (unavailable) return unavailable;
+      throw error;
+    }
+  }
+
+  async getExposureScore(ctx: ProviderContext): Promise<CapabilityResult<ExposureScoreSummary>> {
+    this.validateContext(ctx);
+
+    try {
+      const response = await this.defenderClient.get<{ score: number; time?: string | null }>(
+        ctx.tenantId as string,
+        '/api/exposureScore',
+        DEFENDER_SCOPES
+      );
+      return { available: true, data: { score: Math.round(response.score * 10) / 10, measuredAt: response.time ?? null } };
+    } catch (error) {
+      const unavailable = asUnavailable(error, 'Score.Read.All');
       if (unavailable) return unavailable;
       throw error;
     }

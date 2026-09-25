@@ -8,6 +8,7 @@ import { authMiddleware } from '../middleware/auth.js';
 import { tenantContextMiddleware, requireConnectedTenant } from '../middleware/tenant-context.js';
 import { getIdentityProvider } from '../services/microsoft-clients.js';
 import { DrizzleAuditLogger } from '../services/audit-logger.js';
+import { buildSecurityPosture } from '../services/posture.js';
 import type { CorrelationId } from '@zerostress/types';
 
 const app = new Hono();
@@ -20,6 +21,12 @@ function parseTop(value: string | undefined, fallback: number): number {
   const parsed = parseInt(value ?? '', 10);
   return Number.isFinite(parsed) ? parsed : fallback;
 }
+
+// Sicherheitslage: Scores, MFA, Alerts, Verteilungen (nur Kennzahlen)
+app.get('/posture', requireConnectedTenant, async (c) => {
+  const tenant = c.get('tenant');
+  return c.json(await buildSecurityPosture(tenant.id));
+});
 
 // Anmeldungen im Tenant (Sicherheitsmonitoring: woher, womit, mit welchem Ergebnis)
 app.get('/sign-ins', requireConnectedTenant, async (c) => {

@@ -88,6 +88,12 @@ Secret ab (`AADSTS700025`).
 | `AuditLog.Read.All` | Anmeldungen, Verzeichnisaudit, letzte Anmeldung | Karte "Berechtigung fehlt" |
 | `DeviceManagementManagedDevices.Read.All` | Geraeteliste (Intune) | Karte "Berechtigung fehlt", Defender-Geraete bleiben sichtbar |
 | `DeviceManagementManagedDevices.PrivilegedOperations.All` | Sync, Neustart, Defender-Scan | Geraete-Jobs schlagen fehl |
+| `SecurityEvents.Read.All` | Secure Score und Verbesserungsmassnahmen (Sicherheit > Ueberblick) | Karte "Berechtigung fehlt" |
+| `SecurityAlert.Read.All` | Offene Defender-Alerts | Karte "Berechtigung fehlt" |
+
+Fuer den Exposure Score braucht die Defender-API zusaetzlich `Score.Read.All`
+(WindowsDefenderATP, Anwendungsberechtigung). Der MFA-Registrierungsreport
+laeuft ueber `AuditLog.Read.All` und setzt Entra ID P1 voraus.
 
 ### Defender-for-Endpoint-API (WindowsDefenderATP)
 

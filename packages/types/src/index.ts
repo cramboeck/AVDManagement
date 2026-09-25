@@ -561,6 +561,87 @@ export interface CveDetail {
 }
 
 // ============================================
+// Sicherheitslage (Security Posture)
+// ============================================
+
+export interface SecureScoreSummary {
+  currentScore: number;
+  maxScore: number;
+  percent: number;
+  createdAt: string;
+  // Vergleichswerte von Microsoft (alle Tenants, gleiche Groesse, Branche)
+  comparisons: { basis: string; averagePercent: number }[];
+  // Verbesserungsmassnahmen mit dem groessten Punktgewinn (aus den Control-Profilen)
+  topImprovements: SecureScoreImprovement[];
+}
+
+export interface SecureScoreImprovement {
+  control: string;
+  title: string;
+  category: string;
+  currentScore: number;
+  maxScore: number;
+  scoreGain: number;
+  implementationStatus: string | null;
+  userImpact: string | null;
+  implementationCost: string | null;
+  actionUrl: string | null;
+  remediation: string | null;
+}
+
+export interface ExposureScoreSummary {
+  score: number;
+  measuredAt: string | null;
+}
+
+export interface MfaRegistrationSummary {
+  totalUsers: number;
+  mfaRegistered: number;
+  mfaCapable: number;
+  passwordlessCapable: number;
+  ssprRegistered: number;
+  admins: number;
+  adminsWithoutMfa: number;
+}
+
+export type AlertSeverity = 'high' | 'medium' | 'low' | 'informational' | 'unknown';
+
+export interface OpenAlertsSummary {
+  total: number;
+  bySeverity: Record<AlertSeverity, number>;
+  newest: { id: string; title: string; severity: AlertSeverity; createdAt: string; source: string | null }[];
+}
+
+export interface DistributionBucket {
+  key: string;
+  label: string;
+  count: number;
+}
+
+export interface SignInsByDay {
+  day: string;
+  success: number;
+  failure: number;
+  interrupted: number;
+}
+
+export interface SecurityPosture {
+  secureScore: CapabilityResult<SecureScoreSummary>;
+  exposureScore: CapabilityResult<ExposureScoreSummary>;
+  mfa: CapabilityResult<MfaRegistrationSummary>;
+  alerts: CapabilityResult<OpenAlertsSummary>;
+  devices: CapabilityResult<{
+    total: number;
+    compliance: DistributionBucket[];
+    exposure: DistributionBucket[];
+    osVersions: DistributionBucket[];
+  }>;
+  vulnerabilities: CapabilityResult<{ bySeverity: DistributionBucket[]; truncated: boolean }>;
+  signIns: CapabilityResult<{ days: SignInsByDay[]; sampled: boolean }>;
+  generatedAt: string;
+}
+
+// ============================================
 // Dashboard
 // ============================================
 
