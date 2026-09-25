@@ -27,8 +27,11 @@ import {
 } from './resource-provider.js';
 import { ArmClient, type ArmResponse } from './arm-client.js';
 
+// Jeder Resource Provider hat eigene API-Versionen; nie die Default-Version
+// des ArmClients erben, sondern pro Aufruf explizit setzen
 const AVD_API_VERSION = '2024-04-03';
 const COMPUTE_API_VERSION = '2024-03-01';
+const SUBSCRIPTIONS_API_VERSION = '2022-12-01';
 
 interface AzureHostPool {
   id: string;
@@ -118,7 +121,8 @@ export class AvdProvider extends BaseResourceProvider {
 
     const response = await this.armClient.get<ArmResponse<AzureSubscription[]>>(
       tenantId,
-      '/subscriptions'
+      '/subscriptions',
+      { apiVersion: SUBSCRIPTIONS_API_VERSION }
     );
 
     return response.value.filter((s) => s.state === 'Enabled');
