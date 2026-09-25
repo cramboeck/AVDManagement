@@ -17,6 +17,7 @@ import { auditRouter } from './routes/audit.js';
 import { licensesRouter } from './routes/licenses.js';
 import { avdRouter } from './routes/avd.js';
 import { authRouter } from './routes/auth.js';
+import { getJobQueue } from './services/job-queue.js';
 
 const app = new Hono();
 
@@ -98,3 +99,6 @@ serve({
 });
 
 console.log(`ZeroStress API running at http://localhost:${port}`);
+
+// Worker sofort starten, damit Jobs nicht erst nach dem ersten /jobs-Aufruf laufen
+getJobQueue();

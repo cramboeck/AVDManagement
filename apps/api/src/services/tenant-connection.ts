@@ -10,6 +10,7 @@ import { eq } from 'drizzle-orm';
 import { TokenProvider, GraphClient, ArmClient, GraphApiError } from '@zerostress/core';
 import type { MissingScope, TenantConnectionStatus } from '@zerostress/types';
 import { db, managedTenants } from '../db/index.js';
+import { getTokenProvider } from './microsoft-clients.js';
 
 export interface ConnectionTestResult {
   status: TenantConnectionStatus;
@@ -39,15 +40,13 @@ interface Clients {
 
 let clients: Clients | null = null;
 
+// Eigene Graph-/ARM-Clients ohne TenantId-Aufloesung: der Test spricht
+// den Microsoft-Tenant direkt an, teilt sich aber den TokenProvider
 function getClients(): Clients {
   if (!clients) {
-    const tokens = new TokenProvider({
-      clientId: process.env.ENTRA_CLIENT_ID!,
-      clientSecret: process.env.ENTRA_CLIENT_SECRET!,
-      tenantId: process.env.ENTRA_TENANT_ID!,
-    });
-    const getAccessToken = (tenantId: string, scopes: string[]) =>
-      tokens.getAccessToken(tenantId, scopes);
+    const tokens = getTokenProvider();
+    const getAccessToken = (microsoftTenantId: string, scopes: string[]) =>
+      tokens.getAccessToken(microsoftTenantId, scopes);
     clients = {
       tokens,
       graph: new GraphClient({ getAccessToken }),

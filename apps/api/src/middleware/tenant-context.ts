@@ -8,6 +8,7 @@ import { createMiddleware } from 'hono/factory';
 import { HTTPException } from 'hono/http-exception';
 import { eq, and } from 'drizzle-orm';
 import { db, managedTenants } from '../db/index.js';
+import { rememberMicrosoftTenantId } from '../services/microsoft-clients.js';
 import type { TenantId, ManagedTenant } from '@zerostress/types';
 
 declare module 'hono' {
@@ -42,6 +43,8 @@ export const tenantContextMiddleware = createMiddleware(async (c, next) => {
       message: `Tenant '${tenantId}' not found or access denied`,
     });
   }
+
+  rememberMicrosoftTenantId(tenant.id, tenant.microsoftTenantId);
 
   c.set('tenant', {
     id: tenant.id as TenantId,

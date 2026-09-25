@@ -5,66 +5,15 @@
 import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
-import { Redis } from 'ioredis';
 import { authMiddleware, requireRole } from '../middleware/auth.js';
 import { tenantContextMiddleware, requireConnectedTenant } from '../middleware/tenant-context.js';
-import {
-  JobQueue,
-  IdentityProvider,
-  GraphClient,
-  TokenProvider,
-  ArmClient,
-  AvdProvider,
-  registerIdentityJobs,
-  registerAvdJobs,
-} from '@zerostress/core';
-import { DrizzleJobStore } from '../services/job-store.js';
-import { DrizzleAuditLogger } from '../services/audit-logger.js';
+import { getJobQueue } from '../services/job-queue.js';
 import type { JobId, Job, JobStatus } from '@zerostress/types';
 
 const app = new Hono();
 
 app.use('*', authMiddleware);
 app.use('*', tenantContextMiddleware);
-
-// Job-Queue initialisieren (Singleton in Produktion)
-let jobQueue: JobQueue | null = null;
-
-function getJobQueue(): JobQueue {
-  if (!jobQueue) {
-    const redis = new Redis(process.env.REDIS_URL ?? 'redis://localhost:6379');
-    const jobStore = new DrizzleJobStore();
-    const auditLogger = new DrizzleAuditLogger();
-
-    // Identity-Provider fuer Job-Handler
-    const tokenProvider = new TokenProvider({
-      clientId: process.env.ENTRA_CLIENT_ID!,
-      clientSecret: process.env.ENTRA_CLIENT_SECRET!,
-      tenantId: process.env.ENTRA_TENANT_ID!,
-    });
-
-    const graphClient = new GraphClient({
-      getAccessToken: (tenantId, scopes) => tokenProvider.getAccessToken(tenantId, scopes),
-    });
-
-    const identityProvider = new IdentityProvider(graphClient);
-
-    // ARM-Client fuer AVD
-    const armClient = new ArmClient({
-      getAccessToken: (tenantId, scopes) => tokenProvider.getAccessToken(tenantId, scopes),
-    });
-
-    const avdProvider = new AvdProvider(armClient);
-
-    // Jobs registrieren
-    registerIdentityJobs(identityProvider);
-    registerAvdJobs(avdProvider);
-
-    jobQueue = new JobQueue({ redis }, jobStore, auditLogger);
-    jobQueue.startWorker();
-  }
-  return jobQueue;
-}
 
 // Jobs auflisten
 app.get('/', async (c) => {

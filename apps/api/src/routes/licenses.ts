@@ -5,33 +5,12 @@
 import { Hono } from 'hono';
 import { authMiddleware } from '../middleware/auth.js';
 import { tenantContextMiddleware, requireConnectedTenant } from '../middleware/tenant-context.js';
-import { IdentityProvider, GraphClient, TokenProvider } from '@zerostress/core';
-// Type imports removed - using inferred types from provider methods
+import { getIdentityProvider } from '../services/microsoft-clients.js';
 
 const app = new Hono();
 
 app.use('*', authMiddleware);
 app.use('*', tenantContextMiddleware);
-
-// IdentityProvider-Instanz (Singleton in Produktion)
-let identityProvider: IdentityProvider | null = null;
-
-function getIdentityProvider(): IdentityProvider {
-  if (!identityProvider) {
-    const tokenProvider = new TokenProvider({
-      clientId: process.env.ENTRA_CLIENT_ID!,
-      clientSecret: process.env.ENTRA_CLIENT_SECRET!,
-      tenantId: process.env.ENTRA_TENANT_ID!,
-    });
-
-    const graphClient = new GraphClient({
-      getAccessToken: (tenantId, scopes) => tokenProvider.getAccessToken(tenantId, scopes),
-    });
-
-    identityProvider = new IdentityProvider(graphClient);
-  }
-  return identityProvider;
-}
 
 // Verfuegbare SKUs auflisten
 app.get('/skus', requireConnectedTenant, async (c) => {

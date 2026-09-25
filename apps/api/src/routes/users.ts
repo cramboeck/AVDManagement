@@ -5,28 +5,12 @@
 import { Hono } from 'hono';
 import { authMiddleware } from '../middleware/auth.js';
 import { tenantContextMiddleware, requireConnectedTenant } from '../middleware/tenant-context.js';
-import { IdentityProvider, GraphClient, TokenProvider } from '@zerostress/core';
-// Type imports removed - using inferred types from provider methods
+import { getIdentityProvider } from '../services/microsoft-clients.js';
 
 const app = new Hono();
 
 app.use('*', authMiddleware);
 app.use('*', tenantContextMiddleware);
-
-// Provider-Instanz (in Produktion per DI)
-function getIdentityProvider(): IdentityProvider {
-  const tokenProvider = new TokenProvider({
-    clientId: process.env.ENTRA_CLIENT_ID!,
-    clientSecret: process.env.ENTRA_CLIENT_SECRET!,
-    tenantId: process.env.ENTRA_TENANT_ID!,
-  });
-
-  const graphClient = new GraphClient({
-    getAccessToken: (tenantId, scopes) => tokenProvider.getAccessToken(tenantId, scopes),
-  });
-
-  return new IdentityProvider(graphClient);
-}
 
 // Benutzer auflisten
 app.get('/', requireConnectedTenant, async (c) => {

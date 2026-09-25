@@ -5,48 +5,15 @@
 import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
-import { Redis } from 'ioredis';
 import { authMiddleware, requireRole } from '../middleware/auth.js';
 import { tenantContextMiddleware, requireConnectedTenant } from '../middleware/tenant-context.js';
-import {
-  JobQueue,
-  AvdProvider,
-  ArmClient,
-  TokenProvider,
-} from '@zerostress/core';
-import { DrizzleJobStore } from '../services/job-store.js';
-import { DrizzleAuditLogger } from '../services/audit-logger.js';
+import { getAvdProvider } from '../services/microsoft-clients.js';
+import { getJobQueue } from '../services/job-queue.js';
 
 const app = new Hono();
 
 app.use('*', authMiddleware);
 app.use('*', tenantContextMiddleware);
-
-function getAvdProvider(): AvdProvider {
-  const tokenProvider = new TokenProvider({
-    clientId: process.env.ENTRA_CLIENT_ID!,
-    clientSecret: process.env.ENTRA_CLIENT_SECRET!,
-    tenantId: process.env.ENTRA_TENANT_ID!,
-  });
-
-  const armClient = new ArmClient({
-    getAccessToken: (tenantId, scopes) => tokenProvider.getAccessToken(tenantId, scopes),
-  });
-
-  return new AvdProvider(armClient);
-}
-
-let jobQueue: JobQueue | null = null;
-
-function getJobQueue(): JobQueue {
-  if (!jobQueue) {
-    const redis = new Redis(process.env.REDIS_URL ?? 'redis://localhost:6379');
-    const jobStore = new DrizzleJobStore();
-    const auditLogger = new DrizzleAuditLogger();
-    jobQueue = new JobQueue({ redis }, jobStore, auditLogger);
-  }
-  return jobQueue;
-}
 
 // ============================================
 // Host Pools
