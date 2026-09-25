@@ -12,6 +12,7 @@ import { NoTenantSelected, EmptyState } from '@/components/ui/empty-state';
 import { JobActionDialog } from '@/components/jobs/job-action-dialog';
 import { CapabilityNotice } from '@/components/identity/capability-notice';
 import { formatDateTime } from '@/components/identity/sign-in-table';
+import { RecoveryTab } from '@/components/devices/recovery-tab';
 import {
   ComplianceBadge,
   ExposureBadge,
@@ -30,12 +31,13 @@ import type {
   JobStatus,
 } from '@zerostress/types';
 
-type Tab = 'overview' | 'security' | 'jobs';
+type Tab = 'overview' | 'security' | 'recovery' | 'jobs';
 type DeviceAction = 'sync-device' | 'restart-device' | 'defender-scan';
 
 const tabs: { id: Tab; label: string }[] = [
   { id: 'overview', label: 'Uebersicht' },
   { id: 'security', label: 'Sicherheit' },
+  { id: 'recovery', label: 'Wiederherstellung' },
   { id: 'jobs', label: 'Jobs' },
 ];
 
@@ -174,6 +176,7 @@ export default function DeviceDetailPage({ params }: { params: { deviceId: strin
       <div role="tabpanel">
         {tab === 'overview' && <OverviewTab device={device} />}
         {tab === 'security' && <SecurityTab base={base} tenantId={activeTenant.id} deviceId={deviceId} />}
+        {tab === 'recovery' && <RecoveryTab base={base} tenantId={activeTenant.id} deviceId={deviceId} />}
         {tab === 'jobs' && <JobsTab tenantId={activeTenant.id} managedDeviceId={device.intune?.managedDeviceId ?? null} />}
       </div>
 

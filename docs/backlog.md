@@ -52,6 +52,7 @@ vor dem Bau klar sind.
 | Mail-Statistiken | Graph reports/getEmailActivity* | Reports.Read.All | Volumen pro Tenant/Benutzer, Trend |
 | Hornetsecurity | Hornetsecurity REST-API | API-Key je Kunde im Key Vault | Spam-/Quarantaene-Kennzahlen |
 | SharePoint/Teams: extern geteilte Inhalte | Graph sites, drives permissions; sharing reports | Sites.Read.All | Anonyme Links, externe Gaeste je Site/Team |
+| Teams-/M365-Gruppen | Graph groups, teams, members, owners | Group.Read.All, Team.ReadBasic.All | Besitzerlose Gruppen, Gastanteil, oeffentliche Teams, externe Freigaben je Gruppe |
 | Security-Baselines | Graph policies (CA, Auth-Methoden), Secure Score | Policy.Read.All, SecurityEvents.Read.All | Soll/Ist-Abgleich je Tenant, Drift-Anzeige; keine CIPP-Vorlagen |
 | Monitoring AVD Ebene 2/3 | Azure Monitor Metrics, Log Analytics | Monitoring Reader | Siehe docs/design/avd-monitoring-concept.md |
 | MCP-Server | eigene API | Entra-Login, Job-Modell | Duenne Schicht ueber denselben Endpunkten inkl. Preview und Audit |

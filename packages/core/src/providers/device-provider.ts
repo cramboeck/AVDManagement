@@ -26,6 +26,11 @@ import type {
   TenantVulnerability,
   VulnerableSoftware,
   ExposureScoreSummary,
+  BitLockerKeyMetadata,
+  LapsMetadata,
+  DeviceRecoveryMetadata,
+  RevealedBitLockerKey,
+  RevealedLaps,
 } from '@zerostress/types';
 import { BaseResourceProvider, type ProviderContext } from './resource-provider.js';
 import { GraphClient, type GraphResponse } from './graph-client.js';
@@ -123,6 +128,33 @@ interface DefenderMachineVulnerability {
 const MACHINE_VULNERABILITY_PAGE_SIZE = 10000;
 const MACHINE_VULNERABILITY_MAX_PAGES = 3;
 
+interface GraphBitLockerKey {
+  id: string;
+  createdDateTime: string;
+  volumeType?: string | null;
+  deviceId?: string | null;
+  key?: string;
+}
+
+interface GraphDeviceLocalCredentialInfo {
+  id: string;
+  deviceName?: string | null;
+  lastBackupDateTime?: string | null;
+  refreshDateTime?: string | null;
+  credentials?: {
+    accountName?: string | null;
+    accountSid?: string | null;
+    backupDateTime?: string | null;
+    passwordBase64?: string | null;
+  }[];
+}
+
+const BITLOCKER_VOLUME_TYPES: BitLockerKeyMetadata['volumeType'][] = [
+  'operatingSystemVolume',
+  'fixedDataVolume',
+  'removableDataVolume',
+];
+
 const INTUNE_SELECT = [
   'id',
   'deviceName',
@@ -173,6 +205,10 @@ export class DeviceProvider extends BaseResourceProvider {
   // Defender-API (WindowsDefenderATP), eigener Consent.
   // Software.Read.All braucht der Endpunkt fuer fehlende KBs.
   readonly defenderPermissions = ['Machine.Read.All', 'Vulnerability.Read.All', 'Software.Read.All'];
+
+  // Wiederherstellungsschluessel: Read.All deckt Metadaten und Aufdecken ab
+  readonly bitlockerScopes = ['BitLockerKey.Read.All'];
+  readonly lapsScopes = ['DeviceLocalCredential.Read.All'];
 
   constructor(
     private readonly graphClient: GraphClient,
@@ -417,6 +453,118 @@ export class DeviceProvider extends BaseResourceProvider {
       .slice(0, options.top ?? 500);
 
     return { available: true, data: { items, truncated } };
+  }
+
+  // Nur Metadaten: welche Schluessel es gibt, nie deren Inhalt
+  async getRecoveryMetadata(ctx: ProviderContext, azureAdDeviceId: string | null): Promise<DeviceRecoveryMetadata> {
+    this.validateContext(ctx);
+
+    if (!azureAdDeviceId) {
+      const noEntraId = {
+        available: false as const,
+        reason: 'not-onboarded' as const,
+        missingPermission: null,
+        detail: 'Device has no Entra device id',
+      };
+      return { azureAdDeviceId: null, bitlocker: noEntraId, laps: noEntraId };
+    }
+
+    const [bitlocker, laps] = await Promise.all([
+      this.loadBitLockerKeys(ctx, azureAdDeviceId),
+      this.loadLapsMetadata(ctx, azureAdDeviceId),
+    ]);
+
+    return { azureAdDeviceId, bitlocker, laps };
+  }
+
+  async revealBitLockerKey(ctx: ProviderContext, keyId: string): Promise<RevealedBitLockerKey> {
+    this.validateContext(ctx);
+
+    const key = await this.graphClient.get<GraphBitLockerKey>(
+      ctx.tenantId as string,
+      `/informationProtection/bitlocker/recoveryKeys/${encodeURIComponent(keyId)}?$select=key,volumeType,createdDateTime`,
+      this.bitlockerScopes
+    );
+
+    if (!key.key) {
+      throw new Error('Graph returned no BitLocker key');
+    }
+
+    return {
+      id: keyId,
+      key: key.key,
+      volumeType: oneOf(key.volumeType, BITLOCKER_VOLUME_TYPES, 'unknown'),
+      revealedAt: new Date().toISOString(),
+    };
+  }
+
+  async revealLocalCredentials(ctx: ProviderContext, azureAdDeviceId: string): Promise<RevealedLaps> {
+    this.validateContext(ctx);
+
+    const info = await this.graphClient.get<GraphDeviceLocalCredentialInfo>(
+      ctx.tenantId as string,
+      `/directory/deviceLocalCredentials/${encodeURIComponent(azureAdDeviceId)}?$select=credentials,deviceName`,
+      this.lapsScopes
+    );
+
+    return {
+      deviceName: info.deviceName ?? null,
+      credentials: (info.credentials ?? [])
+        .filter((c) => c.passwordBase64)
+        .map((c) => ({
+          accountName: c.accountName ?? 'Administrator',
+          password: Buffer.from(c.passwordBase64 as string, 'base64').toString('utf8'),
+          backupAt: c.backupDateTime ?? null,
+        }))
+        .sort((a, b) => (b.backupAt ?? '').localeCompare(a.backupAt ?? '')),
+      revealedAt: new Date().toISOString(),
+    };
+  }
+
+  private async loadBitLockerKeys(ctx: ProviderContext, azureAdDeviceId: string): Promise<CapabilityResult<BitLockerKeyMetadata[]>> {
+    try {
+      const response = await this.graphClient.get<GraphResponse<GraphBitLockerKey[]>>(
+        ctx.tenantId as string,
+        `/informationProtection/bitlocker/recoveryKeys?$filter=${encodeURIComponent(`deviceId eq '${azureAdDeviceId}'`)}`,
+        this.bitlockerScopes
+      );
+      return {
+        available: true,
+        data: response.value
+          .map((k) => ({
+            id: k.id,
+            createdAt: k.createdDateTime,
+            volumeType: oneOf(k.volumeType, BITLOCKER_VOLUME_TYPES, 'unknown'),
+          }))
+          .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+      };
+    } catch (error) {
+      const unavailable = asUnavailable(error, 'BitLockerKey.ReadBasic.All');
+      if (unavailable) return unavailable;
+      throw error;
+    }
+  }
+
+  private async loadLapsMetadata(ctx: ProviderContext, azureAdDeviceId: string): Promise<CapabilityResult<LapsMetadata>> {
+    try {
+      const info = await this.graphClient.get<GraphDeviceLocalCredentialInfo>(
+        ctx.tenantId as string,
+        `/directory/deviceLocalCredentials/${encodeURIComponent(azureAdDeviceId)}`,
+        this.lapsScopes
+      );
+      return {
+        available: true,
+        data: {
+          deviceName: info.deviceName ?? null,
+          lastBackupAt: info.lastBackupDateTime ?? null,
+          refreshAt: info.refreshDateTime ?? null,
+        },
+      };
+    } catch (error) {
+      const unavailable = asUnavailable(error, 'DeviceLocalCredential.ReadBasic.All');
+      if (unavailable) return unavailable;
+      throw error;
+    }
   }
 
   async syncDevice(ctx: ProviderContext, managedDeviceId: string): Promise<void> {

@@ -561,6 +561,49 @@ export interface CveDetail {
 }
 
 // ============================================
+// Wiederherstellung: BitLocker- und LAPS-Schluessel
+// Metadaten und Geheimnisse sind getrennte Typen; Geheimnisse werden nie
+// gelistet, exportiert oder protokolliert.
+// ============================================
+
+export interface BitLockerKeyMetadata {
+  id: string;
+  createdAt: string;
+  volumeType: 'operatingSystemVolume' | 'fixedDataVolume' | 'removableDataVolume' | 'unknown';
+}
+
+export interface LapsMetadata {
+  deviceName: string | null;
+  lastBackupAt: string | null;
+  refreshAt: string | null;
+}
+
+export interface DeviceRecoveryMetadata {
+  azureAdDeviceId: string | null;
+  bitlocker: CapabilityResult<BitLockerKeyMetadata[]>;
+  laps: CapabilityResult<LapsMetadata>;
+}
+
+export interface RevealedBitLockerKey {
+  id: string;
+  key: string;
+  volumeType: BitLockerKeyMetadata['volumeType'];
+  revealedAt: string;
+}
+
+export interface RevealedLocalCredential {
+  accountName: string;
+  password: string;
+  backupAt: string | null;
+}
+
+export interface RevealedLaps {
+  deviceName: string | null;
+  credentials: RevealedLocalCredential[];
+  revealedAt: string;
+}
+
+// ============================================
 // Sicherheitslage (Security Posture)
 // ============================================
 

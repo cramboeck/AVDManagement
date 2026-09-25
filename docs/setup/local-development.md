@@ -90,6 +90,12 @@ Secret ab (`AADSTS700025`).
 | `DeviceManagementManagedDevices.PrivilegedOperations.All` | Sync, Neustart, Defender-Scan | Geraete-Jobs schlagen fehl |
 | `SecurityEvents.Read.All` | Secure Score und Verbesserungsmassnahmen (Sicherheit > Ueberblick) | Karte "Berechtigung fehlt" |
 | `SecurityAlert.Read.All` | Offene Defender-Alerts | Karte "Berechtigung fehlt" |
+| `BitLockerKey.Read.All` | BitLocker-Wiederherstellungsschluessel (Geraet > Wiederherstellung) | Karte "Berechtigung fehlt" |
+| `DeviceLocalCredential.Read.All` | Windows-LAPS-Passwoerter; setzt LAPS mit Entra-Sicherung in der Intune-Richtlinie voraus | Karte "Berechtigung fehlt" |
+
+Schluessel und Passwoerter werden nie gelistet oder exportiert: Anzeige nur
+nach Begruendung (mindestens 10 Zeichen), Rolle Engineer, Audit-Eintrag mit
+Begruendung, automatisches Erloeschen nach 60 Sekunden.
 
 Fuer den Exposure Score braucht die Defender-API zusaetzlich `Score.Read.All`
 (WindowsDefenderATP, Anwendungsberechtigung). Der MFA-Registrierungsreport

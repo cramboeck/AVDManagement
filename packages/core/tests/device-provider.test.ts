@@ -337,6 +337,73 @@ describe('DeviceProvider', () => {
     expect(decodeURIComponent(defender.get.mock.calls[0][1] as string)).toContain("severity eq 'Critical'");
   });
 
+  it('lists recovery metadata without secrets and sorts BitLocker keys newest first', async () => {
+    graph.get.mockImplementation(async (_tenant: string, path: string) => {
+      if (path.includes('/bitlocker/recoveryKeys')) {
+        expect(decodeURIComponent(path)).toContain("deviceId eq 'aad-0001'");
+        return {
+          value: [
+            { id: 'k-old', createdDateTime: '2025-01-01T00:00:00Z', volumeType: 'fixedDataVolume', deviceId: 'aad-0001' },
+            { id: 'k-new', createdDateTime: '2026-03-01T00:00:00Z', volumeType: 'operatingSystemVolume', deviceId: 'aad-0001' },
+          ],
+        };
+      }
+      if (path.includes('/deviceLocalCredentials/')) {
+        expect(path).not.toContain('credentials');
+        return { id: 'aad-0001', deviceName: 'LAPTOP-01', lastBackupDateTime: '2026-09-20T00:00:00Z', refreshDateTime: '2026-10-20T00:00:00Z' };
+      }
+      return { value: [] };
+    });
+
+    const result = await provider.getRecoveryMetadata(ctx, 'aad-0001');
+
+    expect(result.bitlocker.available && result.bitlocker.data.map((k) => k.id)).toEqual(['k-new', 'k-old']);
+    expect(JSON.stringify(result)).not.toContain('key"');
+    expect(result.laps.available && result.laps.data).toEqual({
+      deviceName: 'LAPTOP-01',
+      lastBackupAt: '2026-09-20T00:00:00Z',
+      refreshAt: '2026-10-20T00:00:00Z',
+    });
+  });
+
+  it('reports missing recovery permissions per source and handles devices without Entra id', async () => {
+    graph.get.mockRejectedValue(new GraphApiError(403, 'Authorization_RequestDenied', 'Insufficient privileges'));
+
+    const result = await provider.getRecoveryMetadata(ctx, 'aad-0001');
+    expect(result.bitlocker).toMatchObject({ available: false, missingPermission: 'BitLockerKey.ReadBasic.All' });
+    expect(result.laps).toMatchObject({ available: false, missingPermission: 'DeviceLocalCredential.ReadBasic.All' });
+
+    const noId = await provider.getRecoveryMetadata(ctx, null);
+    expect(noId.bitlocker).toMatchObject({ available: false, reason: 'not-onboarded' });
+  });
+
+  it('reveals a BitLocker key and decodes LAPS passwords from base64', async () => {
+    graph.get.mockImplementation(async (_tenant: string, path: string) => {
+      if (path.includes('/bitlocker/recoveryKeys/k-new')) {
+        expect(path).toContain('$select=key');
+        return { id: 'k-new', key: '123456-654321-111111-222222-333333-444444-555555-666666', volumeType: 'operatingSystemVolume', createdDateTime: '2026-03-01T00:00:00Z' };
+      }
+      if (path.includes('/deviceLocalCredentials/')) {
+        expect(path).toContain('$select=credentials');
+        return {
+          id: 'aad-0001',
+          deviceName: 'LAPTOP-01',
+          credentials: [
+            { accountName: 'Administrator', backupDateTime: '2026-09-01T00:00:00Z', passwordBase64: Buffer.from('Old-Pass-1', 'utf8').toString('base64') },
+            { accountName: 'Administrator', backupDateTime: '2026-09-20T00:00:00Z', passwordBase64: Buffer.from('New-Pass-2', 'utf8').toString('base64') },
+          ],
+        };
+      }
+      return { value: [] };
+    });
+
+    const key = await provider.revealBitLockerKey(ctx, 'k-new');
+    expect(key.key).toBe('123456-654321-111111-222222-333333-444444-555555-666666');
+
+    const laps = await provider.revealLocalCredentials(ctx, 'aad-0001');
+    expect(laps.credentials.map((c) => c.password)).toEqual(['New-Pass-2', 'Old-Pass-1']);
+  });
+
   it('posts Intune actions with the privileged scope', async () => {
     graph.post.mockResolvedValue(undefined);
 
