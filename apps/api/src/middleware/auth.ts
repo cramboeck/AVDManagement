@@ -37,9 +37,10 @@ declare module 'hono' {
 export const authMiddleware = createMiddleware(async (c, next) => {
   // Dev-Bypass fuer lokale Entwicklung
   if (process.env.DEV_AUTH_BYPASS === 'true') {
+    // Feste UUIDs fuer Dev-Modus (reproduzierbar)
     const devUser: SessionUser = {
-      id: 'dev-user-id' as UserId,
-      mspId: 'dev-msp-id' as MspId,
+      id: '00000000-0000-0000-0000-000000000001' as UserId,
+      mspId: '00000000-0000-0000-0000-000000000000' as MspId,
       email: 'dev@localhost',
       displayName: 'Dev User',
       role: 'owner',
