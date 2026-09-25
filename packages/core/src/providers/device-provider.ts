@@ -24,6 +24,7 @@ import type {
   VulnerabilityDetail,
   VulnerabilityMachineRef,
   TenantVulnerability,
+  VulnerableSoftware,
 } from '@zerostress/types';
 import { BaseResourceProvider, type ProviderContext } from './resource-provider.js';
 import { GraphClient, type GraphResponse } from './graph-client.js';
@@ -204,61 +205,41 @@ export class DeviceProvider extends BaseResourceProvider {
   async getSecurityPosture(ctx: ProviderContext, machineId: string): Promise<DeviceSecurityPosture> {
     this.validateContext(ctx);
 
-    const [vulnerabilities, directKbs] = await Promise.all([
+    const [vulnerabilities, directKbs, rows] = await Promise.all([
       this.loadVulnerabilities(ctx, machineId),
       this.loadMissingKbs(ctx, machineId),
+      this.loadMachineVulnerabilityRows(ctx, `machineId eq '${machineId}'`),
     ]);
 
+    const software: CapabilityResult<VulnerableSoftware[]> = rows.available
+      ? { available: true, data: groupSoftware(rows.data) }
+      : rows;
+
     if (directKbs.available) {
-      return { vulnerabilities, missingKbs: directKbs, missingKbsSource: 'defender' };
+      return { vulnerabilities, missingKbs: directKbs, missingKbsSource: 'defender', software };
     }
 
     // Ohne Software.Read.All: behebende KBs aus den Schwachstellen des Geraets ableiten
-    if (directKbs.reason === 'permission-missing') {
-      const derived = await this.deriveMissingKbs(ctx, machineId);
-      if (derived.available) {
-        return { vulnerabilities, missingKbs: derived, missingKbsSource: 'derived' };
-      }
+    if (directKbs.reason === 'permission-missing' && rows.available) {
+      return { vulnerabilities, missingKbs: { available: true, data: deriveMissingKbs(rows.data) }, missingKbsSource: 'derived', software };
     }
 
-    return { vulnerabilities, missingKbs: directKbs, missingKbsSource: null };
+    return { vulnerabilities, missingKbs: directKbs, missingKbsSource: null, software };
   }
 
-  private async deriveMissingKbs(ctx: ProviderContext, machineId: string): Promise<CapabilityResult<MissingKb[]>> {
+  // Schwachstellenzeilen (Geraet x CVE x Produkt) nach OData-Filter; Basis fuer
+  // abgeleitete KBs, verwundbare Software und Produktspalten je Geraet
+  private async loadMachineVulnerabilityRows(
+    ctx: ProviderContext,
+    filter: string
+  ): Promise<CapabilityResult<DefenderMachineVulnerability[]>> {
     try {
       const response = await this.defenderClient.get<GraphResponse<DefenderMachineVulnerability[]>>(
         ctx.tenantId as string,
-        `/api/vulnerabilities/machinesVulnerabilities?$filter=${encodeURIComponent(`machineId eq '${machineId}'`)}&$top=${MACHINE_VULNERABILITY_PAGE_SIZE}`,
+        `/api/vulnerabilities/machinesVulnerabilities?$filter=${encodeURIComponent(filter)}&$top=${MACHINE_VULNERABILITY_PAGE_SIZE}`,
         DEFENDER_SCOPES
       );
-
-      const byKb = new Map<string, { products: Set<string>; cves: Set<string> }>();
-      for (const row of response.value) {
-        if (!row.fixingKbId) continue;
-        let entry = byKb.get(row.fixingKbId);
-        if (!entry) {
-          entry = { products: new Set(), cves: new Set() };
-          byKb.set(row.fixingKbId, entry);
-        }
-        const product = [row.productVendor, row.productName].filter(Boolean).join(' ');
-        if (product) entry.products.add(product);
-        entry.cves.add(row.cveId);
-      }
-
-      return {
-        available: true,
-        data: Array.from(byKb.entries())
-          .map(([id, e]) => ({
-            id,
-            name: `Sicherheitsupdate KB${id}`,
-            osBuild: null,
-            products: Array.from(e.products).sort(),
-            url: `https://support.microsoft.com/help/${id}`,
-            cveAddressed: e.cves.size,
-            missingSince: null,
-          }))
-          .sort((a, b) => b.cveAddressed - a.cveAddressed),
-      };
+      return { available: true, data: response.value };
     } catch (error) {
       const unavailable = asUnavailable(error, 'Vulnerability.Read.All');
       if (unavailable) return unavailable;
@@ -309,29 +290,48 @@ export class DeviceProvider extends BaseResourceProvider {
   ): Promise<CapabilityResult<VulnerabilityMachineRef[]>> {
     this.validateContext(ctx);
 
+    let machines: DefenderMachineReference[];
     try {
       const response = await this.defenderClient.get<GraphResponse<DefenderMachineReference[]>>(
         ctx.tenantId as string,
         `/api/vulnerabilities/${encodeURIComponent(cveId)}/machineReferences`,
         DEFENDER_SCOPES
       );
-      return {
-        available: true,
-        data: response.value
-          .map((m) => ({
-            machineId: m.id,
-            name: m.computerDnsName ?? m.id,
-            osPlatform: m.osPlatform,
-            rbacGroupName: m.rbacGroupName,
-            detectedAt: m.detectionTime ?? null,
-          }))
-          .sort((a, b) => a.name.localeCompare(b.name)),
-      };
+      machines = response.value;
     } catch (error) {
       const unavailable = asUnavailable(error, 'Vulnerability.Read.All');
       if (unavailable) return unavailable;
       throw error;
     }
+
+    // Produktzeilen sind Zusatzinformation; ihr Ausfall darf die Geraeteliste nicht kosten
+    const rows = await this.loadMachineVulnerabilityRows(ctx, `cveId eq '${cveId}'`);
+    const productsByMachine = new Map<string, VulnerabilityMachineRef['products']>();
+    if (rows.available) {
+      for (const row of rows.data) {
+        const list = productsByMachine.get(row.machineId) ?? [];
+        list.push({
+          name: [row.productVendor, row.productName].filter(Boolean).join(' ') || 'unbekannt',
+          version: row.productVersion,
+          fixingKbId: row.fixingKbId,
+        });
+        productsByMachine.set(row.machineId, list);
+      }
+    }
+
+    return {
+      available: true,
+      data: machines
+        .map((m) => ({
+          machineId: m.id,
+          name: m.computerDnsName ?? m.id,
+          osPlatform: m.osPlatform,
+          rbacGroupName: m.rbacGroupName,
+          detectedAt: m.detectionTime ?? null,
+          products: productsByMachine.get(m.id) ?? [],
+        }))
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    };
   }
 
   /**
@@ -645,6 +645,63 @@ function mapVulnerability(v: DefenderVulnerability): DeviceVulnerability {
     exploitVerified: v.exploitVerified === true,
     description: v.description,
   };
+}
+
+function deriveMissingKbs(rows: DefenderMachineVulnerability[]): MissingKb[] {
+  const byKb = new Map<string, { products: Set<string>; cves: Set<string> }>();
+  for (const row of rows) {
+    if (!row.fixingKbId) continue;
+    let entry = byKb.get(row.fixingKbId);
+    if (!entry) {
+      entry = { products: new Set(), cves: new Set() };
+      byKb.set(row.fixingKbId, entry);
+    }
+    const product = [row.productVendor, row.productName].filter(Boolean).join(' ');
+    if (product) entry.products.add(product);
+    entry.cves.add(row.cveId);
+  }
+
+  return Array.from(byKb.entries())
+    .map(([id, e]) => ({
+      id,
+      name: `Sicherheitsupdate KB${id}`,
+      osBuild: null,
+      products: Array.from(e.products).sort(),
+      url: `https://support.microsoft.com/help/${id}`,
+      cveAddressed: e.cves.size,
+      missingSince: null,
+    }))
+    .sort((a, b) => b.cveAddressed - a.cveAddressed);
+}
+
+function groupSoftware(rows: DefenderMachineVulnerability[]): VulnerableSoftware[] {
+  const byProduct = new Map<string, VulnerableSoftware & { cves: Set<string>; kbs: Set<string> }>();
+  for (const row of rows) {
+    if (!row.productName) continue;
+    const key = `${row.productVendor ?? ''}|${row.productName}|${row.productVersion ?? ''}`;
+    let entry = byProduct.get(key);
+    if (!entry) {
+      entry = {
+        vendor: row.productVendor,
+        name: row.productName,
+        version: row.productVersion,
+        cveCount: 0,
+        highestSeverity: 'Unknown',
+        fixingKbIds: [],
+        cves: new Set(),
+        kbs: new Set(),
+      };
+      byProduct.set(key, entry);
+    }
+    entry.cves.add(row.cveId);
+    if (row.fixingKbId) entry.kbs.add(row.fixingKbId);
+    const severity = oneOf(row.severity, SEVERITIES, 'Unknown');
+    if (severityRank[severity] < severityRank[entry.highestSeverity]) entry.highestSeverity = severity;
+  }
+
+  return Array.from(byProduct.values())
+    .map(({ cves, kbs, ...software }) => ({ ...software, cveCount: cves.size, fixingKbIds: Array.from(kbs).sort() }))
+    .sort((a, b) => severityRank[a.highestSeverity] - severityRank[b.highestSeverity] || b.cveCount - a.cveCount);
 }
 
 function mapMissingKb(kb: DefenderMissingKb): MissingKb {

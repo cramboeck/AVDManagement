@@ -168,9 +168,13 @@ describe('DeviceProvider', () => {
         value: [
           { id: '5041585', name: 'August 2024 Security Update', osBuild: '22631.4037', productsNames: ['windows_11'], url: 'https://support.microsoft.com/kb/5041585', machineMissedOn: 1, cveAddressed: 90 },
         ],
-      });
+      })
+      .mockResolvedValueOnce({ value: [] });
 
     const posture = await provider.getSecurityPosture(ctx, 'mde-1');
+
+    expect(posture.missingKbsSource).toBe('defender');
+    expect(posture.software).toEqual({ available: true, data: [] });
 
     expect(posture.vulnerabilities.available && posture.vulnerabilities.data.map((v) => v.cveId)).toEqual(['CVE-3', 'CVE-1', 'CVE-2']);
     expect(posture.missingKbs.available && posture.missingKbs.data[0]).toMatchObject({
@@ -207,6 +211,33 @@ describe('DeviceProvider', () => {
     expect(posture.missingKbsSource).toBe('derived');
     expect(posture.missingKbs.available && posture.missingKbs.data).toEqual([
       expect.objectContaining({ id: '5041585', cveAddressed: 2, products: ['microsoft windows_11'] }),
+    ]);
+    expect(posture.software.available && posture.software.data).toEqual([
+      expect.objectContaining({ name: 'windows_11', version: '23H2', cveCount: 2, highestSeverity: 'Critical', fixingKbIds: ['5041585'] }),
+      expect.objectContaining({ name: 'chrome', vendor: 'google', cveCount: 1, highestSeverity: 'Medium', fixingKbIds: [] }),
+    ]);
+  });
+
+  it('attaches affected products to the machines of a CVE', async () => {
+    defender.get.mockImplementation(async (_tenant: string, path: string) => {
+      if (path.endsWith('/machineReferences')) {
+        return { value: [{ id: 'mde-1', computerDnsName: 'laptop-01.contoso.local', osPlatform: 'Windows11', rbacGroupName: null }] };
+      }
+      if (path.includes('machinesVulnerabilities')) {
+        expect(decodeURIComponent(path)).toContain("cveId eq 'CVE-1'");
+        return {
+          value: [
+            { id: 'a', cveId: 'CVE-1', machineId: 'mde-1', fixingKbId: '5041585', productName: 'windows_11', productVendor: 'microsoft', productVersion: '23H2', severity: 'Critical' },
+          ],
+        };
+      }
+      return { value: [] };
+    });
+
+    const result = await provider.getVulnerabilityMachines(ctx, 'CVE-1');
+
+    expect(result.available && result.data[0].products).toEqual([
+      { name: 'microsoft windows_11', version: '23H2', fixingKbId: '5041585' },
     ]);
   });
 

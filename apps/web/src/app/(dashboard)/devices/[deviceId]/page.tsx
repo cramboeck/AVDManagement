@@ -19,7 +19,16 @@ import {
   HealthBadge,
   formatRelative,
 } from '@/components/devices/device-badges';
-import type { Device, DeviceSecurityPosture, DeviceVulnerability, MissingKb, VulnerabilitySeverity, Job, JobStatus } from '@zerostress/types';
+import type {
+  Device,
+  DeviceSecurityPosture,
+  DeviceVulnerability,
+  MissingKb,
+  VulnerableSoftware,
+  VulnerabilitySeverity,
+  Job,
+  JobStatus,
+} from '@zerostress/types';
 
 type Tab = 'overview' | 'security' | 'jobs';
 type DeviceAction = 'sync-device' | 'restart-device' | 'defender-scan';
@@ -266,6 +275,17 @@ function SecurityTab({ base, tenantId, deviceId }: { base: string; tenantId: str
       </section>
 
       <section className="space-y-3">
+        <h2 className="font-medium">Betroffene Software</h2>
+        {!posture.software.available ? (
+          <CapabilityNotice what="die betroffene Software" {...posture.software} compact />
+        ) : posture.software.data.length === 0 ? (
+          <p className="rounded-md border border-success/30 bg-success/10 px-3 py-2 text-sm">Keine Software mit bekannten Schwachstellen.</p>
+        ) : (
+          <SoftwareTable software={posture.software.data} />
+        )}
+      </section>
+
+      <section className="space-y-3">
         <h2 className="font-medium">Schwachstellen</h2>
         {!posture.vulnerabilities.available ? (
           <CapabilityNotice what="Schwachstellen" {...posture.vulnerabilities} />
@@ -309,6 +329,40 @@ function MissingKbTable({ kbs }: { kbs: MissingKb[] }) {
               </td>
               <td className="px-3 py-2 text-xs text-muted-foreground">{kb.products.join(', ') || '—'}</td>
               <td className={clsx('px-3 py-2 tabular-nums', kb.cveAddressed >= 50 && 'font-medium text-destructive')}>{kb.cveAddressed}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function SoftwareTable({ software }: { software: VulnerableSoftware[] }) {
+  return (
+    <div className="overflow-x-auto rounded-lg border">
+      <table className="w-full text-sm">
+        <thead className="border-b bg-muted/50">
+          <tr className="text-left">
+            <th className="px-3 py-2 font-medium">Software</th>
+            <th className="px-3 py-2 font-medium">Version</th>
+            <th className="px-3 py-2 font-medium">Hoechste Schwere</th>
+            <th className="px-3 py-2 font-medium">CVEs</th>
+            <th className="px-3 py-2 font-medium">Behebende KBs</th>
+          </tr>
+        </thead>
+        <tbody>
+          {software.map((s) => (
+            <tr key={`${s.vendor}-${s.name}-${s.version}`} className="border-b last:border-0">
+              <td className="px-3 py-2">
+                <span className="block">{s.name}</span>
+                {s.vendor && <span className="block text-xs text-muted-foreground">{s.vendor}</span>}
+              </td>
+              <td className="px-3 py-2 font-mono text-xs">{s.version ?? '—'}</td>
+              <td className="px-3 py-2">
+                <span className={clsx('rounded-full px-2 py-0.5 text-xs font-medium', severityClasses[s.highestSeverity])}>{s.highestSeverity}</span>
+              </td>
+              <td className="px-3 py-2 tabular-nums">{s.cveCount}</td>
+              <td className="px-3 py-2 font-mono text-xs">{s.fixingKbIds.map((kb) => `KB${kb}`).join(', ') || '—'}</td>
             </tr>
           ))}
         </tbody>

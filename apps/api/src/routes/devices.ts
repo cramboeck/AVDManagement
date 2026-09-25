@@ -67,6 +67,7 @@ app.get('/:deviceId/security', requireConnectedTenant, async (c) => {
       vulnerabilities: notOnboarded,
       missingKbs: notOnboarded,
       missingKbsSource: null,
+      software: notOnboarded,
     };
     return c.json(posture);
   }

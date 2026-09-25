@@ -192,20 +192,34 @@ export default function CveDetailPage({ params }: { params: { cveId: string } })
                   <tr>
                     <th className="py-1 pr-3 font-medium">Geraet</th>
                     <th className="py-1 pr-3 font-medium">Plattform</th>
-                    <th className="py-1 pr-3 font-medium">Gruppe</th>
+                    <th className="py-1 pr-3 font-medium">Betroffene Software</th>
+                    <th className="py-1 pr-3 font-medium">Fix</th>
                     <th className="py-1 font-medium">Erkannt</th>
                   </tr>
                 </thead>
                 <tbody>
                   {detail.machines.data.map((m) => (
-                    <tr key={m.machineId} className="border-b last:border-0">
+                    <tr key={m.machineId} className="border-b align-top last:border-0">
                       <td className="py-1.5 pr-3">
                         <Link href={`/devices?search=${encodeURIComponent(m.name.split('.')[0])}`} className="hover:underline">
                           {m.name}
                         </Link>
+                        {m.rbacGroupName && <span className="block text-xs text-muted-foreground">{m.rbacGroupName}</span>}
                       </td>
                       <td className="py-1.5 pr-3 text-muted-foreground">{m.osPlatform ?? '—'}</td>
-                      <td className="py-1.5 pr-3 text-muted-foreground">{m.rbacGroupName ?? '—'}</td>
+                      <td className="py-1.5 pr-3">
+                        {m.products.length === 0
+                          ? '—'
+                          : m.products.map((p, i) => (
+                              <span key={`${p.name}-${i}`} className="block">
+                                {p.name}
+                                {p.version && <span className="ml-1 font-mono text-xs text-muted-foreground">{p.version}</span>}
+                              </span>
+                            ))}
+                      </td>
+                      <td className="py-1.5 pr-3 font-mono text-xs">
+                        {Array.from(new Set(m.products.map((p) => p.fixingKbId).filter(Boolean))).map((kb) => `KB${kb}`).join(', ') || '—'}
+                      </td>
                       <td className="py-1.5 text-xs text-muted-foreground">{formatDate(m.detectedAt)}</td>
                     </tr>
                   ))}

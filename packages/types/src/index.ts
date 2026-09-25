@@ -440,11 +440,22 @@ export interface MissingKb {
   missingSince: string | null;
 }
 
+// Verwundbare Software auf einem Geraet, aus den Schwachstellenzeilen abgeleitet
+export interface VulnerableSoftware {
+  vendor: string | null;
+  name: string;
+  version: string | null;
+  cveCount: number;
+  highestSeverity: VulnerabilitySeverity;
+  fixingKbIds: string[];
+}
+
 export interface DeviceSecurityPosture {
   vulnerabilities: CapabilityResult<DeviceVulnerability[]>;
   missingKbs: CapabilityResult<MissingKb[]>;
   // 'derived': aus den Schwachstellen des Geraets abgeleitet, weil der KB-Endpunkt nicht verfuegbar war
   missingKbsSource: 'defender' | 'derived' | null;
+  software: CapabilityResult<VulnerableSoftware[]>;
 }
 
 // Schwachstelle aus Sicht des Tenants (Defender)
@@ -473,6 +484,8 @@ export interface VulnerabilityMachineRef {
   osPlatform: string | null;
   rbacGroupName: string | null;
   detectedAt: string | null;
+  // Betroffene Software auf diesem Geraet (aus den Schwachstellenzeilen)
+  products: { name: string; version: string | null; fixingKbId: string | null }[];
 }
 
 export interface TenantVulnerability {
