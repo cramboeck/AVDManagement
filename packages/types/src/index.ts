@@ -445,6 +445,106 @@ export interface DeviceSecurityPosture {
   missingKbs: CapabilityResult<MissingKb[]>;
 }
 
+// Schwachstelle aus Sicht des Tenants (Defender)
+export interface VulnerabilityDetail {
+  cveId: string;
+  name: string;
+  description: string | null;
+  severity: VulnerabilitySeverity;
+  cvssScore: number | null;
+  cvssVector: string | null;
+  exposedMachines: number;
+  publishedAt: string | null;
+  updatedAt: string | null;
+  firstDetectedAt: string | null;
+  publicExploit: boolean;
+  exploitVerified: boolean;
+  exploitInKit: boolean;
+  exploitTypes: string[];
+  exploitUrls: string[];
+  epssFromDefender: number | null;
+}
+
+export interface VulnerabilityMachineRef {
+  machineId: string;
+  name: string;
+  osPlatform: string | null;
+  rbacGroupName: string | null;
+  detectedAt: string | null;
+}
+
+export interface TenantVulnerability {
+  cveId: string;
+  severity: VulnerabilitySeverity;
+  deviceCount: number;
+  products: string[];
+  fixingKbIds: string[];
+}
+
+export interface KevEntry {
+  dateAdded: string;
+  dueDate: string | null;
+  requiredAction: string | null;
+  knownRansomwareUse: boolean;
+  vendorProject: string | null;
+  product: string | null;
+}
+
+export interface EpssScore {
+  probability: number;
+  percentile: number;
+  date: string;
+}
+
+export interface NvdSummary {
+  description: string | null;
+  cvssScore: number | null;
+  cvssSeverity: string | null;
+  cvssVector: string | null;
+  cweIds: string[];
+  publishedAt: string | null;
+  lastModifiedAt: string | null;
+  references: { url: string; source: string | null; tags: string[] }[];
+}
+
+export interface EnrichmentSource<T> {
+  status: 'ok' | 'not-listed' | 'error';
+  data: T | null;
+  reason: string | null;
+  fetchedAt: string;
+}
+
+export interface CveEnrichment {
+  kev: EnrichmentSource<KevEntry>;
+  epss: EnrichmentSource<EpssScore>;
+  nvd: EnrichmentSource<NvdSummary>;
+  msrcUrl: string;
+  nvdUrl: string;
+}
+
+export interface CveExplanation {
+  cveId: string;
+  language: string;
+  model: string;
+  summary: string;
+  attackPath: string;
+  remediation: string[];
+  urgency: 'sofort' | 'diese-woche' | 'naechster-patchzyklus' | 'informativ';
+  urgencyReason: string;
+  customerNote: string;
+  sources: string[];
+  generatedAt: string;
+}
+
+export interface CveDetail {
+  cveId: string;
+  defender: CapabilityResult<VulnerabilityDetail>;
+  machines: CapabilityResult<VulnerabilityMachineRef[]>;
+  enrichment: CveEnrichment;
+  explanation: CveExplanation | null;
+  explanationAvailable: boolean;
+}
+
 // ============================================
 // Dashboard
 // ============================================

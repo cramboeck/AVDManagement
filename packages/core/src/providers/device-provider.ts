@@ -21,6 +21,9 @@ import type {
   DeviceVulnerability,
   MissingKb,
   VulnerabilitySeverity,
+  VulnerabilityDetail,
+  VulnerabilityMachineRef,
+  TenantVulnerability,
 } from '@zerostress/types';
 import { BaseResourceProvider, type ProviderContext } from './resource-provider.js';
 import { GraphClient, type GraphResponse } from './graph-client.js';
@@ -85,6 +88,38 @@ interface DefenderMissingKb {
   machineMissedOn: number | null;
   cveAddressed: number | null;
 }
+
+interface DefenderVulnerabilityDetail extends DefenderVulnerability {
+  cvssVector?: string | null;
+  exposedMachines?: number | null;
+  firstDetected?: string | null;
+  exploitInKit?: boolean | null;
+  exploitTypes?: string[] | null;
+  exploitUris?: string[] | null;
+  epss?: number | null;
+}
+
+interface DefenderMachineReference {
+  id: string;
+  computerDnsName: string | null;
+  osPlatform: string | null;
+  rbacGroupName: string | null;
+  detectionTime?: string | null;
+}
+
+interface DefenderMachineVulnerability {
+  id: string;
+  cveId: string;
+  machineId: string;
+  fixingKbId: string | null;
+  productName: string | null;
+  productVendor: string | null;
+  productVersion: string | null;
+  severity: string | null;
+}
+
+const MACHINE_VULNERABILITY_PAGE_SIZE = 10000;
+const MACHINE_VULNERABILITY_MAX_PAGES = 3;
 
 const INTUNE_SELECT = [
   'id',
@@ -174,6 +209,141 @@ export class DeviceProvider extends BaseResourceProvider {
     ]);
 
     return { vulnerabilities, missingKbs };
+  }
+
+  async getVulnerability(ctx: ProviderContext, cveId: string): Promise<CapabilityResult<VulnerabilityDetail>> {
+    this.validateContext(ctx);
+
+    try {
+      const v = await this.defenderClient.get<DefenderVulnerabilityDetail>(
+        ctx.tenantId as string,
+        `/api/vulnerabilities/${encodeURIComponent(cveId)}`,
+        DEFENDER_SCOPES
+      );
+      return {
+        available: true,
+        data: {
+          cveId: v.id,
+          name: v.name,
+          description: v.description || null,
+          severity: oneOf(v.severity, SEVERITIES, 'Unknown'),
+          cvssScore: v.cvssV3 ?? null,
+          cvssVector: v.cvssVector ?? null,
+          exposedMachines: v.exposedMachines ?? 0,
+          publishedAt: v.publishedOn,
+          updatedAt: v.updatedOn,
+          firstDetectedAt: v.firstDetected ?? null,
+          publicExploit: v.publicExploit === true,
+          exploitVerified: v.exploitVerified === true,
+          exploitInKit: v.exploitInKit === true,
+          exploitTypes: v.exploitTypes ?? [],
+          exploitUrls: v.exploitUris ?? [],
+          epssFromDefender: v.epss ?? null,
+        },
+      };
+    } catch (error) {
+      const unavailable = asUnavailable(error, 'Vulnerability.Read.All');
+      if (unavailable) return unavailable;
+      throw error;
+    }
+  }
+
+  async getVulnerabilityMachines(
+    ctx: ProviderContext,
+    cveId: string
+  ): Promise<CapabilityResult<VulnerabilityMachineRef[]>> {
+    this.validateContext(ctx);
+
+    try {
+      const response = await this.defenderClient.get<GraphResponse<DefenderMachineReference[]>>(
+        ctx.tenantId as string,
+        `/api/vulnerabilities/${encodeURIComponent(cveId)}/machineReferences`,
+        DEFENDER_SCOPES
+      );
+      return {
+        available: true,
+        data: response.value
+          .map((m) => ({
+            machineId: m.id,
+            name: m.computerDnsName ?? m.id,
+            osPlatform: m.osPlatform,
+            rbacGroupName: m.rbacGroupName,
+            detectedAt: m.detectionTime ?? null,
+          }))
+          .sort((a, b) => a.name.localeCompare(b.name)),
+      };
+    } catch (error) {
+      const unavailable = asUnavailable(error, 'Vulnerability.Read.All');
+      if (unavailable) return unavailable;
+      throw error;
+    }
+  }
+
+  /**
+   * Schwachstellen im Tenant, nach CVE zusammengefasst (Anzahl Geraete,
+   * betroffene Produkte, behebende KBs). Grosse Tenants werden auf wenige
+   * Seiten begrenzt; das Ergebnis ist dann eine Stichprobe der schwersten.
+   */
+  async getTenantVulnerabilities(
+    ctx: ProviderContext,
+    options: { severity?: VulnerabilitySeverity; top?: number } = {}
+  ): Promise<CapabilityResult<{ items: TenantVulnerability[]; truncated: boolean }>> {
+    this.validateContext(ctx);
+    const tenantId = ctx.tenantId as string;
+
+    const params = [`$top=${MACHINE_VULNERABILITY_PAGE_SIZE}`];
+    if (options.severity) {
+      params.push(`$filter=${encodeURIComponent(`severity eq '${options.severity}'`)}`);
+    }
+
+    const rows: DefenderMachineVulnerability[] = [];
+    let next: string | null = `/api/vulnerabilities/machinesVulnerabilities?${params.join('&')}`;
+    let pages = 0;
+    let truncated = false;
+
+    try {
+      while (next && pages < MACHINE_VULNERABILITY_MAX_PAGES) {
+        const page: GraphResponse<DefenderMachineVulnerability[]> = await this.defenderClient.get<GraphResponse<DefenderMachineVulnerability[]>>(
+          tenantId,
+          next,
+          DEFENDER_SCOPES
+        );
+        rows.push(...page.value);
+        next = page['@odata.nextLink'] ?? null;
+        pages += 1;
+      }
+      truncated = next !== null;
+    } catch (error) {
+      const unavailable = asUnavailable(error, 'Vulnerability.Read.All');
+      if (unavailable) return unavailable;
+      throw error;
+    }
+
+    const byCve = new Map<string, { severity: VulnerabilitySeverity; machines: Set<string>; products: Set<string>; kbs: Set<string> }>();
+    for (const row of rows) {
+      let entry = byCve.get(row.cveId);
+      if (!entry) {
+        entry = { severity: oneOf(row.severity, SEVERITIES, 'Unknown'), machines: new Set(), products: new Set(), kbs: new Set() };
+        byCve.set(row.cveId, entry);
+      }
+      entry.machines.add(row.machineId);
+      const product = [row.productVendor, row.productName].filter(Boolean).join(' ');
+      if (product) entry.products.add(product);
+      if (row.fixingKbId) entry.kbs.add(row.fixingKbId);
+    }
+
+    const items = Array.from(byCve.entries())
+      .map(([cveId, e]) => ({
+        cveId,
+        severity: e.severity,
+        deviceCount: e.machines.size,
+        products: Array.from(e.products).sort(),
+        fixingKbIds: Array.from(e.kbs).sort(),
+      }))
+      .sort((a, b) => severityRank[a.severity] - severityRank[b.severity] || b.deviceCount - a.deviceCount)
+      .slice(0, options.top ?? 500);
+
+    return { available: true, data: { items, truncated } };
   }
 
   async syncDevice(ctx: ProviderContext, managedDeviceId: string): Promise<void> {

@@ -346,14 +346,12 @@ function VulnerabilityList({ vulnerabilities }: { vulnerabilities: DeviceVulnera
             {vulnerabilities.slice(0, 200).map((v) => (
               <tr key={v.cveId} className="border-b align-top last:border-0">
                 <td className="px-3 py-2">
-                  <a
-                    href={`https://msrc.microsoft.com/update-guide/vulnerability/${encodeURIComponent(v.cveId)}`}
-                    target="_blank"
-                    rel="noreferrer"
+                  <Link
+                    href={`/security/vulnerabilities/${encodeURIComponent(v.cveId)}`}
                     className="font-mono text-xs text-primary hover:underline"
                   >
                     {v.cveId}
-                  </a>
+                  </Link>
                   {v.description && (
                     <p className="mt-0.5 max-w-md truncate text-xs text-muted-foreground" title={v.description}>
                       {v.description}

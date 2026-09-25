@@ -112,6 +112,17 @@ export const syncStates = pgTable('sync_states', {
   errorMessage: text('error_message'),
 });
 
+// KI-Erklaerungen zu CVEs. Global, weil sie ausschliesslich aus
+// oeffentlichen Daten entstehen und keine Tenant-Bezuege enthalten.
+export const cveExplanations = pgTable('cve_explanations', {
+  cveId: varchar('cve_id', { length: 32 }).primaryKey(),
+  language: varchar('language', { length: 8 }).notNull(),
+  model: varchar('model', { length: 64 }).notNull(),
+  inputHash: varchar('input_hash', { length: 64 }).notNull(),
+  content: jsonb('content').notNull(),
+  generatedAt: timestamp('generated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
 // ============================================
 // AVD-Tabellen (Azure Virtual Desktop)
 // ============================================

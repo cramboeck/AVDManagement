@@ -189,6 +189,71 @@ describe('DeviceProvider', () => {
     expect(posture.missingKbs).toMatchObject({ available: false, reason: 'not-onboarded' });
   });
 
+  it('maps a vulnerability detail including exploit metadata', async () => {
+    defender.get.mockResolvedValueOnce({
+      id: 'CVE-2026-1234',
+      name: 'Windows Kernel Elevation of Privilege',
+      description: 'A local attacker could gain SYSTEM.',
+      severity: 'High',
+      cvssV3: 7.8,
+      cvssVector: 'CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H',
+      exposedMachines: 12,
+      publishedOn: '2026-08-12T00:00:00Z',
+      updatedOn: '2026-09-01T00:00:00Z',
+      publicExploit: true,
+      exploitVerified: false,
+      exploitInKit: false,
+      exploitTypes: ['Local privilege escalation'],
+      exploitUris: ['https://example.com/poc'],
+      epss: 0.42,
+    });
+
+    const result = await provider.getVulnerability(ctx, 'CVE-2026-1234');
+
+    expect(result.available && result.data).toMatchObject({
+      cveId: 'CVE-2026-1234',
+      severity: 'High',
+      cvssScore: 7.8,
+      exposedMachines: 12,
+      publicExploit: true,
+      exploitTypes: ['Local privilege escalation'],
+      epssFromDefender: 0.42,
+    });
+    expect(defender.get.mock.calls[0][1]).toBe('/api/vulnerabilities/CVE-2026-1234');
+  });
+
+  it('groups tenant vulnerabilities by CVE with device counts, products and fixing KBs', async () => {
+    defender.get.mockResolvedValueOnce({
+      value: [
+        { id: 'a', cveId: 'CVE-1', machineId: 'm1', fixingKbId: '5041585', productName: 'windows_11', productVendor: 'microsoft', productVersion: '23H2', severity: 'Critical' },
+        { id: 'b', cveId: 'CVE-1', machineId: 'm2', fixingKbId: '5041585', productName: 'windows_11', productVendor: 'microsoft', productVersion: '23H2', severity: 'Critical' },
+        { id: 'c', cveId: 'CVE-1', machineId: 'm2', fixingKbId: '5041590', productName: 'windows_10', productVendor: 'microsoft', productVersion: '22H2', severity: 'Critical' },
+        { id: 'd', cveId: 'CVE-2', machineId: 'm3', fixingKbId: null, productName: 'chrome', productVendor: 'google', productVersion: '128', severity: 'Medium' },
+        { id: 'e', cveId: 'CVE-3', machineId: 'm1', fixingKbId: null, productName: 'reader', productVendor: 'adobe', productVersion: '24', severity: 'High' },
+      ],
+    });
+
+    const result = await provider.getTenantVulnerabilities(ctx);
+
+    expect(result.available).toBe(true);
+    if (!result.available) return;
+    expect(result.data.truncated).toBe(false);
+    expect(result.data.items.map((i) => i.cveId)).toEqual(['CVE-1', 'CVE-3', 'CVE-2']);
+    expect(result.data.items[0]).toMatchObject({
+      deviceCount: 2,
+      products: ['microsoft windows_10', 'microsoft windows_11'],
+      fixingKbIds: ['5041585', '5041590'],
+    });
+  });
+
+  it('passes the severity filter to Defender', async () => {
+    defender.get.mockResolvedValueOnce({ value: [] });
+
+    await provider.getTenantVulnerabilities(ctx, { severity: 'Critical' });
+
+    expect(decodeURIComponent(defender.get.mock.calls[0][1] as string)).toContain("severity eq 'Critical'");
+  });
+
   it('posts Intune actions with the privileged scope', async () => {
     graph.post.mockResolvedValue(undefined);
 

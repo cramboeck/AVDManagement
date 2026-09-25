@@ -24,6 +24,11 @@ der Start mit einer klaren Meldung ab.
 `JWT_SECRET` signiert den State des Admin-Consent-Rueckrufs. Lokal reicht
 der Beispielwert; fuer alles andere: `openssl rand -base64 32`.
 
+Optional: `ANTHROPIC_API_KEY` schaltet die KI-Erklaerung zu Schwachstellen
+frei (ohne Schluessel zeigt die Konsole "nicht eingerichtet"); es werden nur
+oeffentliche CVE-Daten gesendet, nie Geraete-, Benutzer- oder Tenantnamen.
+`NVD_API_KEY` erhoeht das Ratenlimit der NVD-Anreicherung.
+
 ## Starten
 
 ```powershell
@@ -43,6 +48,10 @@ ueber `dist/` aufloest.
 
 Erwartete erste Zeile der API:
 `Environment: <pfad>\.env.local (DEV_AUTH_BYPASS active)`
+
+Nach einem `git pull`, das `apps/api/src/db/schema.ts` aendert, einmal
+`npm run db:push` ausfuehren, damit neue Tabellen (z. B. `cve_explanations`)
+angelegt werden.
 
 ## DEV_AUTH_BYPASS
 

@@ -12,10 +12,16 @@ import { NoTenantSelected, EmptyState } from '@/components/ui/empty-state';
 import { CapabilityNotice } from '@/components/identity/capability-notice';
 import { SignInTable, isLegacyClient, formatLocation } from '@/components/identity/sign-in-table';
 import { AuditTable } from '@/components/identity/audit-table';
-import type { CapabilityResult, SignInEvent, DirectoryAuditEvent } from '@zerostress/types';
+import type {
+  CapabilityResult,
+  SignInEvent,
+  DirectoryAuditEvent,
+  TenantVulnerability,
+  VulnerabilitySeverity,
+} from '@zerostress/types';
 
 type Range = '24h' | '7d' | '30d';
-type Tab = 'sign-ins' | 'audit';
+type Tab = 'sign-ins' | 'audit' | 'vulnerabilities';
 
 const rangeHours: Record<Range, number> = { '24h': 24, '7d': 24 * 7, '30d': 24 * 30 };
 const rangeLabels: Record<Range, string> = { '24h': '24 Stunden', '7d': '7 Tage', '30d': '30 Tage' };
@@ -175,6 +181,7 @@ export default function SecurityPage() {
         {([
           { id: 'sign-ins', label: 'Anmeldungen' },
           { id: 'audit', label: 'Verzeichnisaenderungen' },
+          { id: 'vulnerabilities', label: 'Schwachstellen' },
         ] as { id: Tab; label: string }[]).map((t) => (
           <button
             key={t.id}
@@ -253,6 +260,12 @@ export default function SecurityPage() {
         </div>
       )}
 
+      {tab === 'vulnerabilities' && (
+        <div role="tabpanel">
+          <VulnerabilitiesTab tenantId={activeTenant.id} />
+        </div>
+      )}
+
       {tab === 'audit' && (
         <div role="tabpanel">
           {auditQuery.isLoading ? (
@@ -266,6 +279,102 @@ export default function SecurityPage() {
           ) : auditQuery.data?.available ? (
             <AuditTable events={auditQuery.data.data} />
           ) : null}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const severityClasses: Record<VulnerabilitySeverity, string> = {
+  Critical: 'bg-destructive/15 text-destructive',
+  High: 'bg-destructive/10 text-destructive',
+  Medium: 'bg-warning/10 text-warning',
+  Low: 'bg-muted text-muted-foreground',
+  Unknown: 'bg-muted text-muted-foreground',
+};
+
+function VulnerabilitiesTab({ tenantId }: { tenantId: string }) {
+  const [severity, setSeverity] = useState<'all' | VulnerabilitySeverity>('all');
+
+  const query = useQuery({
+    queryKey: ['tenant-vulnerabilities', tenantId, severity],
+    queryFn: () =>
+      api.get<CapabilityResult<{ items: TenantVulnerability[]; truncated: boolean }>>(
+        `/tenants/${tenantId}/vulnerabilities${severity === 'all' ? '' : `?severity=${severity}`}`
+      ),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  if (query.isLoading) return <LoadingTable rows={8} />;
+  if (query.error) return <ErrorState error={query.error as Error} onRetry={query.refetch} />;
+  const result = query.data;
+  if (!result) return null;
+  if (!result.available) return <CapabilityNotice what="Schwachstellen aus Defender" {...result} />;
+
+  const items = result.data.items;
+  const totals = (['Critical', 'High', 'Medium', 'Low'] as VulnerabilitySeverity[]).map((s) => ({
+    severity: s,
+    count: items.filter((i) => i.severity === s).length,
+  }));
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap gap-2">
+          {totals.map((t) => (
+            <button
+              key={t.severity}
+              onClick={() => setSeverity(severity === t.severity ? 'all' : t.severity)}
+              aria-pressed={severity === t.severity}
+              className={clsx(
+                'rounded-full px-3 py-1 text-xs font-medium ring-offset-background focus:outline-none focus-visible:ring-2 focus-visible:ring-primary',
+                severityClasses[t.severity],
+                severity === t.severity && 'ring-2 ring-primary'
+              )}
+            >
+              {t.severity}: {t.count}
+            </button>
+          ))}
+        </div>
+        <span className="text-xs text-muted-foreground">
+          {items.length} CVEs{result.data.truncated ? ' (Stichprobe, Tenant hat mehr)' : ''}
+        </span>
+      </div>
+
+      {items.length === 0 ? (
+        <EmptyState title="Keine offenen Schwachstellen" description="Defender meldet fuer diesen Filter keine betroffenen Geraete." />
+      ) : (
+        <div className="overflow-x-auto rounded-lg border">
+          <table className="w-full text-sm">
+            <thead className="border-b bg-muted/50">
+              <tr className="text-left">
+                <th className="px-3 py-2 font-medium">CVE</th>
+                <th className="px-3 py-2 font-medium">Schwere</th>
+                <th className="px-3 py-2 font-medium">Geraete</th>
+                <th className="px-3 py-2 font-medium">Produkte</th>
+                <th className="px-3 py-2 font-medium">Behebende KBs</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((v) => (
+                <tr key={v.cveId} className="border-b last:border-0 hover:bg-accent/50">
+                  <td className="px-3 py-2">
+                    <Link href={`/security/vulnerabilities/${encodeURIComponent(v.cveId)}`} className="font-mono text-xs text-primary hover:underline">
+                      {v.cveId}
+                    </Link>
+                  </td>
+                  <td className="px-3 py-2">
+                    <span className={clsx('rounded-full px-2 py-0.5 text-xs font-medium', severityClasses[v.severity])}>{v.severity}</span>
+                  </td>
+                  <td className="px-3 py-2 tabular-nums">{v.deviceCount}</td>
+                  <td className="max-w-[20rem] truncate px-3 py-2 text-xs text-muted-foreground" title={v.products.join(', ')}>
+                    {v.products.join(', ') || '—'}
+                  </td>
+                  <td className="px-3 py-2 font-mono text-xs">{v.fixingKbIds.map((kb) => `KB${kb}`).join(', ') || '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
     </div>
