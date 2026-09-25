@@ -222,6 +222,39 @@ app.post(
   }
 );
 
+// Bibliotheksskript auf einem Session-Host ueber Azure Run Command
+const runScriptSchema = z.object({
+  hostPoolId: z.string(),
+  hostPoolName: z.string(),
+  sessionHostId: z.string(),
+  sessionHostName: z.string(),
+  vmResourceId: z.string().min(1),
+  scriptId: z.enum(['update-status', 'update-scan', 'system-info', 'winget-updates', 'network-info', 'storage-info']),
+});
+
+app.post('/actions/run-script', requireRole('engineer'), requireConnectedTenant, zValidator('json', runScriptSchema), async (c) => {
+  const auth = c.get('auth');
+  const tenant = c.get('tenant');
+  const body = c.req.valid('json');
+  const queue = getJobQueue();
+
+  const job = await queue.createJob({
+    type: 'avd.run-script',
+    tenantId: tenant.id,
+    mspId: auth.mspId,
+    userId: auth.user.id,
+    userEmail: auth.user.email,
+    payload: {
+      ...body,
+      targetType: 'session-host',
+      targetId: body.sessionHostId,
+      targetDisplayName: `${body.sessionHostName} - ${body.scriptId}`,
+    },
+  });
+
+  return c.json(job, 202);
+});
+
 const startStopSessionHostSchema = z.object({
   hostPoolId: z.string(),
   hostPoolName: z.string(),

@@ -87,6 +87,14 @@ Job mit Preview; Name, Version und Hash stehen im Audit.
 | Netzwerkinfo | nur lesend | aktive Adapter mit IPv4, Praefix, Gateway, DNS, DHCP, MAC, Verbindungsart, SSID; Domaene, Proxy |
 | Speicherinfo | nur lesend | alle festen Laufwerke mit Belegung und Zustand, physische Datentraeger mit SSD/HDD, Bus, Groesse, Zustand, Firmware |
 
+**AVD-Session-Hosts:** dieselbe Bibliothek laeuft dort ueber Azure Run
+Command (`RunPowerShellScript`), Knopf "Skript" in der Host-Liste. Ein
+Rahmenskript fuehrt Erkennung, bei Exit 1 Behebung und danach erneut die
+Erkennung aus, wie Intune. Die VM muss laufen; der Service Principal braucht
+`Microsoft.Compute/virtualMachines/runCommand/action`, enthalten in
+**Virtual Machine Contributor** auf der Ressourcengruppe der Hosts. Die
+Compute-API begrenzt die Ausgabe auf die letzten 4096 Bytes.
+
 Ohne Skript zeigt das Geraetedetail bereits Hersteller, Modell, Seriennummer,
 Arbeitsspeicher, WLAN-MAC und die Belegung des Systemspeichers (Intune)
 sowie letzte interne und oeffentliche IP und die Schnittstellen laut
@@ -231,6 +239,7 @@ Ressourcengruppe folgende Rollen erhalten:
 
 - `Reader`
 - `Desktop Virtualization Contributor`
+- `Virtual Machine Contributor` (Start/Stop/Neustart der Hosts und Skripte ueber Run Command)
 
 Ohne diese Zuweisung sieht die Konsole keine Host Pools; der
 Verbindungstest meldet dann `0 Azure-Subscription(s) sichtbar`.

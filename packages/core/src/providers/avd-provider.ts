@@ -26,7 +26,26 @@ import {
   BaseResourceProvider,
   type ProviderContext,
 } from './resource-provider.js';
-import { ArmClient, type ArmResponse } from './arm-client.js';
+import { ArmClient, type ArmResponse, type ArmAsyncOperation } from './arm-client.js';
+
+// Run Command: Ausgabe der Compute-API je Kanal
+export interface VmCommandOutput {
+  stdout: string | null;
+  stderr: string | null;
+}
+
+interface RunCommandStatus {
+  code: string | null;
+  level?: string | null;
+  displayStatus?: string | null;
+  message: string | null;
+}
+
+type RunCommandResponse = { asyncOperationUrl?: string } | { value?: RunCommandStatus[] } | undefined;
+
+interface RunCommandAsyncOperation extends ArmAsyncOperation {
+  properties?: { output?: { value?: RunCommandStatus[] } };
+}
 
 // Jeder Resource Provider hat eigene API-Versionen; nie die Default-Version
 // des ArmClients erben, sondern pro Aufruf explizit setzen
@@ -493,6 +512,35 @@ export class AvdProvider extends BaseResourceProvider {
     if (result?.asyncOperationUrl) {
       await this.armClient.waitForAsyncOperation(tenantId, result.asyncOperationUrl);
     }
+  }
+
+  /**
+   * PowerShell auf einer Azure-VM ueber Run Command (RunPowerShellScript).
+   * Synchron aus Sicht des Aufrufers; die Compute-API begrenzt die Ausgabe
+   * auf die letzten 4096 Bytes.
+   */
+  async runCommand(ctx: ProviderContext, vmResourceId: string, scriptLines: string[], timeoutMs = 10 * 60 * 1000): Promise<VmCommandOutput> {
+    this.validateContext(ctx);
+    const tenantId = ctx.tenantId as string;
+
+    const result = await this.armClient.post<RunCommandResponse>(
+      tenantId,
+      `${vmResourceId}/runCommand`,
+      { commandId: 'RunPowerShellScript', script: scriptLines },
+      { apiVersion: COMPUTE_API_VERSION, timeoutMs: 60000 }
+    );
+
+    let values: RunCommandStatus[] = [];
+    if (result && 'asyncOperationUrl' in result && result.asyncOperationUrl) {
+      const finished = await this.armClient.waitForAsyncOperationResult<RunCommandAsyncOperation>(tenantId, result.asyncOperationUrl, timeoutMs);
+      values = finished.properties?.output?.value ?? [];
+    } else if (result && 'value' in result && Array.isArray(result.value)) {
+      values = result.value;
+    }
+
+    const stdout = values.find((v) => /StdOut/i.test(v.code ?? ''))?.message ?? null;
+    const stderr = values.find((v) => /StdErr/i.test(v.code ?? ''))?.message ?? null;
+    return { stdout, stderr };
   }
 
   /**

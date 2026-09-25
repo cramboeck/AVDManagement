@@ -6,7 +6,7 @@
  */
 
 import { Redis } from 'ioredis';
-import { JobQueue, registerIdentityJobs, registerAvdJobs, registerDeviceJobs, registerScriptJobs } from '@zerostress/core';
+import { JobQueue, registerIdentityJobs, registerAvdJobs, registerDeviceJobs, registerScriptJobs, registerAvdScriptJobs } from '@zerostress/core';
 import { DrizzleJobStore } from './job-store.js';
 import { DrizzleAuditLogger } from './audit-logger.js';
 import { getIdentityProvider, getAvdProvider, getDeviceProvider, getRemediationProvider } from './microsoft-clients.js';
@@ -33,6 +33,7 @@ export function getJobQueue(): JobQueue {
     registerAvdJobs(getAvdProvider());
     registerDeviceJobs(getDeviceProvider());
     registerScriptJobs(getRemediationProvider());
+    registerAvdScriptJobs(getAvdProvider());
 
     jobStore = new DrizzleJobStore();
     jobQueue = new JobQueue({ redis }, jobStore, new DrizzleAuditLogger());

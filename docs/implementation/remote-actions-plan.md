@@ -72,7 +72,7 @@ und passt in den Apps-Plan Stufe D (Ringe).
 | Stufe | Inhalt | Aufwand |
 |---|---|---|
 | R1 | Skriptbibliothek mit drei Skripten (Update-Stand, Update-Scan starten, Systeminfo), Remediation-Sync in den Tenant, Job "Skript ausfuehren" auf Einzelgeraet mit Ergebnisanzeige. **Umgesetzt:** `packages/core/scripts`, `RemediationProvider` (Graph beta `deviceHealthScripts`, `initiateOnDemandProactiveRemediation`, `deviceHealthScriptStates`), Job `device.run-script`, Tab Skripte im Geraetedetail. Noch ohne Codesignatur; Ausgaben der drei Skripte enthalten keine personenbezogenen Daten, daher liegen sie unverschluesselt im Job-Ergebnis | 3 Tage |
-| R2 | Azure Run Command fuer AVD-Hosts mit derselben Bibliothek und derselben Oberflaeche | 1 Tag |
+| R2 | Azure Run Command fuer AVD-Hosts mit derselben Bibliothek und derselben Oberflaeche. **Umgesetzt:** Rahmenskript `buildRunCommandScript` (Erkennung, Behebung bei Exit 1, erneute Erkennung, markierte Ausgabe), `AvdProvider.runCommand`, Job `avd.run-script`, Knopf "Skript" in der Host-Liste | 1 Tag |
 | R3 | Defender Live Response als dritter Transport, automatische Wahl des schnellsten verfuegbaren Wegs je Geraet | 2 Tage |
 | R4 | Bulk auf Geraetegruppen, Ausgabe als Tabelle ueber alle Geraete | 1 Tag |
 

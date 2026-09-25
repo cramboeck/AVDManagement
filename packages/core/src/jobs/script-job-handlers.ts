@@ -8,8 +8,11 @@
 
 import type { LibraryScriptId, ScriptRunResult } from '@zerostress/types';
 import { registerJob, type JobContext, type JobResult, type PreviewContext, type PreviewResult } from './job-types.js';
-import { getLibraryScript, parseScriptOutput } from '../scripts/library.js';
+import { getLibraryScript, parseScriptOutput, type LoadedScript } from '../scripts/library.js';
+import { buildRunCommandScript, parseRunCommandOutput } from '../scripts/run-command.js';
 import type { RemediationOperations, RemediationRunState_ } from '../providers/remediation-provider.js';
+import type { ProviderContext } from '../providers/resource-provider.js';
+import type { VmCommandOutput } from '../providers/avd-provider.js';
 
 export interface RunScriptPayload {
   managedDeviceId: string;
@@ -155,6 +158,136 @@ export function registerScriptJobs(remediations: RemediationOperations, options:
         ],
         warnings,
         estimatedDurationSeconds: script.expectedDurationSeconds,
+      };
+    }
+  );
+}
+
+// ============================================
+// Azure Run Command (AVD-Session-Hosts, Azure-VMs)
+// ============================================
+
+export interface AvdRunScriptPayload {
+  hostPoolId: string;
+  hostPoolName: string;
+  sessionHostId: string;
+  sessionHostName: string;
+  vmResourceId: string;
+  scriptId: LibraryScriptId;
+}
+
+/**
+ * Was der Job braucht; AvdProvider erfuellt es, Tests koennen es nachbilden.
+ */
+export interface VmCommandRunner {
+  runCommand(ctx: ProviderContext, vmResourceId: string, scriptLines: string[], timeoutMs?: number): Promise<VmCommandOutput>;
+}
+
+function scriptWarnings(script: LoadedScript, transport: string): string[] {
+  const warnings = [
+    `Das Skript laeuft als SYSTEM auf dem Host ueber ${transport}. Es stammt aus der Bibliothek der Konsole; Version und Pruefsumme werden protokolliert.`,
+  ];
+  if (script.hasRemediation && script.remediationSummary) {
+    warnings.push(`Aendert etwas auf dem Host: ${script.remediationSummary}`);
+  } else {
+    warnings.push('Nur lesend: das Skript veraendert nichts auf dem Host.');
+  }
+  return warnings;
+}
+
+export function registerAvdScriptJobs(runner: VmCommandRunner, options: RunScriptOptions = {}): void {
+  registerJob(
+    {
+      type: 'avd.run-script',
+      displayName: 'Skript auf Session-Host ausfuehren',
+      maxRetries: 0,
+      timeoutSeconds: 900,
+      concurrencyPerTenant: 3,
+      requiresPreview: true,
+    },
+    async (ctx: JobContext): Promise<JobResult> => {
+      const payload = ctx.payload as unknown as AvdRunScriptPayload;
+      const script = getLibraryScript(payload.scriptId);
+      if (!script) {
+        return failure('SCRIPT_UNKNOWN', `Script '${payload.scriptId}' is not in the library`);
+      }
+      if (!payload.vmResourceId) {
+        return failure('VM_UNKNOWN', 'Session host has no VM resource id');
+      }
+
+      const requestedAt = new Date();
+      let raw: VmCommandOutput;
+      try {
+        raw = await runner.runCommand({ tenantId: ctx.tenantId, correlationId: ctx.correlationId }, payload.vmResourceId, buildRunCommandScript(script), options.timeoutMs);
+      } catch (error) {
+        return failure('RUN_COMMAND_FAILED', error instanceof Error ? error.message : String(error));
+      }
+
+      const outcome = parseRunCommandOutput(raw.stdout, raw.stderr);
+      const detectionState = outcome.exitCode === 0 ? 'success' : outcome.exitCode === 1 ? 'fail' : outcome.exitCode === null ? 'unknown' : 'scriptError';
+      const remediationState =
+        outcome.remediation.state === 'none'
+          ? 'skipped'
+          : outcome.remediation.state === 'skipped'
+            ? 'skipped'
+            : outcome.remediation.exitCode === 0
+              ? 'success'
+              : 'remediationFailed';
+
+      const result: ScriptRunResult = {
+        scriptId: script.id,
+        version: script.version,
+        hash: script.hash,
+        tenantScriptId: 'azure-run-command',
+        managedDeviceId: payload.vmResourceId,
+        requestedAt: requestedAt.toISOString(),
+        completedAt: new Date().toISOString(),
+        detectionState,
+        remediationState,
+        output: outcome.output,
+        outputJson: parseScriptOutput(outcome.output),
+        detectionError: detectionState === 'scriptError' ? outcome.stderr || `Exit code ${outcome.exitCode}` : outcome.stderr,
+        remediationError: remediationState === 'remediationFailed' ? `Remediation exit code ${outcome.remediation.exitCode}` : null,
+        deviceReportedAt: new Date().toISOString(),
+        possiblyStale: false,
+        stateSource: 'run-command',
+      };
+
+      if (detectionState === 'scriptError' || remediationState === 'remediationFailed') {
+        return { success: false, error: { code: 'SCRIPT_FAILED_ON_HOST', message: result.remediationError || result.detectionError || 'Script failed', retryable: false } };
+      }
+      if (detectionState === 'unknown' && !outcome.output) {
+        return failure('RUN_COMMAND_NO_OUTPUT', outcome.stderr || 'Run Command returned no output; the VM may be stopped or the agent unresponsive');
+      }
+      return { success: true, data: result as unknown as Record<string, unknown> };
+    },
+    async (ctx: PreviewContext): Promise<PreviewResult> => {
+      const payload = ctx.payload as unknown as AvdRunScriptPayload;
+      const script = getLibraryScript(payload.scriptId);
+      if (!script) {
+        throw new Error(`Script '${payload.scriptId}' is not in the library`);
+      }
+      return {
+        changes: [
+          {
+            objectType: 'session-host',
+            objectId: payload.sessionHostId,
+            objectDisplayName: payload.sessionHostName,
+            action: 'update',
+            before: {},
+            after: {
+              script: script.displayName,
+              scriptId: script.id,
+              version: script.version,
+              hash: script.hash,
+              runAs: 'system',
+              remediation: script.hasRemediation,
+              transport: 'azure-run-command',
+            },
+          },
+        ],
+        warnings: [...scriptWarnings(script, 'Azure Run Command'), 'Die VM muss laufen; Run Command braucht den Azure-VM-Agent.'],
+        estimatedDurationSeconds: Math.min(script.expectedDurationSeconds, 180),
       };
     }
   );

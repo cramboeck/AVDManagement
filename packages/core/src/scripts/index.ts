@@ -3,3 +3,4 @@
  */
 
 export * from './library.js';
+export * from './run-command.js';

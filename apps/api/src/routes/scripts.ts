@@ -6,13 +6,18 @@ import { randomUUID } from 'node:crypto';
 import { Hono } from 'hono';
 import { authMiddleware } from '../middleware/auth.js';
 import { tenantContextMiddleware, requireConnectedTenant } from '../middleware/tenant-context.js';
-import { getLibraryScript } from '@zerostress/core';
+import { getLibraryScript, loadScriptLibrary, toLibraryEntry } from '@zerostress/core';
 import { getRemediationProvider } from '../services/microsoft-clients.js';
 
 const app = new Hono();
 
 app.use('*', authMiddleware);
 app.use('*', tenantContextMiddleware);
+
+// Die Bibliothek selbst, ohne Tenant-Abgleich (fuer Run Command auf VMs)
+app.get('/library', async (c) => {
+  return c.json({ items: loadScriptLibrary().map(toLibraryEntry) });
+});
 
 // Welche Bibliotheksskripte im Tenant fehlen, veraltet oder aktuell sind
 app.get('/', requireConnectedTenant, async (c) => {

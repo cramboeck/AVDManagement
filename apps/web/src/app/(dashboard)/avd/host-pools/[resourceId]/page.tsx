@@ -8,6 +8,7 @@ import { LoadingTable } from '@/components/ui/loading';
 import { ErrorState, ErrorBanner } from '@/components/ui/error-state';
 import { NoTenantSelected } from '@/components/ui/empty-state';
 import { SessionList } from '@/components/avd/session-list';
+import { RunScriptDialog } from '@/components/avd/run-script-dialog';
 import Link from 'next/link';
 import type {
   SyncedHostPool,
@@ -172,6 +173,7 @@ interface SessionHostRowProps {
   onSelect: (hostId: string) => void;
   onToggleExpand: (hostId: string) => void;
   onAction: (host: SyncedSessionHost, action: 'start' | 'stop' | 'drain-on' | 'drain-off') => void;
+  onRunScript: (host: SyncedSessionHost) => void;
 }
 
 function SessionHostRow({
@@ -183,6 +185,7 @@ function SessionHostRow({
   onSelect,
   onToggleExpand,
   onAction,
+  onRunScript,
 }: SessionHostRowProps) {
   const status = host.status || 'Unknown';
   const statusColor = statusColors[status] || 'bg-muted text-muted-foreground';
@@ -291,6 +294,15 @@ function SessionHostRow({
                 title="Drain deaktivieren"
               >
                 Drain aus
+              </button>
+            )}
+            {host.vmResourceId && canStop && (
+              <button
+                onClick={() => onRunScript(host)}
+                className="rounded px-2 py-1 text-xs hover:bg-accent"
+                title="Bibliotheksskript ueber Azure Run Command ausfuehren"
+              >
+                Skript
               </button>
             )}
           </div>
@@ -461,6 +473,7 @@ export default function HostPoolDetailPage({
   const { activeTenant, isLoading: tenantLoading } = useTenant();
   const [selectedHost, setSelectedHost] = useState<SyncedSessionHost | null>(null);
   const [selectedAction, setSelectedAction] = useState<'start' | 'stop' | 'drain-on' | 'drain-off' | null>(null);
+  const [scriptHost, setScriptHost] = useState<SyncedSessionHost | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 
@@ -648,12 +661,23 @@ export default function HostPoolDetailPage({
                   onSelect={toggleSelection}
                   onToggleExpand={toggleExpand}
                   onAction={handleAction}
+                  onRunScript={setScriptHost}
                 />
               ))
             )}
           </tbody>
         </table>
       </div>
+
+      {scriptHost && activeTenant && (
+        <RunScriptDialog
+          tenantId={activeTenant.id}
+          host={scriptHost}
+          hostPoolName={pool?.name || ''}
+          hostPoolResourceId={resourceId}
+          onClose={() => setScriptHost(null)}
+        />
+      )}
 
       {selectedHost && selectedAction && (
         <ActionDialog

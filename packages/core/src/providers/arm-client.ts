@@ -198,14 +198,26 @@ export class ArmClient {
     asyncOperationUrl: string,
     timeoutMs: number = 300000
   ): Promise<void> {
+    await this.waitForAsyncOperationResult<ArmAsyncOperation>(tenantId, asyncOperationUrl, timeoutMs);
+  }
+
+  /**
+   * Wie waitForAsyncOperation, liefert aber den letzten Status samt Nutzlast
+   * (Run Command legt seine Ausgabe unter properties.output ab)
+   */
+  async waitForAsyncOperationResult<T extends ArmAsyncOperation>(
+    tenantId: string,
+    asyncOperationUrl: string,
+    timeoutMs: number = 300000
+  ): Promise<T> {
     const startTime = Date.now();
     const pollInterval = 5000;
 
     while (Date.now() - startTime < timeoutMs) {
-      const status = await this.get<ArmAsyncOperation>(tenantId, asyncOperationUrl);
+      const status = await this.get<T>(tenantId, asyncOperationUrl);
 
       if (status.status === 'Succeeded') {
-        return;
+        return status;
       }
 
       if (status.status === 'Failed' || status.status === 'Canceled') {
