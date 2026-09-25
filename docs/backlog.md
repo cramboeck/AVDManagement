@@ -26,6 +26,16 @@ vor dem Bau klar sind.
 - Aktionen als Jobs: Sync, Neustart, Defender-Schnellscan
 - Offen: Inventar-Cache (jeder Detailaufruf laedt heute den ganzen Bestand), Isolieren/Freigeben ueber Defender (`Machine.Isolate`), Retire/Wipe mit verschaerfter Preview, Softwareinventar, tenant-uebergreifende Sicht "kritische Luecken aelter als 30 Tage"
 
+## Naechste Schritte (Reihenfolge vorgeschlagen)
+
+| # | Thema | Voraussetzung | Notiz |
+|---|---|---|---|
+| 1 | Tabellen-Standard `DataTable`: Sortieren, Suche, Spaltenfilter, Seitengroesse, CSV, Spaltenauswahl, Einstellungen je Benutzer | — | Ausrollen auf Benutzer, Geraete, Jobs, Anmeldungen, Schwachstellen, Audit |
+| 2 | Gesamtstatus mit Grafiken: Secure Score, Exposure Score, MFA-Abdeckung, Incidents; Verteilungen Compliance/Exposure/OS/CVE-Schwere/Anmeldungen | `SecurityEvents.Read.All`, `SecurityAlert.Read.All`, Defender `Score.Read.All` | Tenant-uebergreifend mit Mini-Trends |
+| 3 | LAPS + BitLocker im Geraetedetail (Tab Wiederherstellung) | `DeviceLocalCredential.Read.All`, `BitLockerKey.Read.All`, LAPS mit Entra-Sicherung | Anzeige nur mit Begruendung, Engineer-Rolle, Audit, 60 s sichtbar; nie in Listen oder Logs |
+| 4 | Softwareinventar + winget-Gegencheck | Defender `Software.Read.All`; Windows-Build-Worker mit winget; Zuordnung Produkt -> winget-ID | Installiert vs. aktuell, geschlossene CVEs je Update |
+| 5 | Automatische Deployments (Apps-Plan Stufen C/D) | Worker, Paketkatalog, Azure Storage EU | Update -> Paket -> Preview -> Freigabe -> Ringe; Auto nur per Regel |
+
 ## Naechste Module
 
 | Thema | Datenquelle | Voraussetzung | Notiz |
