@@ -19,6 +19,32 @@ export interface TenantTokenConfig {
   clientSecret?: string;
 }
 
+const GRAPH_RESOURCE = 'https://graph.microsoft.com';
+
+/**
+ * Client-Credential-Flow akzeptiert nur `<Ressource>/.default`. Die
+ * Provider deklarieren ihre Einzelscopes (Dokumentation + Consent-Pruefung),
+ * das Token wird immer fuer die gesamte Ressource angefordert.
+ */
+export function resolveResourceScope(scopes: string[]): string {
+  const resources = new Set(
+    scopes.map((scope) => (scope.startsWith('https://') ? new URL(scope).origin : GRAPH_RESOURCE))
+  );
+
+  if (resources.size === 0) {
+    return `${GRAPH_RESOURCE}/.default`;
+  }
+
+  if (resources.size > 1) {
+    throw new Error(
+      `A single token cannot span multiple resources: ${[...resources].join(', ')}`
+    );
+  }
+
+  const [resource] = resources;
+  return `${resource}/.default`;
+}
+
 export class TokenProvider {
   private readonly msalClients = new Map<string, ConfidentialClientApplication>();
   private readonly tokenCache = new Map<string, { token: string; expiresAt: number }>();
@@ -32,7 +58,8 @@ export class TokenProvider {
    * Access-Token fuer einen Tenant abrufen
    */
   async getAccessToken(tenantId: string, scopes: string[]): Promise<string> {
-    const cacheKey = `${tenantId}:${scopes.sort().join(',')}`;
+    const resourceScope = resolveResourceScope(scopes);
+    const cacheKey = `${tenantId}:${resourceScope}`;
     const cached = this.tokenCache.get(cacheKey);
 
     if (cached && cached.expiresAt > Date.now() + 60000) {
@@ -40,12 +67,9 @@ export class TokenProvider {
     }
 
     const client = this.getMsalClient(tenantId);
-    const graphScopes = scopes.map((s) =>
-      s.startsWith('https://') ? s : `https://graph.microsoft.com/${s}`
-    );
 
     const result = await client.acquireTokenByClientCredential({
-      scopes: graphScopes,
+      scopes: [resourceScope],
     });
 
     if (!result?.accessToken) {

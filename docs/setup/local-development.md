@@ -29,10 +29,17 @@ der Beispielwert; fuer alles andere: `openssl rand -base64 32`.
 ```powershell
 docker-compose up -d
 npm install
+npm run build --workspace=@zerostress/types --workspace=@zerostress/core
 npm run db:push
 npm run dev --workspace=@zerostress/api     # Fenster 1, Port 3001
 npm run dev --workspace=@zerostress/web     # Fenster 2, Port 3002
 ```
+
+Die API laedt `@zerostress/core` und `@zerostress/types` aus deren `dist/`
+(nicht im Git). **Nach jedem `git pull`, das `packages/` beruehrt, den
+Build-Befehl wiederholen**, sonst laeuft die API mit altem Core-Code.
+Wer an Core arbeitet, startet zusaetzlich
+`npm run dev --workspace=@zerostress/core` (tsc im Watch-Modus).
 
 Erwartete erste Zeile der API:
 `Environment: <pfad>\.env.local (DEV_AUTH_BYPASS active)`
