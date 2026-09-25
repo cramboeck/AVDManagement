@@ -132,29 +132,36 @@ export class IdentityProvider extends BaseResourceProvider {
     if (pageToken) {
       url = pageToken;
     } else {
-      const params = new URLSearchParams({
-        $select: 'id,userPrincipalName,displayName,mail,accountEnabled,userType,createdDateTime',
-        $top: String(pageSize),
-        $orderby: 'displayName',
-      });
+      const query = [
+        '$select=id,userPrincipalName,displayName,mail,accountEnabled,userType,createdDateTime',
+        `$top=${pageSize}`,
+      ];
 
       if (filter) {
-        params.set('$filter', filter);
+        query.push(`$filter=${encodeURIComponent(filter)}`);
       }
 
+      // $search ist eine Advanced Query: braucht ConsistencyLevel=eventual und
+      // $count=true, laesst sich aber nicht mit $orderby kombinieren
       if (search) {
-        params.set('$search', `"displayName:${search}" OR "mail:${search}"`);
+        const term = search.replace(/"/g, '');
+        query.push(`$search=${encodeURIComponent(`"displayName:${term}" OR "mail:${term}"`)}`);
+        query.push('$count=true');
+      } else {
+        query.push('$orderby=displayName');
       }
 
-      url = `/users?${params}`;
+      url = `/users?${query.join('&')}`;
     }
 
-    const response = await this.graphClient.get<GraphResponse<GraphUser[]>>(
-      tenantId,
-      url,
-      this.requiredScopes,
-      search ? { headers: { ConsistencyLevel: 'eventual' } } : undefined
-    );
+    const response = search
+      ? await this.graphClient.get<GraphResponse<GraphUser[]>>(
+          tenantId,
+          url,
+          this.requiredScopes,
+          { headers: { ConsistencyLevel: 'eventual' } }
+        )
+      : await this.graphClient.get<GraphResponse<GraphUser[]>>(tenantId, url, this.requiredScopes);
 
     const users = response.value.map((u) =>
       this.mapGraphUserToSyncedUser(ctx.tenantId, u)

@@ -55,7 +55,7 @@ describe('IdentityProvider', () => {
 
     it('should handle 401 unauthorized', async () => {
       const error = new GraphApiError(401, 'InvalidAuthenticationToken', 'Access token is empty.');
-      mockGraphClient.get.mockRejectedValueOnce(error);
+      mockGraphClient.get.mockRejectedValue(error);
 
       await expect(provider.listUsers(ctx)).rejects.toThrow(GraphApiError);
       await expect(provider.listUsers(ctx)).rejects.toMatchObject({
@@ -66,7 +66,7 @@ describe('IdentityProvider', () => {
 
     it('should handle 403 forbidden', async () => {
       const error = new GraphApiError(403, 'Authorization_RequestDenied', 'Insufficient privileges.');
-      mockGraphClient.get.mockRejectedValueOnce(error);
+      mockGraphClient.get.mockRejectedValue(error);
 
       await expect(provider.listUsers(ctx)).rejects.toThrow(GraphApiError);
       await expect(provider.listUsers(ctx)).rejects.toMatchObject({
@@ -77,7 +77,7 @@ describe('IdentityProvider', () => {
 
     it('should handle 429 throttling', async () => {
       const error = new GraphApiError(429, 'TooManyRequests', 'Too many requests.', 30);
-      mockGraphClient.get.mockRejectedValueOnce(error);
+      mockGraphClient.get.mockRejectedValue(error);
 
       await expect(provider.listUsers(ctx)).rejects.toThrow(GraphApiError);
       await expect(provider.listUsers(ctx)).rejects.toMatchObject({
