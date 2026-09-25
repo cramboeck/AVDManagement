@@ -175,7 +175,7 @@ function TenantRow({
   onTest: () => void;
   onSelect: () => void;
 }) {
-  const needsConsent = tenant.connectionStatus !== 'connected';
+  const isConnected = tenant.connectionStatus === 'connected';
 
   return (
     <li className="rounded-lg border bg-card p-4">
@@ -197,11 +197,10 @@ function TenantRow({
         </div>
 
         <div className="flex flex-wrap gap-2">
-          {needsConsent && (
-            <ActionButton onClick={onStartConsent} pending={isStartingConsent} primary>
-              Consent starten
-            </ActionButton>
-          )}
+          {/* Nach neuen App-Berechtigungen muss der Consent auch bei verbundenen Tenants erneuert werden */}
+          <ActionButton onClick={onStartConsent} pending={isStartingConsent} primary={!isConnected}>
+            {isConnected ? 'Consent erneuern' : 'Consent starten'}
+          </ActionButton>
           <ActionButton onClick={onTest} pending={isTesting}>
             Verbindung testen
           </ActionButton>
