@@ -4,6 +4,7 @@
 
 import { describe, it, expect, vi } from 'vitest';
 import {
+  INVENTORY_KINDS,
   InventorySyncEngine,
   planSync,
   toMeta,
@@ -49,6 +50,7 @@ function record(overrides: Partial<SnapshotRecord>): SnapshotRecord {
     startedAt: NOW,
     durationMs: 100,
     error: null,
+    unavailable: false,
     ...overrides,
   };
 }
@@ -117,6 +119,16 @@ describe('planSync', () => {
   });
 });
 
+describe('planSync with unavailable sources', () => {
+  it('retries a source that was unavailable after five minutes instead of the full interval', () => {
+    const unavailable = record({ kind: 'vulnerabilities', unavailable: true, syncedAt: new Date(NOW.getTime() - 6 * 60_000) });
+    const others = INVENTORY_KINDS.filter((k) => k !== 'vulnerabilities').map((k) => record({ kind: k, syncedAt: NOW }));
+    expect(planSync([unavailable, ...others], NOW, DEFAULT_SYNC_INTERVALS)).toEqual(['vulnerabilities']);
+    const fresh = record({ kind: 'vulnerabilities', unavailable: true, syncedAt: new Date(NOW.getTime() - 60_000) });
+    expect(planSync([fresh, ...others], NOW, DEFAULT_SYNC_INTERVALS)).toEqual([]);
+  });
+});
+
 describe('toMeta', () => {
   it('reports a missing snapshot as stale', () => {
     expect(toMeta(null, 'devices', NOW, DEFAULT_SYNC_INTERVALS)).toMatchObject({ status: 'missing', stale: true, syncedAt: null, itemCount: 0 });
@@ -149,7 +161,7 @@ describe('InventorySyncEngine', () => {
     const store = new InMemorySnapshotStore();
     const key = { tenantId: TENANT_A, mspId: MSP, kind: 'devices' as const };
     await store.markRunning(key, new Date(NOW.getTime() - 3_600_000));
-    await store.complete(key, { payload: inventory(['old']), itemCount: 1, syncedAt: new Date(NOW.getTime() - 3_600_000), durationMs: 5 });
+    await store.complete(key, { payload: inventory(['old']), itemCount: 1, syncedAt: new Date(NOW.getTime() - 3_600_000), durationMs: 5, unavailable: false });
     const { engine, devices, enqueue } = engineFor(store);
 
     const read = await engine.getOrLoad({ tenantId: TENANT_A, mspId: MSP }, 'devices');
@@ -164,7 +176,7 @@ describe('InventorySyncEngine', () => {
     const store = new InMemorySnapshotStore();
     const key = { tenantId: TENANT_A, mspId: MSP, kind: 'devices' as const };
     await store.markRunning(key, NOW);
-    await store.complete(key, { payload: inventory(['kept']), itemCount: 1, syncedAt: NOW, durationMs: 5 });
+    await store.complete(key, { payload: inventory(['kept']), itemCount: 1, syncedAt: NOW, durationMs: 5, unavailable: false });
     const { engine } = engineFor(store, {
       devices: vi.fn(async () => {
         throw new Error('Graph 503');
@@ -218,7 +230,7 @@ describe('InventorySyncEngine', () => {
     const store = new InMemorySnapshotStore();
     const key = { tenantId: TENANT_A, mspId: MSP, kind: 'devices' as const };
     await store.markRunning(key, NOW);
-    await store.complete(key, { payload: inventory(['a']), itemCount: 1, syncedAt: NOW, durationMs: 1 });
+    await store.complete(key, { payload: inventory(['a']), itemCount: 1, syncedAt: NOW, durationMs: 1, unavailable: false });
     const { engine, enqueue } = engineFor(store);
 
     const queued = await engine.runTick();

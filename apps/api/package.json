@@ -19,6 +19,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.128.0",
+    "@azure/identity": "^4.0.0",
     "@hono/node-server": "^1.8.0",
     "@hono/zod-validator": "^0.2.0",
     "@zerostress/core": "*",

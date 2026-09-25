@@ -56,9 +56,9 @@ describe.skipIf(!databaseUrl)('DrizzleSnapshotStore with Postgres', () => {
   it('keeps tenants apart across write, read, failure and delete', async () => {
     const now = new Date();
     await store.markRunning({ tenantId: tenantA, mspId, kind: 'devices' }, now);
-    await store.complete({ tenantId: tenantA, mspId, kind: 'devices' }, { payload: { owner: 'A' }, itemCount: 1, syncedAt: now, durationMs: 5 });
+    await store.complete({ tenantId: tenantA, mspId, kind: 'devices' }, { payload: { owner: 'A' }, itemCount: 1, syncedAt: now, durationMs: 5, unavailable: false });
     await store.markRunning({ tenantId: tenantB, mspId, kind: 'devices' }, now);
-    await store.complete({ tenantId: tenantB, mspId, kind: 'devices' }, { payload: { owner: 'B' }, itemCount: 2, syncedAt: now, durationMs: 5 });
+    await store.complete({ tenantId: tenantB, mspId, kind: 'devices' }, { payload: { owner: 'B' }, itemCount: 2, syncedAt: now, durationMs: 5, unavailable: false });
 
     expect((await store.get<{ owner: string }>(tenantA, 'devices'))?.payload).toEqual({ owner: 'A' });
     expect((await store.get<{ owner: string }>(tenantB, 'devices'))?.payload).toEqual({ owner: 'B' });

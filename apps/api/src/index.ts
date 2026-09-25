@@ -30,6 +30,7 @@ import { appsRouter } from './routes/apps.js';
 import { alertsRouter } from './routes/alerts.js';
 import { mcpRouter } from './routes/mcp.js';
 import { sharepointRouter } from './routes/sharepoint.js';
+import { packagesRouter } from './routes/packages.js';
 import { getJobQueue, getJobHealth } from './services/job-queue.js';
 import { startInventorySync, getInventoryHealth } from './services/inventory.js';
 import { startAlerting, getAlertingHealth } from './services/alerting.js';
@@ -110,6 +111,7 @@ app.route('/tenants/:tenantId/apps', appsRouter);
 app.route('/tenants/:tenantId/alerts', alertsRouter);
 app.route('/tenants/:tenantId/sharepoint', sharepointRouter);
 app.route('/dashboard', dashboardRouter);
+app.route('/packages', packagesRouter);
 // MCP: JSON-RPC ueber POST, gleiche Auth und Dienste wie die Web-Oberflaeche
 app.route('/mcp', mcpRouter);
 

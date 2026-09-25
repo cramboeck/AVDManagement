@@ -14,6 +14,7 @@ import { createConsentState } from '../services/consent-state.js';
 import { testTenantConnection, persistConnectionTestResult } from '../services/tenant-connection.js';
 import { toManagedTenant, type TenantRow } from '../services/tenant-mapper.js';
 import { DrizzleSnapshotStore } from '../services/inventory-store.js';
+import { getTokenProvider } from '../services/microsoft-clients.js';
 import type { TenantId, MspId, UserId, CorrelationId } from '@zerostress/types';
 
 const app = new Hono();
@@ -227,6 +228,7 @@ app.post('/:tenantId/test-connection', requireRole('engineer'), async (c) => {
     return c.json(notFound(tenantId), 404);
   }
 
+  getTokenProvider().invalidateTokens(tenant.microsoftTenantId);
   const result = await testTenantConnection(tenant.microsoftTenantId);
   await persistConnectionTestResult(tenant.id, result);
 

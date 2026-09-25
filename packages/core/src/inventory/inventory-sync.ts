@@ -47,6 +47,8 @@ export const DEFAULT_SYNC_INTERVALS: Record<InventoryKind, number> = {
 export const RUNNING_STUCK_MS = 10 * 60 * 1000;
 // Nach einem Fehler nicht sofort wieder anrennen
 export const ERROR_RETRY_MS = 5 * 60 * 1000;
+// Quelle nicht verfuegbar (Berechtigung fehlt): frueh wieder probieren, Consent kommt meist bald
+export const UNAVAILABLE_RETRY_MS = 5 * 60 * 1000;
 const DEFAULT_TICK_MS = 5 * 60 * 1000;
 
 export interface SyncTarget {
@@ -108,7 +110,8 @@ export function planSync(records: SnapshotRecord[], now: Date, intervals: Record
       continue;
     }
     const syncedAt = record.syncedAt?.getTime() ?? 0;
-    if (now.getTime() - syncedAt >= intervals[kind]) due.push(kind);
+    const interval = record.unavailable ? Math.min(intervals[kind], UNAVAILABLE_RETRY_MS) : intervals[kind];
+    if (now.getTime() - syncedAt >= interval) due.push(kind);
   }
   return due;
 }
@@ -145,9 +148,13 @@ export function toMeta(
     durationMs: record.durationMs,
     itemCount: record.itemCount,
     error: stuck ? 'Sync did not finish' : record.error,
-    stale: record.syncedAt ? now.getTime() - record.syncedAt.getTime() >= intervals[kind] : true,
+    stale: record.syncedAt ? now.getTime() - record.syncedAt.getTime() >= (record.unavailable ? Math.min(intervals[kind], UNAVAILABLE_RETRY_MS) : intervals[kind]) : true,
     live,
   };
+}
+
+function isUnavailable(payload: unknown): boolean {
+  return !!payload && typeof payload === 'object' && (payload as { available?: unknown }).available === false;
 }
 
 function countItems<K extends InventoryKind>(kind: K, payload: InventoryPayloads[K]): number {
@@ -250,6 +257,7 @@ export class InventorySyncEngine {
           itemCount: countItems(kind, payload),
           syncedAt,
           durationMs: syncedAt.getTime() - startedAt.getTime(),
+          unavailable: isUnavailable(payload),
         });
         if (this.onSynced) {
           await this.onSynced(target, kind);

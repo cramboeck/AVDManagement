@@ -682,6 +682,115 @@ export interface MailOverviewSet {
 export type MailOverview = CapabilityResult<MailOverviewSet> & { snapshot?: SnapshotMeta };
 
 // ============================================
+// Apps: Paketkatalog (Stufe C) und Build-Worker (Stufe D)
+// ============================================
+
+export type PackageInstallerType = 'msi' | 'exe' | 'psadt' | 'intunewin' | 'winget';
+export type PackageArchitecture = 'x64' | 'x86' | 'arm64' | 'neutral';
+export type DetectionOperator = 'equal' | 'notEqual' | 'greaterThan' | 'greaterThanOrEqual' | 'lessThan' | 'lessThanOrEqual';
+
+export type AppDetectionRule =
+  | { type: 'registry'; keyPath: string; valueName: string | null; detectionType: 'exists' | 'string' | 'version' | 'integer'; operator: DetectionOperator | null; value: string | null; check32BitOn64System: boolean }
+  | { type: 'msi'; productCode: string; productVersion: string | null; operator: DetectionOperator | null }
+  | { type: 'file'; path: string; fileOrFolderName: string; detectionType: 'exists' | 'version' | 'sizeInMB' | 'modifiedDate' | 'createdDate'; operator: DetectionOperator | null; value: string | null; check32BitOn64System: boolean }
+  | { type: 'script'; script: string; enforceSignatureCheck: boolean; runAs32Bit: boolean };
+
+export type ReturnCodeType = 'success' | 'softReboot' | 'hardReboot' | 'retry' | 'failed';
+
+export interface AppManifest {
+  schemaVersion: 1;
+  vendor: string;
+  name: string;
+  version: string;
+  architecture: PackageArchitecture;
+  language: string;
+  revision: string;
+  installerType: PackageInstallerType;
+  // Dateiname des Installers im Paket (msi/exe/psadt), null bei winget
+  installerFileName: string | null;
+  installCommand: string | null;
+  uninstallCommand: string | null;
+  msiProductCode: string | null;
+  processesToClose: string[];
+  detection: AppDetectionRule[];
+  requirements: {
+    minimumWindowsRelease: string | null;
+    architecture: 'x64' | 'x86' | 'both';
+    minDiskMb: number | null;
+    minRamMb: number | null;
+  };
+  returnCodes: { code: number; type: ReturnCodeType }[];
+  restartBehavior: 'basedOnReturnCode' | 'allow' | 'suppress' | 'force';
+  installContext: 'system' | 'user';
+  description: string;
+  publisher: string;
+  informationUrl: string | null;
+  privacyUrl: string | null;
+  owner: string | null;
+  notes: string | null;
+  // Nur bei installerType winget
+  wingetPackageIdentifier: string | null;
+}
+
+export type PackageStatus = 'draft' | 'installer-uploaded' | 'queued' | 'building' | 'ready' | 'failed';
+
+export interface StoredFile {
+  fileName: string;
+  sha256: string;
+  sizeBytes: number;
+  storageKey: string;
+  uploadedAt: string;
+}
+
+export interface AppPackage {
+  id: string;
+  manifest: AppManifest;
+  status: PackageStatus;
+  // Fertiges .intunewin, fuer winget nicht noetig
+  artifact: StoredFile | null;
+  // Roh-Installer fuer den Build-Worker
+  installer: StoredFile | null;
+  buildLog: string | null;
+  buildError: string | null;
+  // Erkennungsschluessel, den der Worker in das Paket schreibt (psadt)
+  detectionKeyPath: string | null;
+  createdByEmail: string;
+  createdAt: string;
+  updatedAt: string;
+  deployments: AppDeployment[];
+}
+
+export type DeploymentStatus = 'pending' | 'publishing' | 'published' | 'failed' | 'superseded';
+
+export interface AppDeployment {
+  id: string;
+  packageId: string;
+  tenantId: TenantId;
+  tenantDisplayName: string;
+  intuneAppId: string | null;
+  contentVersion: string | null;
+  status: DeploymentStatus;
+  error: string | null;
+  jobId: string | null;
+  publishedAt: string | null;
+  updatedAt: string;
+}
+
+export type BuildStatus = 'queued' | 'claimed' | 'building' | 'succeeded' | 'failed';
+
+export interface BuildJob {
+  id: string;
+  packageId: string;
+  status: BuildStatus;
+  workerId: string | null;
+  claimedAt: string | null;
+  finishedAt: string | null;
+  log: string | null;
+  error: string | null;
+  createdAt: string;
+}
+
+// ============================================
 // Remotehilfe (TeamViewer)
 // ============================================
 

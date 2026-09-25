@@ -141,6 +141,7 @@ export const inventorySnapshots = pgTable(
     startedAt: timestamp('started_at', { withTimezone: true }),
     durationMs: integer('duration_ms'),
     error: text('error'),
+    unavailable: boolean('unavailable').notNull().default(false),
   },
   (table) => ({
     pk: primaryKey({ columns: [table.tenantId, table.kind] }),
@@ -178,6 +179,64 @@ export const alerts = pgTable(
     uniqueFingerprint: uniqueIndex('alerts_tenant_fingerprint').on(table.tenantId, table.fingerprint),
   })
 );
+
+// Paketkatalog je MSP: Manifest als typisiertes JSON, Artefakt und Installer
+// liegen im Artefaktspeicher, hier nur Referenzen mit Hash.
+export const appPackages = pgTable('app_packages', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  mspId: uuid('msp_id').notNull().references(() => mspOrganizations.id),
+  manifest: jsonb('manifest').notNull(),
+  status: varchar('status', { length: 30 }).notNull().default('draft'),
+  artifact: jsonb('artifact'),
+  installer: jsonb('installer'),
+  buildLog: text('build_log'),
+  buildError: text('build_error'),
+  detectionKeyPath: text('detection_key_path'),
+  createdBy: uuid('created_by').notNull().references(() => mspUsers.id),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+// Paket x Tenant: welche Intune-App aus welchem Paket entstanden ist
+export const appDeployments = pgTable(
+  'app_deployments',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    mspId: uuid('msp_id').notNull().references(() => mspOrganizations.id),
+    packageId: uuid('package_id')
+      .notNull()
+      .references(() => appPackages.id, { onDelete: 'cascade' }),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => managedTenants.id, { onDelete: 'cascade' }),
+    intuneAppId: varchar('intune_app_id', { length: 64 }),
+    contentVersion: varchar('content_version', { length: 64 }),
+    status: varchar('status', { length: 20 }).notNull().default('pending'),
+    error: text('error'),
+    jobId: uuid('job_id'),
+    publishedAt: timestamp('published_at', { withTimezone: true }),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    uniquePackageTenant: uniqueIndex('app_deployments_package_tenant').on(table.packageId, table.tenantId),
+  })
+);
+
+// Build-Auftraege fuer den Windows-Worker
+export const buildJobs = pgTable('build_jobs', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  mspId: uuid('msp_id').notNull().references(() => mspOrganizations.id),
+  packageId: uuid('package_id')
+    .notNull()
+    .references(() => appPackages.id, { onDelete: 'cascade' }),
+  status: varchar('status', { length: 20 }).notNull().default('queued'),
+  workerId: varchar('worker_id', { length: 100 }),
+  claimedAt: timestamp('claimed_at', { withTimezone: true }),
+  finishedAt: timestamp('finished_at', { withTimezone: true }),
+  log: text('log'),
+  error: text('error'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
 
 // ============================================
 // AVD-Tabellen (Azure Virtual Desktop)

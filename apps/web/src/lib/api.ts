@@ -93,6 +93,19 @@ export async function apiFetch<T>(
 export const api = {
   get: <T>(path: string) => apiFetch<T>(path),
 
+  // Roher Datei-Upload (Body ist die Datei, kein JSON)
+  upload: async <T>(path: string, file: File): Promise<T> => {
+    const token = await getAccessToken();
+    const headers: Record<string, string> = { 'Content-Type': 'application/octet-stream' };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    const response = await fetch(`${API_URL}${path}${path.includes('?') ? '&' : '?'}fileName=${encodeURIComponent(file.name)}`, { method: 'PUT', headers, body: file });
+    if (!response.ok) {
+      const problem: ProblemDetails = await response.json().catch(() => ({ type: 'https://api.zerostress.io/problems/unknown', title: response.statusText, status: response.status }));
+      throw new ApiError(response.status, problem);
+    }
+    return response.json();
+  },
+
   post: <T>(path: string, body?: unknown) =>
     apiFetch<T>(path, {
       method: 'POST',

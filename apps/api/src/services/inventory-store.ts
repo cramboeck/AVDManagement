@@ -25,6 +25,7 @@ function toRecord<T>(row: SnapshotRow): SnapshotRecord<T> {
     startedAt: row.startedAt,
     durationMs: row.durationMs,
     error: row.error,
+    unavailable: row.unavailable === true,
   };
 }
 
@@ -55,7 +56,7 @@ export class DrizzleSnapshotStore implements InventorySnapshotStore {
       });
   }
 
-  async complete<T>(key: SnapshotKey, input: { payload: T; itemCount: number; syncedAt: Date; durationMs: number }): Promise<void> {
+  async complete<T>(key: SnapshotKey, input: { payload: T; itemCount: number; syncedAt: Date; durationMs: number; unavailable: boolean }): Promise<void> {
     const values = {
       status: 'ready',
       payload: input.payload,
@@ -63,6 +64,7 @@ export class DrizzleSnapshotStore implements InventorySnapshotStore {
       syncedAt: input.syncedAt,
       durationMs: input.durationMs,
       error: null,
+      unavailable: input.unavailable,
     };
     await db
       .insert(inventorySnapshots)

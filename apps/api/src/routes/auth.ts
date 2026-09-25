@@ -9,6 +9,7 @@ import { db, managedTenants } from '../db/index.js';
 import { DrizzleAuditLogger } from '../services/audit-logger.js';
 import { verifyConsentState, type ConsentStateClaims } from '../services/consent-state.js';
 import { testTenantConnection, persistConnectionTestResult } from '../services/tenant-connection.js';
+import { getTokenProvider } from '../services/microsoft-clients.js';
 import type { CorrelationId } from '@zerostress/types';
 
 const app = new Hono();
@@ -185,6 +186,8 @@ app.get('/consent-callback', async (c) => {
     return redirectToTenants({ consent: 'error', reason: 'tenant-mismatch', tenantId: tenant.id });
   }
 
+  // Neue Berechtigungen gelten erst mit einem frischen Token
+  getTokenProvider().invalidateTokens(tenant.microsoftTenantId);
   const result = await testTenantConnection(tenant.microsoftTenantId);
   await persistConnectionTestResult(tenant.id, result);
 

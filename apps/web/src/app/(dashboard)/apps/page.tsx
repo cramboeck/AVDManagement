@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import clsx from 'clsx';
@@ -92,7 +93,12 @@ export default function AppsPage() {
           <h1 className="text-2xl font-semibold">Apps</h1>
           <p className="text-sm text-muted-foreground">Intune-Anwendungen mit Zuweisungen und Installationsstatus. Zuweisungen laufen als Jobs mit Vorschau.</p>
         </div>
-        <SnapshotStatus tenantId={activeTenant.id} kinds={['apps']} invalidate={[['apps', activeTenant.id]]} />
+        <div className="flex flex-wrap items-center gap-3">
+          <Link href="/apps/catalog" className="rounded-md border px-3 py-1.5 text-sm hover:bg-accent">
+            Paketkatalog
+          </Link>
+          <SnapshotStatus tenantId={activeTenant.id} kinds={['apps']} invalidate={[['apps', activeTenant.id]]} />
+        </div>
       </div>
 
       {query.isLoading ? (

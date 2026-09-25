@@ -23,6 +23,8 @@ export interface SnapshotRecord<T = unknown> {
   startedAt: Date | null;
   durationMs: number | null;
   error: string | null;
+  // true: die Quelle war nicht verfuegbar (Berechtigung, Lizenz); kuerzeres Wiederholintervall
+  unavailable: boolean;
 }
 
 export interface SnapshotKey {
@@ -36,7 +38,7 @@ export interface InventorySnapshotStore {
   list(tenantId: TenantId): Promise<SnapshotRecord[]>;
   // Legt den Datensatz an oder setzt ihn auf running; Payload bleibt erhalten
   markRunning(key: SnapshotKey, startedAt: Date): Promise<void>;
-  complete<T>(key: SnapshotKey, input: { payload: T; itemCount: number; syncedAt: Date; durationMs: number }): Promise<void>;
+  complete<T>(key: SnapshotKey, input: { payload: T; itemCount: number; syncedAt: Date; durationMs: number; unavailable: boolean }): Promise<void>;
   // Fehler festhalten, alter Stand bleibt lesbar
   fail(key: SnapshotKey, input: { error: string; durationMs: number }): Promise<void>;
   deleteForTenant(tenantId: TenantId): Promise<void>;
@@ -76,10 +78,11 @@ export class InMemorySnapshotStore implements InventorySnapshotStore {
       startedAt,
       durationMs: existing?.durationMs ?? null,
       error: existing?.error ?? null,
+      unavailable: existing?.unavailable ?? false,
     });
   }
 
-  async complete<T>(key: SnapshotKey, input: { payload: T; itemCount: number; syncedAt: Date; durationMs: number }): Promise<void> {
+  async complete<T>(key: SnapshotKey, input: { payload: T; itemCount: number; syncedAt: Date; durationMs: number; unavailable: boolean }): Promise<void> {
     const existing = this.records.get(this.keyOf(key.tenantId, key.kind));
     this.records.set(this.keyOf(key.tenantId, key.kind), {
       tenantId: key.tenantId,
@@ -92,6 +95,7 @@ export class InMemorySnapshotStore implements InventorySnapshotStore {
       startedAt: existing?.startedAt ?? null,
       durationMs: input.durationMs,
       error: null,
+      unavailable: input.unavailable,
     });
   }
 
@@ -108,6 +112,7 @@ export class InMemorySnapshotStore implements InventorySnapshotStore {
       startedAt: existing?.startedAt ?? null,
       durationMs: input.durationMs,
       error: input.error,
+      unavailable: existing?.unavailable ?? false,
     });
   }
 
