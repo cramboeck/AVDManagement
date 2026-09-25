@@ -42,6 +42,19 @@ export const errorHandler: ErrorHandler = (err, c) => {
   }
 
   const message = err instanceof Error ? err.message : 'Unknown error';
+
+  // Postgres meldet fehlende Tabellen/Spalten, wenn das Schema hinter dem Code liegt
+  if (/(column|relation) "[^"]+" does not exist/.test(message)) {
+    const problem: ProblemDetails = {
+      type: 'https://api.zerostress.io/problems/schema-outdated',
+      title: 'Datenbankschema veraltet: im Repo "npm run db:push" ausfuehren und die API neu starten.',
+      status: 500,
+      detail: message,
+      correlationId,
+    };
+    return c.json(problem, 500);
+  }
+
   const problem: ProblemDetails = {
     type: 'https://api.zerostress.io/problems/internal-error',
     title: 'Internal Server Error',

@@ -26,6 +26,7 @@ import { BaseResourceProvider, type ProviderContext } from './resource-provider.
 import { GraphClient, type GraphResponse } from './graph-client.js';
 import { GraphApiError } from '../errors.js';
 import { GRAPH_BETA } from './remediation-provider.js';
+import type { OpenedIntuneWin } from '../apps/intunewin.js';
 
 interface GraphMobileApp {
   id: string;
@@ -332,6 +333,17 @@ export class AppProvider extends BaseResourceProvider {
     );
   }
 
+  async publishWin32(ctx: ProviderContext, payload: Record<string, unknown>, opened: OpenedIntuneWin, onProgress?: (step: string) => void, options?: PublishOptions): Promise<{ appId: string; contentVersion: string }> {
+    this.validateContext(ctx);
+    return publishWin32App(this.graphClient, this.writeScopes, ctx, payload, opened, onProgress, options);
+  }
+
+  async publishWinGet(ctx: ProviderContext, payload: Record<string, unknown>): Promise<{ appId: string }> {
+    this.validateContext(ctx);
+    const app = await this.graphClient.post<{ id: string }>(ctx.tenantId as string, `${GRAPH_BETA}/deviceAppManagement/mobileApps`, this.writeScopes, payload);
+    return { appId: app.id };
+  }
+
   /**
    * Sicherheitsgruppe anlegen; liefert die Id einer bestehenden Gruppe gleichen Namens statt eines Duplikats.
    */
@@ -357,6 +369,127 @@ export class AppProvider extends BaseResourceProvider {
     });
     return { id: created.id, created: true };
   }
+}
+
+export interface PublishOptions {
+  sleep?: (ms: number) => Promise<void>;
+  now?: () => number;
+  fetchImpl?: typeof fetch;
+  uploadTimeoutMs?: number;
+}
+
+interface ContentFile {
+  id: string;
+  uploadState: string | null;
+  azureStorageUri: string | null;
+}
+
+const BLOB_BLOCK_SIZE = 6 * 1024 * 1024;
+
+/**
+ * Win32-App anlegen und Inhalt hochladen (neun Schritte, siehe Apps-Plan).
+ */
+export async function publishWin32App(
+  graphClient: GraphClient,
+  scopes: string[],
+  ctx: ProviderContext,
+  payload: Record<string, unknown>,
+  opened: OpenedIntuneWin,
+  onProgress: (step: string) => void = () => undefined,
+  options: PublishOptions = {}
+): Promise<{ appId: string; contentVersion: string }> {
+  const tenantId = ctx.tenantId as string;
+  const sleep = options.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
+  const now = options.now ?? (() => Date.now());
+  const fetchImpl = options.fetchImpl ?? fetch;
+  const timeoutMs = options.uploadTimeoutMs ?? 20 * 60 * 1000;
+
+  // 1. App-Objekt
+  const app = await graphClient.post<{ id: string }>(tenantId, `${GRAPH_BETA}/deviceAppManagement/mobileApps`, scopes, payload);
+  onProgress(`App angelegt: ${app.id}`);
+  const base = `${GRAPH_BETA}/deviceAppManagement/mobileApps/${encodeURIComponent(app.id)}/microsoft.graph.win32LobApp`;
+
+  // 2. Content-Version
+  const version = await graphClient.post<{ id: string }>(tenantId, `${base}/contentVersions`, scopes, {});
+  onProgress(`Content-Version ${version.id}`);
+
+  // 3. Datei anmelden
+  const meta = opened.metadata;
+  const file = await graphClient.post<ContentFile>(tenantId, `${base}/contentVersions/${version.id}/files`, scopes, {
+    '@odata.type': '#microsoft.graph.mobileAppContentFile',
+    name: meta.fileName,
+    size: meta.unencryptedContentSize,
+    sizeEncrypted: opened.payload.length,
+    manifest: null,
+    isDependency: false,
+  });
+  const fileUrl = `${base}/contentVersions/${version.id}/files/${file.id}`;
+
+  // 4. Auf die Blob-Adresse warten
+  const deadline = now() + timeoutMs;
+  let uploadTarget: ContentFile = file;
+  while (uploadTarget.uploadState !== 'azureStorageUriRequestSuccess') {
+    if (uploadTarget.uploadState && /fail|error/i.test(uploadTarget.uploadState)) throw new Error(`Intune lehnte die Datei ab: ${uploadTarget.uploadState}`);
+    if (now() > deadline) throw new Error('Zeitueberschreitung beim Warten auf die Upload-Adresse');
+    await sleep(2000);
+    uploadTarget = await graphClient.get<ContentFile>(tenantId, fileUrl, scopes);
+  }
+  if (!uploadTarget.azureStorageUri) throw new Error('Keine Upload-Adresse von Intune');
+  onProgress('Upload-Adresse erhalten');
+
+  // 5. Bloecke hochladen
+  const blockIds: string[] = [];
+  for (let offset = 0, index = 0; offset < opened.payload.length; offset += BLOB_BLOCK_SIZE, index += 1) {
+    const chunk = opened.payload.subarray(offset, Math.min(offset + BLOB_BLOCK_SIZE, opened.payload.length));
+    const blockId = Buffer.from(String(index).padStart(4, '0')).toString('base64');
+    const response = await fetchImpl(`${uploadTarget.azureStorageUri}&comp=block&blockid=${encodeURIComponent(blockId)}`, {
+      method: 'PUT',
+      headers: { 'x-ms-blob-type': 'BlockBlob', 'Content-Length': String(chunk.length) },
+      // Buffer ist kein BodyInit; Kopie des Blocks als Uint8Array ueber eigenem ArrayBuffer
+      body: new Uint8Array(chunk),
+    });
+    if (!response.ok) throw new Error(`Blob-Block ${index} fehlgeschlagen: ${response.status}`);
+    blockIds.push(blockId);
+    onProgress(`Block ${index + 1} von ${Math.ceil(opened.payload.length / BLOB_BLOCK_SIZE)} hochgeladen`);
+  }
+  const blockList = `<?xml version="1.0" encoding="utf-8"?><BlockList>${blockIds.map((id) => `<Latest>${id}</Latest>`).join('')}</BlockList>`;
+  const listResponse = await fetchImpl(`${uploadTarget.azureStorageUri}&comp=blocklist`, {
+    method: 'PUT',
+    headers: { 'x-ms-blob-content-type': 'application/octet-stream', 'Content-Type': 'application/xml' },
+    body: blockList,
+  });
+  if (!listResponse.ok) throw new Error(`Blockliste fehlgeschlagen: ${listResponse.status}`);
+
+  // 6. Commit mit Verschluesselungsinfo (ohne @odata.type, sonst lehnt Graph ab)
+  await graphClient.post(tenantId, `${fileUrl}/commit`, scopes, {
+    fileEncryptionInfo: {
+      encryptionKey: meta.encryptionInfo.encryptionKey,
+      macKey: meta.encryptionInfo.macKey,
+      initializationVector: meta.encryptionInfo.initializationVector,
+      mac: meta.encryptionInfo.mac,
+      profileIdentifier: meta.encryptionInfo.profileIdentifier,
+      fileDigest: meta.encryptionInfo.fileDigest,
+      fileDigestAlgorithm: meta.encryptionInfo.fileDigestAlgorithm,
+    },
+  });
+  onProgress('Commit angestossen');
+
+  // 7. Auf commitFileSuccess warten
+  let committed = await graphClient.get<ContentFile>(tenantId, fileUrl, scopes);
+  while (committed.uploadState !== 'commitFileSuccess') {
+    if (committed.uploadState && /fail|error/i.test(committed.uploadState)) throw new Error(`Commit fehlgeschlagen: ${committed.uploadState}`);
+    if (now() > deadline) throw new Error('Zeitueberschreitung beim Commit');
+    await sleep(3000);
+    committed = await graphClient.get<ContentFile>(tenantId, fileUrl, scopes);
+  }
+
+  // 8. Version festschreiben
+  await graphClient.patch(tenantId, `${GRAPH_BETA}/deviceAppManagement/mobileApps/${encodeURIComponent(app.id)}`, scopes, {
+    '@odata.type': '#microsoft.graph.win32LobApp',
+    committedContentVersion: version.id,
+  });
+  onProgress('Content-Version festgeschrieben');
+  return { appId: app.id, contentVersion: version.id };
 }
 
 /**

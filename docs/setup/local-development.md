@@ -50,8 +50,13 @@ Erwartete erste Zeile der API:
 `Environment: <pfad>\.env.local (DEV_AUTH_BYPASS active)`
 
 Nach einem `git pull`, das `apps/api/src/db/schema.ts` aendert, einmal
-`npm run db:push` ausfuehren, damit neue Tabellen (z. B. `cve_explanations`,
-`inventory_snapshots`, `alerts`) angelegt werden.
+`npm run db:push` ausfuehren, damit neue Tabellen und Spalten (z. B.
+`cve_explanations`, `inventory_snapshots.unavailable`, `alerts`,
+`app_packages`, `app_deployments`, `build_jobs`) angelegt werden.
+Fehlt etwas, meldet die API es beim Start ("Database schema is behind the
+code"), `GET /health` zeigt `schema.missing`, und Aufrufe antworten mit
+dem Problemtyp `schema-outdated` statt mit einem rohen Postgres-Fehler
+wie `column "unavailable" does not exist`.
 
 ## Bestands-Snapshot
 
@@ -103,8 +108,46 @@ Vorher und Nachher und warnt bei "erforderlich" fuer grosse Gruppen.
 `apps.create-deployment-groups` legt je App drei Sicherheitsgruppen an
 (`<Praefix> <App> - Install (Required)`, `- Available`, `- Uninstall`),
 verwendet bestehende Gruppen gleichen Namens wieder und weist sie auf
-Wunsch sofort zu. Paketkatalog, Upload und Build-Worker (Stufen C/D) sind
-im Plan `docs/implementation/apps-module-plan.md` beschrieben und offen.
+Wunsch sofort zu.
+
+### Paketkatalog und Rollout
+
+Unter **Apps > Katalog** pflegt der MSP Pakete einmal fuer alle Tenants.
+Ein Paket besteht aus einem typisierten Manifest (Hersteller, Name,
+Version, Architektur, Sprache, Revision, Installertyp `msi`/`exe`/`psadt`/
+`winget`, Install- und Uninstall-Befehl, Erkennung, Anforderungen,
+Return-Codes, Neustartverhalten) und optional zwei Dateien: dem fertigen
+`.intunewin` (Artefakt) und dem rohen Installer (fuer den spaeteren
+Build-Worker). Dateien gehen per `PUT /packages/:id/artifact|installer
+?fileName=` als roher Body in den Artefaktspeicher.
+
+Artefaktspeicher: `ARTIFACT_STORE=local` legt Dateien unter
+`ARTIFACT_STORE_PATH` (Standard `./data/artifacts`) ab, `ARTIFACT_STORE=azure`
+schreibt per Managed Identity in den Blob-Container
+`ARTIFACT_AZURE_ACCOUNT`/`ARTIFACT_AZURE_CONTAINER` (EU-Region waehlen).
+Es gibt keine SAS-Schluessel in der Konfiguration. `APP_DETECTION_PREFIX`
+(Standard `ZSC`) bildet den Registry-Erkennungsschluessel
+`HKLM\SOFTWARE\<Praefix>_IntuneAppInstall\Apps\<Vendor-Name-Version-Lang-Rev-Arch>`
+mit dem Wert `Installed = Y`; das Praefix gilt pro MSP und wird nach dem
+ersten Upload nicht mehr geaendert, weil es Teil des Bezeichners ist.
+
+**Rollout** (`POST /packages/:id/rollout`, Rolle Engineer) legt je
+gewaehltem, verbundenem Tenant einen Job `apps.publish` an. Die Vorschau
+zeigt Anzeigename, Typ, Install-/Uninstall-Befehl, Erkennung, Artefakt mit
+Groesse und SHA-256 sowie Warnungen (bereits veroeffentlicht, kein
+Artefakt). Der Job laeuft dann den Intune-Upload als Zustandsautomat:
+App anlegen, Content-Version, Datei anlegen, auf `azureStorageUriRequestSuccess`
+warten, Blob in 6-MB-Bloecken hochladen, Blockliste, Commit mit
+`fileEncryptionInfo` aus der `Detection.xml` der `.intunewin`, auf
+`commitFileSuccess` warten, `committedContentVersion` setzen. winget-Pakete
+legen nur das Graph-Objekt `winGetApp` an. Der Job weist niemandem zu;
+Zuweisung bleibt der bewusste zweite Schritt unter Apps. Fortschritt,
+Intune-App-Id und Fehler je Tenant stehen in `app_deployments` und im
+Paketdetail. Benoetigt `DeviceManagementApps.ReadWrite.All`.
+
+Der Windows-Build-Worker (Stufe D: Installer plus Manifest -> PSADT-Wrapper
+-> `.intunewin`) ist im Plan `docs/implementation/apps-module-plan.md`
+beschrieben.
 
 ## Remotehilfe (TeamViewer)
 

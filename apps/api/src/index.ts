@@ -34,6 +34,7 @@ import { packagesRouter } from './routes/packages.js';
 import { getJobQueue, getJobHealth } from './services/job-queue.js';
 import { startInventorySync, getInventoryHealth } from './services/inventory.js';
 import { startAlerting, getAlertingHealth } from './services/alerting.js';
+import { reportSchemaAtStartup, getSchemaHealth } from './services/schema-check.js';
 
 const app = new Hono();
 
@@ -59,12 +60,14 @@ app.get('/health', (c) => {
   const jobs = getJobHealth();
   const inventory = getInventoryHealth();
   const alerting = getAlertingHealth();
+  const schema = getSchemaHealth();
   return c.json({
-    status: jobs.worker && jobs.redis === 'ready' && inventory.worker && alerting.worker ? 'ok' : 'degraded',
+    status: jobs.worker && jobs.redis === 'ready' && inventory.worker && alerting.worker && schema?.ok !== false ? 'ok' : 'degraded',
     timestamp: new Date().toISOString(),
     jobs,
     inventory,
     alerting,
+    schema,
   });
 });
 
@@ -140,6 +143,9 @@ serve({
 });
 
 console.log(`ZeroStress API running at http://localhost:${port}`);
+
+// Schema-Stand pruefen: fehlende Spalten einmal deutlich melden (npm run db:push)
+void reportSchemaAtStartup();
 
 // Worker sofort starten, damit Jobs nicht erst nach dem ersten /jobs-Aufruf laufen
 getJobQueue();

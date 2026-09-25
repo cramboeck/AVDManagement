@@ -3,3 +3,4 @@
  */
 
 export * from './manifest.js';
+export * from './intunewin.js';

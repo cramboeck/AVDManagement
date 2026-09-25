@@ -1,10 +1,23 @@
 # Modul "Apps" (Application Management) — Plan
 
-Status: Stufen A und B umgesetzt (Bestand, Installationsstatus,
-Zuweisungen als Jobs, Bereitstellungsgruppen). Stufen C und D offen, siehe
-"Offene Entscheidungen". Grundlage: Modul-Standard (`docs/backlog.md`) und
-die Analyse von PackageFactory und CloudManagementPortal (beide MIT,
-eigener Code des Auftraggebers).
+Status: Stufen A, B und C umgesetzt (Bestand, Installationsstatus,
+Zuweisungen als Jobs, Bereitstellungsgruppen, Paketkatalog mit Manifest
+und Artefaktspeicher, Upload-Pipeline als Job `apps.publish`, Rollout auf
+N Tenants). Stufe D (Windows-Build-Worker) in Arbeit. Grundlage:
+Modul-Standard (`docs/backlog.md`) und die Analyse von PackageFactory und
+CloudManagementPortal (beide MIT, eigener Code des Auftraggebers).
+
+Entscheidungen (freigegeben): Reihenfolge A -> B -> C -> D; erst fertige
+`.intunewin` hochladen, dann Worker; Ablage Cockpit-DB plus Azure Blob EU
+(lokal: Ordner); Detection-Praefix pro MSP; Portal-Apps nur anzeigen;
+winget als Katalogtyp; Code-Signierung spaeter.
+
+Umgesetzt in C2: `.intunewin`-Leser (ZIP-Zentralverzeichnis + inflateRaw)
+liest `Detection.xml` und die innere `Contents/IntunePackage.intunewin`;
+`publishWin32App` faehrt den Automaten unten mit Fortschrittsmeldung je
+Schritt; `apps.publish` ueberspringt bereits veroeffentlichte Tenants und
+schreibt Status/Fehler nach `app_deployments`; `POST /packages/:id/rollout`
+legt je Tenant einen Job an (optional sofort freigegeben).
 
 ## Aus der zweiten Durchsicht der Repos (Stand Umsetzung A/B)
 
@@ -112,13 +125,14 @@ Versionserkennung (Evergreen, winget als Quellen), Supersedence,
 Rollout in Ringen (Pilot -> Breit), automatische Aktualisierung bei
 neuer Version mit Preview der betroffenen Tenants.
 
-## Offene Entscheidungen
+## Entschieden
 
-1. Reihenfolge A -> B -> C -> D freigeben?
-2. PackageFactory als Build-Worker ausbauen oder zunaechst nur fertige
-   `.intunewin`-Dateien hochladen?
-3. Paketablage: Cockpit-DB + Azure Storage (EU), oder bestehende
-   Infrastruktur?
-4. Detection-Praefix pro MSP (`CompanyPrefix`) oder pro Kunde?
-5. Umgang mit Apps, die nicht aus dem Katalog stammen (im Portal
-   angelegt): nur anzeigen oder in den Katalog importieren?
+1. Reihenfolge A -> B -> C -> D.
+2. Zuerst fertige `.intunewin`-Dateien hochladen (C), dann der Worker (D).
+   PackageFactory wird nicht angebunden; der Worker entsteht im Monorepo.
+3. Paketablage: Cockpit-DB plus Azure Blob Storage (EU), lokal ein Ordner.
+4. Detection-Praefix pro MSP (`APP_DETECTION_PREFIX`).
+5. Im Portal angelegte Apps werden nur angezeigt, nicht importiert.
+6. winget ist ein Katalogtyp ohne Artefakt.
+7. Code-Signierung der PSADT-Skripte kommt spaeter (Worker sieht den
+   Haken vor, Zertifikat bleibt ausserhalb des Repos).

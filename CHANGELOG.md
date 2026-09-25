@@ -1,0 +1,52 @@
+# Changelog
+
+Alle nennenswerten Aenderungen an ZeroStress Cockpit. Format angelehnt an
+"Keep a Changelog"; bis zur ersten Beta gibt es nur den Abschnitt
+"Unreleased". Aeltere Schritte stehen in der Git-Historie.
+
+## Unreleased
+
+### Hinzugefuegt
+
+- Apps: Upload-Pipeline fuer Win32-Pakete nach Intune als Job
+  `apps.publish` (App anlegen, Content-Version, Blob-Bloecke, Commit,
+  Content-Version festschreiben) und Rollout eines Katalogpakets auf
+  mehrere Tenants mit Vorschau, Freigabe und Status je Tenant.
+- Apps: `.intunewin`-Leser fuer `Detection.xml` und die innere Nutzlast.
+- API: Schema-Pruefung beim Start und in `GET /health`; fehlende Tabellen
+  oder Spalten werden als Problemtyp `schema-outdated` mit Hinweis auf
+  `npm run db:push` gemeldet statt als roher Postgres-Fehler.
+- Gruppen: Jobs zum Hinzufuegen und Entfernen von Mitgliedern und
+  Besitzern mit Vorschau und Audit; Entfernen direkt aus der Benutzerseite.
+- Apps: Paketkatalog mit typisiertem Manifest, Artefaktspeicher (lokal
+  oder Azure Blob EU) und Katalog-UI (Stufe C1).
+- Lokale Adminrechte auf Zeit (Vergabe und Entzug als Jobs) und
+  Batteriezustand-Skript.
+- SharePoint- und OneDrive-Freigabeuebersicht, Alerts-Spalte im Dashboard.
+- TeamViewer: Remote-Sitzung aus dem Geraetedetail mit Begruendung und
+  Audit.
+- MCP-Server ueber die Konsolen-Dienste.
+- Anmelde-Anomalien als Alerts mit festem Regelsatz, Liste in der App und
+  optionaler Mail.
+- Skript fuer lokale Administratoren mit versiegeltem, auditiertem Ergebnis.
+- Apps-Modul Stufen A und B: Intune-App-Bestand, Installationsstatus,
+  Zuweisungen als Jobs, Bereitstellungsgruppen.
+- Best-Practice-Pruefungen je Tenant inklusive SPF/DKIM/DMARC per DNS.
+- Exchange-Seite mit Postfachnutzung, Kontingenten und Mailvolumen.
+- Gruppenmodul mit Besitzer- und Gastkennzeichen.
+- Tenant-Entfernung mit getippter Bestaetigung.
+- Skriptbibliothek mit Intune-Remediation-Laeufen (R1) und Azure Run
+  Command fuer AVD-Sitzungshosts (R2); Skripte fuer Updatestatus,
+  Systeminfo, winget-Updates, Netzwerk, Speicher.
+- Bestands-Snapshot je Tenant mit Hintergrundabgleich.
+- BitLocker- und LAPS-Wiederherstellung mit begruendetem, auditiertem
+  Aufdecken.
+- Sicherheitsuebersicht, CVE-Detail mit oeffentlicher Anreicherung und
+  KI-Erklaerung, Geraetemodul aus Intune und Defender.
+
+### Geaendert
+
+- Geraeteuebersicht: Netzwerkkarte zeigt nur aktive Adapter, Rest
+  ausklappbar; Skriptergebnisse in Ausklappbereichen.
+- Remediation-Ergebnisse werden per Basislinienvergleich erkannt, mit
+  Rueckfall auf den letzten bekannten Zustand.

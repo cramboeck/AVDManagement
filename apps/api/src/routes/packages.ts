@@ -11,6 +11,9 @@ import { authMiddleware, requireRole } from '../middleware/auth.js';
 import { DrizzleAuditLogger } from '../services/audit-logger.js';
 import { createPackage, deletePackage, getPackage, listPackages, openFile, storeFile, updateManifest, detectionPrefix } from '../services/packages.js';
 import { getArtifactStore } from '../services/artifact-store.js';
+import { startRollout } from '../services/publishing.js';
+import { zValidator } from '@hono/zod-validator';
+import { z } from 'zod';
 import type { CorrelationId } from '@zerostress/types';
 
 const app = new Hono();
@@ -91,6 +94,34 @@ app.delete('/:packageId', requireRole('owner'), async (c) => {
     correlationId: randomUUID() as CorrelationId,
   });
   return c.json({ deleted: true });
+});
+
+// Rollout: je gewaehltem Tenant ein Job apps.publish mit Vorschau
+const rolloutSchema = z.object({ tenantIds: z.array(z.string().uuid()).min(1).max(100), autoApprove: z.boolean().default(false) });
+
+app.post('/:packageId/rollout', requireRole('engineer'), zValidator('json', rolloutSchema), async (c) => {
+  const auth = c.get('auth');
+  const packageId = c.req.param('packageId');
+  const body = c.req.valid('json');
+  try {
+    const jobs = await startRollout({ mspId: auth.mspId, userId: auth.user.id, userEmail: auth.user.email, packageId, tenantIds: body.tenantIds, autoApprove: body.autoApprove });
+    await audit.log({
+      mspId: auth.mspId,
+      tenantId: null,
+      userId: auth.user.id,
+      action: 'apps.package.rollout',
+      targetType: 'package',
+      targetId: packageId,
+      targetDisplayName: packageId,
+      afterState: { tenants: body.tenantIds.length, jobs: jobs.length, autoApprove: body.autoApprove },
+      result: 'success',
+      correlationId: randomUUID() as CorrelationId,
+    });
+    return c.json({ jobs }, 202);
+  } catch (error) {
+    if (error instanceof Error && /Package not found/.test(error.message)) return c.json(problem(404, 'Package not found'), 404);
+    throw error;
+  }
 });
 
 // Datei-Upload als roher Body (Content-Type application/octet-stream), Dateiname als Query
