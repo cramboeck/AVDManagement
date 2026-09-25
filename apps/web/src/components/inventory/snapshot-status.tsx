@@ -12,6 +12,7 @@ const kindLabels: Record<InventoryKind, string> = {
   vulnerabilities: 'Schwachstellen',
   groups: 'Gruppen',
   mail: 'Postfaecher',
+  apps: 'Apps',
 };
 
 export function formatAge(iso: string | null, now = Date.now()): string {

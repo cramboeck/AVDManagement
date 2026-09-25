@@ -6,10 +6,10 @@
  */
 
 import { Redis } from 'ioredis';
-import { JobQueue, registerIdentityJobs, registerAvdJobs, registerDeviceJobs, registerScriptJobs, registerAvdScriptJobs } from '@zerostress/core';
+import { JobQueue, registerIdentityJobs, registerAvdJobs, registerDeviceJobs, registerScriptJobs, registerAvdScriptJobs, registerAppJobs } from '@zerostress/core';
 import { DrizzleJobStore } from './job-store.js';
 import { DrizzleAuditLogger } from './audit-logger.js';
-import { getIdentityProvider, getAvdProvider, getDeviceProvider, getRemediationProvider } from './microsoft-clients.js';
+import { getIdentityProvider, getAvdProvider, getDeviceProvider, getRemediationProvider, getAppProvider } from './microsoft-clients.js';
 
 // Freigaben verfallen nach der Preview-Gueltigkeit (5 Min) plus Puffer
 const PENDING_APPROVAL_TTL_MS = 10 * 60 * 1000;
@@ -34,6 +34,7 @@ export function getJobQueue(): JobQueue {
     registerDeviceJobs(getDeviceProvider());
     registerScriptJobs(getRemediationProvider());
     registerAvdScriptJobs(getAvdProvider());
+    registerAppJobs(getAppProvider());
 
     jobStore = new DrizzleJobStore();
     jobQueue = new JobQueue({ redis }, jobStore, new DrizzleAuditLogger());

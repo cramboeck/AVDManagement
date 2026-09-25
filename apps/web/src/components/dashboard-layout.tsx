@@ -86,6 +86,7 @@ const navItems = [
   { href: '/groups', label: 'Gruppen', icon: GroupsIcon },
   { href: '/mail', label: 'Exchange', icon: MailIcon },
   { href: '/devices', label: 'Geraete', icon: DeviceIcon },
+  { href: '/apps', label: 'Apps', icon: AppsIcon },
   { href: '/network', label: 'Netzwerk', icon: NetworkIcon },
   { href: '/security', label: 'Sicherheit', icon: ShieldIcon },
   { href: '/jobs', label: 'Jobs', icon: JobsIcon },
@@ -187,6 +188,17 @@ function GroupsIcon({ className }: { className?: string }) {
       <circle cx="9" cy="8" r="3" />
       <circle cx="17" cy="9" r="2.5" />
       <path d="M3 19a6 6 0 0 1 12 0M14.5 18a4.5 4.5 0 0 1 6.5 0" />
+    </svg>
+  );
+}
+
+function AppsIcon({ className }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={className}>
+      <rect x="3" y="3" width="7" height="7" rx="1.5" />
+      <rect x="14" y="3" width="7" height="7" rx="1.5" />
+      <rect x="3" y="14" width="7" height="7" rx="1.5" />
+      <path d="M17.5 14v7M14 17.5h7" />
     </svg>
   );
 }

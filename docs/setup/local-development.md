@@ -79,6 +79,25 @@ Minuten), die Zaehlungen laufen ueber `$batch` mit zwei Anfragen je Gruppe.
 `resourceProvisioningOptions`, ein Teams-Scope ist nicht noetig. Das Detail
 laedt Besitzer und Mitglieder live (bis 2000).
 
+## Apps (Intune-Anwendungen)
+
+Die Seite **Apps** zeigt Windows-Apps aus Intune (Win32, winget, MSI,
+Microsoft 365 Apps, Edge, Store, Web-Links) mit Zuweisungen und den Zahlen
+installiert, fehlgeschlagen, ausstehend aus dem Intune-Bericht
+`getAppsInstallSummaryReport`; Snapshot alle 30 Minuten. Das Detail laedt
+den Installationsstatus je Geraet live (`getDeviceInstallStatusReport`)
+mit Klartext zu bekannten Fehlercodes.
+
+Zuweisungen sind Jobs mit Vorschau: `apps.assign` und `apps.unassign`
+lesen die bestehende Liste, fuehren zusammen und schreiben sie komplett
+zurueck, weil Intune `/assign` die ganze Liste ersetzt. Die Vorschau zeigt
+Vorher und Nachher und warnt bei "erforderlich" fuer grosse Gruppen.
+`apps.create-deployment-groups` legt je App drei Sicherheitsgruppen an
+(`<Praefix> <App> - Install (Required)`, `- Available`, `- Uninstall`),
+verwendet bestehende Gruppen gleichen Namens wieder und weist sie auf
+Wunsch sofort zu. Paketkatalog, Upload und Build-Worker (Stufen C/D) sind
+im Plan `docs/implementation/apps-module-plan.md` beschrieben und offen.
+
 ## Best-Practice-Checks (Sicherheit > Best Practices)
 
 Ein eigener Katalog aus oeffentlichen Microsoft-Empfehlungen, keine
@@ -201,6 +220,8 @@ Secret ab (`AADSTS700025`).
 | `DeviceLocalCredential.Read.All` | Windows-LAPS-Passwoerter; setzt LAPS mit Entra-Sicherung in der Intune-Richtlinie voraus | Karte "Berechtigung fehlt" |
 | `DeviceManagementConfiguration.ReadWrite.All` | Skriptbibliothek als Intune Remediations im Tenant anlegen und aktuell halten (Geraet > Skripte) | Karte "Berechtigung fehlt" im Tab Skripte |
 | `Reports.Read.All` | Exchange-Nutzungsberichte: Postfachgroessen, Kontingente, Mailvolumen (Seite Exchange) | Karte "Berechtigung fehlt" |
+| `DeviceManagementApps.ReadWrite.All` | Apps: Bestand, Installationsstatus, Zuweisungen als Jobs (Seite Apps) | Karte "Berechtigung fehlt" |
+| `Group.ReadWrite.All` | Bereitstellungsgruppen je App anlegen (Apps > Bereitstellungsgruppen anlegen) | Job schlaegt mit 403 fehl |
 | `Policy.Read.All` | Best-Practice-Checks: Conditional Access, Sicherheitsstandards, Authentifizierungsmethoden, Autorisierungsrichtlinie (Sicherheit > Best Practices) | Betroffene Checks "nicht pruefbar" |
 
 Schluessel und Passwoerter werden nie gelistet oder exportiert: Anzeige nur

@@ -16,3 +16,4 @@ export * from './remediation-provider.js';
 export * from './group-provider.js';
 export * from './mail-provider.js';
 export * from './policy-provider.js';
+export * from './app-provider.js';

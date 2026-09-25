@@ -1,7 +1,36 @@
 # Modul "Apps" (Application Management) — Plan
 
-Status: Entwurf, noch nicht freigegeben. Grundlage: Modul-Standard
-(`docs/backlog.md`) und die Analyse von PackageFactory (MIT, eigener Code).
+Status: Stufen A und B umgesetzt (Bestand, Installationsstatus,
+Zuweisungen als Jobs, Bereitstellungsgruppen). Stufen C und D offen, siehe
+"Offene Entscheidungen". Grundlage: Modul-Standard (`docs/backlog.md`) und
+die Analyse von PackageFactory und CloudManagementPortal (beide MIT,
+eigener Code des Auftraggebers).
+
+## Aus der zweiten Durchsicht der Repos (Stand Umsetzung A/B)
+
+Uebernommen in A/B:
+- Zuweisung als "lesen, zusammenfuehren, ersetzen" (`mergeAssignments`),
+  weil `/assign` die komplette Liste ersetzt; PackageFactory schickte die
+  bestehenden Ziele unveraendert mit.
+- Drei Bereitstellungsgruppen je App mit Namensvorschau; anders als in
+  PackageFactory mit Duplikatpruefung ueber den Anzeigenamen und als Job
+  mit Preview statt Sofortaktion.
+- Fehlercode-Tabelle fuer den Installationsstatus, erweitert und auf Deutsch.
+
+Fuer Stufe C vorgemerkt (mit den in PackageFactory gefundenen Fehlern korrigiert):
+- Registry-Erkennung: `keyPath` muss mit `HKEY_LOCAL_MACHINE\` beginnen,
+  nicht mit `SOFTWARE\`; Erkennung auf den Wert `Installed = Y` statt
+  "Schluessel existiert", sonst gilt eine deinstallierte App als installiert.
+- Der Erkennungsschluessel muss aus demselben Bezeichner entstehen wie im
+  Installationsskript (kein Parsen von Ordnernamen).
+- Commit-Aufruf ohne `@odata.type` in `fileEncryptionInfo`; die innere Datei
+  `Contents/IntunePackage.intunewin` hochladen, nicht das aeussere Zip.
+- Upload als Job mit Zustandsautomat, nicht in einem HTTP-Request.
+- CloudManagementPortal: Token-Cache je Scope uebernommen, aber mit
+  TenantId im Schluessel (bereits so in `TokenProvider`).
+
+Nicht uebernommen: eigene Datei-Endpunkte ohne Authentifizierung,
+Gruppenloeschen ohne Bestaetigung, Supersedence bleibt Roadmap.
 
 ## Ziel
 

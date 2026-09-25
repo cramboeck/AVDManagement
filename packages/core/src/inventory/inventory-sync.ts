@@ -20,6 +20,7 @@ import type {
   GroupInventorySet,
   InventoryKind,
   MailOverviewSet,
+  AppInventorySet,
   MspId,
   SnapshotMeta,
   TenantId,
@@ -28,7 +29,7 @@ import type {
 import type { ProviderContext } from '../providers/resource-provider.js';
 import type { InventorySnapshotStore, SnapshotRecord } from './snapshot-store.js';
 
-export const INVENTORY_KINDS: InventoryKind[] = ['devices', 'vulnerabilities', 'groups', 'mail'];
+export const INVENTORY_KINDS: InventoryKind[] = ['devices', 'vulnerabilities', 'groups', 'mail', 'apps'];
 
 // Zielintervalle: Geraete aendern sich oefter als die CVE-Zuordnung
 export const DEFAULT_SYNC_INTERVALS: Record<InventoryKind, number> = {
@@ -37,6 +38,7 @@ export const DEFAULT_SYNC_INTERVALS: Record<InventoryKind, number> = {
   groups: 60 * 60 * 1000,
   // Berichte aendern sich einmal am Tag
   mail: 6 * 60 * 60 * 1000,
+  apps: 30 * 60 * 1000,
 };
 
 // Ein Sync, der laenger als das laeuft, gilt als abgebrochen (Prozessneustart)
@@ -55,6 +57,7 @@ export interface InventoryPayloads {
   vulnerabilities: CapabilityResult<TenantVulnerabilitySet>;
   groups: CapabilityResult<GroupInventorySet>;
   mail: CapabilityResult<MailOverviewSet>;
+  apps: CapabilityResult<AppInventorySet>;
 }
 
 export type InventoryLoaders = {
@@ -184,6 +187,7 @@ export class InventorySyncEngine {
       vulnerabilities: options.intervals?.vulnerabilities ?? DEFAULT_SYNC_INTERVALS.vulnerabilities,
       groups: options.intervals?.groups ?? DEFAULT_SYNC_INTERVALS.groups,
       mail: options.intervals?.mail ?? DEFAULT_SYNC_INTERVALS.mail,
+      apps: options.intervals?.apps ?? DEFAULT_SYNC_INTERVALS.apps,
     };
     this.now = options.now ?? (() => new Date());
   }

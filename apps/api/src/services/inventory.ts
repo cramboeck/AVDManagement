@@ -10,6 +10,7 @@ import { Redis } from 'ioredis';
 import { and, eq } from 'drizzle-orm';
 import { InventorySyncService, INVENTORY_KINDS, type SyncTarget } from '@zerostress/core';
 import type {
+  AppInventory,
   Device,
   DeviceInventory,
   GroupInventory,
@@ -23,7 +24,7 @@ import type {
 } from '@zerostress/types';
 import { db, managedTenants } from '../db/index.js';
 import { DrizzleSnapshotStore } from './inventory-store.js';
-import { getDeviceProvider, getGroupProvider, getMailProvider, rememberMicrosoftTenantId } from './microsoft-clients.js';
+import { getAppProvider, getDeviceProvider, getGroupProvider, getMailProvider, rememberMicrosoftTenantId } from './microsoft-clients.js';
 
 // Der Snapshot haelt alle CVEs; die Route schneidet je Anfrage zu
 const VULNERABILITY_SNAPSHOT_LIMIT = 5000;
@@ -58,6 +59,7 @@ export function getInventoryService(): InventorySyncService {
         vulnerabilities: (ctx) => getDeviceProvider().getTenantVulnerabilities(ctx, { top: VULNERABILITY_SNAPSHOT_LIMIT }),
         groups: (ctx) => getGroupProvider().listGroups(ctx),
         mail: (ctx) => getMailProvider().getMailOverview(ctx, 'D30'),
+        apps: (ctx) => getAppProvider().listApps(ctx),
       },
       onSynced: async (target, kind) => {
         if (kind === 'devices') {
@@ -131,6 +133,25 @@ export async function getGroupInventory(tenant: ManagedTenant): Promise<GroupInv
 export async function getMailOverview(tenant: ManagedTenant): Promise<MailOverview> {
   const read = await getInventoryService().getOrLoad(targetOf(tenant), 'mail');
   return { ...read.payload, snapshot: read.meta };
+}
+
+/**
+ * Apps mit aufgeloesten Gruppennamen aus dem Gruppen-Snapshot.
+ */
+export async function getAppInventory(tenant: ManagedTenant): Promise<AppInventory> {
+  const [apps, groups] = await Promise.all([getInventoryService().getOrLoad(targetOf(tenant), 'apps'), getInventoryService().getOrLoad(targetOf(tenant), 'groups').catch(() => null)]);
+  if (!apps.payload.available) {
+    return { ...apps.payload, snapshot: apps.meta };
+  }
+  const names = new Map<string, string>();
+  if (groups?.payload.available) {
+    for (const g of groups.payload.data.items) names.set(g.id, g.displayName);
+  }
+  const items = apps.payload.data.items.map((app) => ({
+    ...app,
+    assignments: app.assignments.map((a) => ({ ...a, groupName: a.groupId ? (names.get(a.groupId) ?? null) : null })),
+  }));
+  return { available: true, data: { ...apps.payload.data, items }, snapshot: apps.meta };
 }
 
 export async function getInventoryStatus(tenant: ManagedTenant): Promise<TenantInventoryStatus> {

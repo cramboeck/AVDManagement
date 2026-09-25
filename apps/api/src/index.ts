@@ -26,6 +26,7 @@ import { scriptsRouter } from './routes/scripts.js';
 import { networkRouter } from './routes/network.js';
 import { groupsRouter } from './routes/groups.js';
 import { mailRouter } from './routes/mail.js';
+import { appsRouter } from './routes/apps.js';
 import { getJobQueue, getJobHealth } from './services/job-queue.js';
 import { startInventorySync, getInventoryHealth } from './services/inventory.js';
 
@@ -99,6 +100,7 @@ app.route('/tenants/:tenantId/scripts', scriptsRouter);
 app.route('/tenants/:tenantId/network', networkRouter);
 app.route('/tenants/:tenantId/groups', groupsRouter);
 app.route('/tenants/:tenantId/mail', mailRouter);
+app.route('/tenants/:tenantId/apps', appsRouter);
 app.route('/dashboard', dashboardRouter);
 
 // Session-Info (fuer Frontend)

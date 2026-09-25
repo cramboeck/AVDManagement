@@ -470,7 +470,98 @@ export interface DeviceInventory {
 // Bestands-Snapshot (Cache je Tenant)
 // ============================================
 
-export type InventoryKind = 'devices' | 'vulnerabilities' | 'groups' | 'mail';
+export type InventoryKind = 'devices' | 'vulnerabilities' | 'groups' | 'mail' | 'apps';
+
+// ============================================
+// Apps (Intune-Anwendungen, Zuweisungen, Installationsstatus)
+// ============================================
+
+export type IntuneAppType =
+  | 'win32LobApp'
+  | 'winGetApp'
+  | 'windowsMobileMSI'
+  | 'officeSuiteApp'
+  | 'windowsMicrosoftEdgeApp'
+  | 'microsoftStoreForBusinessApp'
+  | 'webApp'
+  | 'windowsUniversalAppX'
+  | 'other';
+
+export type AppAssignmentIntent = 'required' | 'available' | 'uninstall' | 'availableWithoutEnrollment';
+export type AppAssignmentTargetType = 'group' | 'exclusionGroup' | 'allUsers' | 'allDevices';
+
+export interface AppAssignment {
+  id: string;
+  intent: AppAssignmentIntent;
+  targetType: AppAssignmentTargetType;
+  groupId: string | null;
+  // Aus dem Gruppen-Snapshot aufgeloest; null, wenn unbekannt
+  groupName: string | null;
+  filterId: string | null;
+  filterType: 'include' | 'exclude' | null;
+}
+
+export interface AppInstallSummary {
+  installed: number;
+  failed: number;
+  pending: number;
+  notInstalled: number;
+  notApplicable: number;
+}
+
+export interface IntuneApp {
+  id: string;
+  displayName: string;
+  publisher: string | null;
+  type: IntuneAppType;
+  version: string | null;
+  createdAt: string | null;
+  modifiedAt: string | null;
+  isAssigned: boolean;
+  assignments: AppAssignment[];
+  // null: Bericht nicht verfuegbar
+  install: AppInstallSummary | null;
+}
+
+export interface AppStats {
+  total: number;
+  assigned: number;
+  withFailures: number;
+  win32: number;
+  winget: number;
+}
+
+export interface AppInventorySet {
+  items: IntuneApp[];
+  stats: AppStats;
+  // Installationszahlen aus dem Intune-Bericht (kann fehlen)
+  summaryAvailable: boolean;
+}
+
+export type AppInventory = CapabilityResult<AppInventorySet> & { snapshot?: SnapshotMeta };
+
+export type AppInstallState = 'installed' | 'failed' | 'pending' | 'notInstalled' | 'notApplicable' | 'uninstallFailed' | 'unknown';
+
+export interface AppDeviceStatus {
+  deviceId: string | null;
+  deviceName: string;
+  userPrincipalName: string | null;
+  installState: AppInstallState;
+  installStateDetail: string | null;
+  errorCode: string | null;
+  // Klartext zu bekannten Intune-Fehlercodes
+  errorHint: string | null;
+  appVersion: string | null;
+  lastModifiedAt: string | null;
+}
+
+export interface AppAssignmentInput {
+  intent: AppAssignmentIntent;
+  targetType: AppAssignmentTargetType;
+  groupId: string | null;
+  filterId?: string | null;
+  filterType?: 'include' | 'exclude' | null;
+}
 
 // ============================================
 // Exchange Online: Postfaecher und Mailaktivitaet (Graph-Berichte)

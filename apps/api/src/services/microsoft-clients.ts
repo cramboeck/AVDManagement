@@ -19,6 +19,7 @@ import {
   GroupProvider,
   MailProvider,
   PolicyProvider,
+  AppProvider,
   DEFENDER_API_BASE_URL,
   NotFoundError,
 } from '@zerostress/core';
@@ -127,6 +128,15 @@ export function getPolicyProvider(): PolicyProvider {
     policyProvider = new PolicyProvider(getGraphClient());
   }
   return policyProvider;
+}
+
+let appProvider: AppProvider | null = null;
+
+export function getAppProvider(): AppProvider {
+  if (!appProvider) {
+    appProvider = new AppProvider(getGraphClient());
+  }
+  return appProvider;
 }
 
 let securityProvider: SecurityProvider | null = null;

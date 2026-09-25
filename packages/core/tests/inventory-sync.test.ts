@@ -66,9 +66,10 @@ function engineFor(store: InMemorySnapshotStore, loaders?: Partial<ConstructorPa
     },
   }));
   const mail = vi.fn(async () => ({ available: false as const, reason: 'permission-missing' as const, missingPermission: 'Reports.Read.All', detail: null }));
+  const apps = vi.fn(async () => ({ available: true as const, data: { items: [], stats: { total: 0, assigned: 0, withFailures: 0, win32: 0, winget: 0 }, summaryAvailable: false } }));
   const engine = new InventorySyncEngine({
     store,
-    loaders: { devices, vulnerabilities, groups, mail, ...loaders },
+    loaders: { devices, vulnerabilities, groups, mail, apps, ...loaders },
     listTargets: async () => [
       { tenantId: TENANT_A, mspId: MSP },
       { tenantId: TENANT_B, mspId: MSP },
@@ -81,7 +82,7 @@ function engineFor(store: InMemorySnapshotStore, loaders?: Partial<ConstructorPa
 
 describe('planSync', () => {
   it('schedules every kind when nothing is stored', () => {
-    expect(planSync([], NOW, DEFAULT_SYNC_INTERVALS)).toEqual(['devices', 'vulnerabilities', 'groups', 'mail']);
+    expect(planSync([], NOW, DEFAULT_SYNC_INTERVALS)).toEqual(['devices', 'vulnerabilities', 'groups', 'mail', 'apps']);
   });
 
   it('leaves fresh snapshots alone and picks up stale ones', () => {
@@ -89,7 +90,8 @@ describe('planSync', () => {
     const stale = record({ kind: 'vulnerabilities', syncedAt: new Date(NOW.getTime() - DEFAULT_SYNC_INTERVALS.vulnerabilities) });
     const freshGroups = record({ kind: 'groups', syncedAt: NOW });
     const freshMail = record({ kind: 'mail', syncedAt: NOW });
-    expect(planSync([fresh, stale, freshGroups, freshMail], NOW, DEFAULT_SYNC_INTERVALS)).toEqual(['vulnerabilities']);
+    const freshApps = record({ kind: 'apps', syncedAt: NOW });
+    expect(planSync([fresh, stale, freshGroups, freshMail, freshApps], NOW, DEFAULT_SYNC_INTERVALS)).toEqual(['vulnerabilities']);
   });
 
   it('does not restart a running sync unless it is stuck', () => {
@@ -97,7 +99,8 @@ describe('planSync', () => {
     const stuck = record({ kind: 'vulnerabilities', status: 'running', startedAt: new Date(NOW.getTime() - RUNNING_STUCK_MS) });
     const groups = record({ kind: 'groups', syncedAt: NOW });
     const mail = record({ kind: 'mail', syncedAt: NOW });
-    expect(planSync([running, stuck, groups, mail], NOW, DEFAULT_SYNC_INTERVALS)).toEqual(['vulnerabilities']);
+    const apps = record({ kind: 'apps', syncedAt: NOW });
+    expect(planSync([running, stuck, groups, mail, apps], NOW, DEFAULT_SYNC_INTERVALS)).toEqual(['vulnerabilities']);
   });
 
   it('retries a failed sync only after the backoff', () => {
@@ -105,7 +108,8 @@ describe('planSync', () => {
     const old = record({ kind: 'vulnerabilities', status: 'error', error: 'boom', startedAt: new Date(NOW.getTime() - ERROR_RETRY_MS) });
     const groups = record({ kind: 'groups', syncedAt: NOW });
     const mail = record({ kind: 'mail', syncedAt: NOW });
-    expect(planSync([recent, old, groups, mail], NOW, DEFAULT_SYNC_INTERVALS)).toEqual(['vulnerabilities']);
+    const apps = record({ kind: 'apps', syncedAt: NOW });
+    expect(planSync([recent, old, groups, mail, apps], NOW, DEFAULT_SYNC_INTERVALS)).toEqual(['vulnerabilities']);
   });
 });
 
@@ -192,6 +196,7 @@ describe('InventorySyncEngine', () => {
     await engine.sync({ tenantId: TENANT_B, mspId: MSP }, 'vulnerabilities');
     await engine.sync({ tenantId: TENANT_B, mspId: MSP }, 'groups');
     await engine.sync({ tenantId: TENANT_B, mspId: MSP }, 'mail');
+    await engine.sync({ tenantId: TENANT_B, mspId: MSP }, 'apps');
     const statusA = await engine.getStatus(TENANT_A);
     expect(statusA.every((m) => m.status === 'missing')).toBe(true);
 
@@ -213,8 +218,8 @@ describe('InventorySyncEngine', () => {
 
     const queued = await engine.runTick();
 
-    expect(queued).toBe(7);
-    expect(enqueue).toHaveBeenCalledWith({ tenantId: TENANT_A, mspId: MSP }, ['vulnerabilities', 'groups', 'mail'], 'scheduled');
-    expect(enqueue).toHaveBeenCalledWith({ tenantId: TENANT_B, mspId: MSP }, ['devices', 'vulnerabilities', 'groups', 'mail'], 'scheduled');
+    expect(queued).toBe(9);
+    expect(enqueue).toHaveBeenCalledWith({ tenantId: TENANT_A, mspId: MSP }, ['vulnerabilities', 'groups', 'mail', 'apps'], 'scheduled');
+    expect(enqueue).toHaveBeenCalledWith({ tenantId: TENANT_B, mspId: MSP }, ['devices', 'vulnerabilities', 'groups', 'mail', 'apps'], 'scheduled');
   });
 });
