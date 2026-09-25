@@ -180,6 +180,26 @@ describe('DeviceProvider', () => {
     });
   });
 
+  it('reports the role the Defender API actually demands', async () => {
+    defender.get
+      .mockResolvedValueOnce({ value: [] })
+      .mockRejectedValueOnce(
+        new GraphApiError(
+          403,
+          'Forbidden',
+          'Missing application roles. API required roles: Software.Read.All, application roles: Vulnerability.Read.All,Machine.Read.All.'
+        )
+      );
+
+    const posture = await provider.getSecurityPosture(ctx, 'mde-1');
+
+    expect(posture.missingKbs).toMatchObject({
+      available: false,
+      reason: 'permission-missing',
+      missingPermission: 'Software.Read.All',
+    });
+  });
+
   it('marks a machine unknown to Defender as not onboarded', async () => {
     defender.get.mockRejectedValue(new GraphApiError(404, 'NotFound', 'Machine not found'));
 

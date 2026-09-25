@@ -168,8 +168,9 @@ export class DeviceProvider extends BaseResourceProvider {
   // Aktionen (Sync, Neustart, Scan) brauchen die privilegierte Intune-Berechtigung
   readonly actionScopes = ['DeviceManagementManagedDevices.PrivilegedOperations.All'];
 
-  // Defender-API (WindowsDefenderATP), eigener Consent
-  readonly defenderPermissions = ['Machine.Read.All', 'Vulnerability.Read.All'];
+  // Defender-API (WindowsDefenderATP), eigener Consent.
+  // Software.Read.All braucht der Endpunkt fuer fehlende KBs.
+  readonly defenderPermissions = ['Machine.Read.All', 'Vulnerability.Read.All', 'Software.Read.All'];
 
   constructor(
     private readonly graphClient: GraphClient,
@@ -448,11 +449,22 @@ export class DeviceProvider extends BaseResourceProvider {
         data: response.value.map(mapMissingKb).sort((a, b) => b.cveAddressed - a.cveAddressed),
       };
     } catch (error) {
-      const unavailable = asUnavailable(error, 'Vulnerability.Read.All');
+      const unavailable = asUnavailable(error, 'Software.Read.All');
       if (unavailable) return unavailable;
       throw error;
     }
   }
+}
+
+// Die Defender-API nennt im 403 die tatsaechlich benoetigte Rolle
+// ("API required roles: Software.Read.All, application roles: ...")
+// Rollen haben immer Punkt-Notation (Software.Read.All); das schliesst Fuellwoerter wie "application" aus
+const ROLE = '[A-Za-z0-9]+(?:\\.[A-Za-z0-9]+)+';
+const REQUIRED_ROLES_PATTERN = new RegExp(`API required roles:\\s*(${ROLE}(?:\\s*,\\s*${ROLE})*)`);
+
+export function requiredRolesFromError(message: string, fallback: string): string {
+  const match = REQUIRED_ROLES_PATTERN.exec(message);
+  return match ? match[1].split(/\s*,\s*/).join(', ') : fallback;
 }
 
 // AADSTS500011: Ressource im Tenant unbekannt, d. h. kein Defender for Endpoint
@@ -468,7 +480,12 @@ function asUnavailable(error: unknown, permission: string): Unavailable | null {
     return { available: false, reason: 'not-onboarded', missingPermission: null, detail: error.message };
   }
   if (error.isAuthError) {
-    return { available: false, reason: 'permission-missing', missingPermission: permission, detail: error.message };
+    return {
+      available: false,
+      reason: 'permission-missing',
+      missingPermission: requiredRolesFromError(error.message, permission),
+      detail: error.message,
+    };
   }
   return null;
 }

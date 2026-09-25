@@ -94,8 +94,11 @@ Secret ab (`AADSTS700025`).
 Exposure, Risiko, Schwachstellen und fehlende Sicherheitsupdates kommen aus
 der Defender-API, nicht aus Graph. In der App-Registrierung unter
 **API-Berechtigungen > Berechtigung hinzufuegen > APIs, die meine
-Organisation verwendet > "WindowsDefenderATP"** als Anwendungsberechtigungen:
-`Machine.Read.All`, `Vulnerability.Read.All`. Danach Consent erneuern.
+Organisation verwendet > "WindowsDefenderATP"** (im Suchfeld die
+Anwendungs-ID `fc780465-2017-40d4-a0c5-307022471b92` eingeben) als
+Anwendungsberechtigungen: `Machine.Read.All`, `Vulnerability.Read.All`,
+`Software.Read.All` (fehlende KBs). Danach Consent erneuern. Fehlt eine
+Rolle, nennt die Konsole die von der Defender-API geforderte Rolle.
 
 Voraussetzung im Kundentenant: Defender for Business (in Microsoft 365
 Business Premium) oder Defender for Endpoint P2. Ohne Lizenz existiert die
