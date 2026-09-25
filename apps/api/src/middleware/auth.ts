@@ -35,6 +35,24 @@ declare module 'hono' {
 }
 
 export const authMiddleware = createMiddleware(async (c, next) => {
+  // Dev-Bypass fuer lokale Entwicklung
+  if (process.env.DEV_AUTH_BYPASS === 'true') {
+    const devUser: SessionUser = {
+      id: 'dev-user-id' as UserId,
+      mspId: 'dev-msp-id' as MspId,
+      email: 'dev@localhost',
+      displayName: 'Dev User',
+      role: 'owner',
+    };
+    c.set('auth', {
+      user: devUser,
+      mspId: devUser.mspId,
+      accessToken: 'dev-token',
+    });
+    await next();
+    return;
+  }
+
   const authHeader = c.req.header('Authorization');
 
   if (!authHeader?.startsWith('Bearer ')) {
