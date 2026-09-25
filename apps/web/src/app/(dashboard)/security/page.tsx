@@ -12,6 +12,7 @@ import { LoadingTable } from '@/components/ui/loading';
 import { ErrorState } from '@/components/ui/error-state';
 import { NoTenantSelected, EmptyState } from '@/components/ui/empty-state';
 import { CapabilityNotice } from '@/components/identity/capability-notice';
+import { SnapshotStatus } from '@/components/inventory/snapshot-status';
 import { SignInTable, isLegacyClient, formatLocation } from '@/components/identity/sign-in-table';
 import { AuditTable } from '@/components/identity/audit-table';
 import { ChartCard } from '@/components/charts/chart-card';
@@ -25,6 +26,7 @@ import type {
   SignInEvent,
   DirectoryAuditEvent,
   TenantVulnerability,
+  TenantVulnerabilityList,
   VulnerabilitySeverity,
   SecurityPosture,
   DistributionBucket,
@@ -320,9 +322,7 @@ function VulnerabilitiesTab({ tenantId }: { tenantId: string }) {
   const query = useQuery({
     queryKey: ['tenant-vulnerabilities', tenantId, severity],
     queryFn: () =>
-      api.get<CapabilityResult<{ items: TenantVulnerability[]; truncated: boolean }>>(
-        `/tenants/${tenantId}/vulnerabilities${severity === 'all' ? '' : `?severity=${severity}`}`
-      ),
+      api.get<TenantVulnerabilityList>(`/tenants/${tenantId}/vulnerabilities${severity === 'all' ? '' : `?severity=${severity}`}`),
     staleTime: 5 * 60 * 1000,
   });
 
@@ -358,7 +358,10 @@ function VulnerabilitiesTab({ tenantId }: { tenantId: string }) {
             </button>
           ))}
         </div>
-        {result.data.truncated && <span className="text-xs text-warning">Stichprobe — der Tenant hat mehr Schwachstellen als geladen</span>}
+        <div className="flex flex-wrap items-center gap-3">
+          {result.data.truncated && <span className="text-xs text-warning">Stichprobe — der Tenant hat mehr Schwachstellen als geladen</span>}
+          <SnapshotStatus tenantId={tenantId} kinds={['vulnerabilities']} invalidate={[['tenant-vulnerabilities', tenantId]]} />
+        </div>
       </div>
 
       {items.length === 0 ? (
@@ -493,10 +496,10 @@ function PostureTab({ tenantId }: { tenantId: string }) {
   return (
     <div className={clsx('space-y-6 transition-opacity', fetching && 'opacity-70')}>
       <div className="flex items-center justify-between">
-        <p className="text-xs text-muted-foreground">Stand {new Date(posture.generatedAt).toLocaleTimeString('de-DE')}</p>
-        <button onClick={() => query.refetch()} disabled={fetching} className="rounded-md border px-3 py-1.5 text-sm hover:bg-accent disabled:opacity-50">
-          {fetching ? 'Aktualisiere...' : 'Aktualisieren'}
-        </button>
+        <p className="text-xs text-muted-foreground">
+          Scores, MFA und Alerts live um {new Date(posture.generatedAt).toLocaleTimeString('de-DE')}; Geraete und Schwachstellen aus dem Bestand
+        </p>
+        <SnapshotStatus tenantId={tenantId} kinds={['devices', 'vulnerabilities']} invalidate={[['security-posture', tenantId]]} />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">

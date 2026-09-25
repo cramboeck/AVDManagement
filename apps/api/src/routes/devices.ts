@@ -9,6 +9,7 @@ import { z } from 'zod';
 import { authMiddleware, requireRole } from '../middleware/auth.js';
 import { tenantContextMiddleware, requireConnectedTenant } from '../middleware/tenant-context.js';
 import { getDeviceProvider } from '../services/microsoft-clients.js';
+import { getDeviceInventory, findDevice } from '../services/inventory.js';
 import { DrizzleAuditLogger } from '../services/audit-logger.js';
 import type { CorrelationId, DeviceSecurityPosture, TenantId } from '@zerostress/types';
 
@@ -36,18 +37,17 @@ function notFound(deviceId: string) {
   };
 }
 
-// Geraetebestand beider Quellen
+// Geraetebestand beider Quellen aus dem Snapshot (mit Stand)
 app.get('/', requireConnectedTenant, async (c) => {
   const tenant = c.get('tenant');
-  const inventory = await getDeviceProvider().listDevices(ctxFor(tenant.id, c.req.header('X-Correlation-ID')));
-  return c.json(inventory);
+  return c.json(await getDeviceInventory(tenant));
 });
 
 app.get('/:deviceId', requireConnectedTenant, async (c) => {
   const tenant = c.get('tenant');
   const deviceId = c.req.param('deviceId');
 
-  const device = await getDeviceProvider().getDevice(ctxFor(tenant.id, c.req.header('X-Correlation-ID')), deviceId);
+  const device = await findDevice(tenant, deviceId);
   if (!device) {
     return c.json(notFound(deviceId), 404);
   }
@@ -60,7 +60,7 @@ app.get('/:deviceId/security', requireConnectedTenant, async (c) => {
   const deviceId = c.req.param('deviceId');
   const ctx = ctxFor(tenant.id, c.req.header('X-Correlation-ID'));
 
-  const device = await getDeviceProvider().getDevice(ctx, deviceId);
+  const device = await findDevice(tenant, deviceId);
   if (!device) {
     return c.json(notFound(deviceId), 404);
   }
@@ -90,7 +90,7 @@ app.get('/:deviceId/recovery', requireConnectedTenant, async (c) => {
   const deviceId = c.req.param('deviceId');
   const ctx = ctxFor(tenant.id, c.req.header('X-Correlation-ID'));
 
-  const device = await getDeviceProvider().getDevice(ctx, deviceId);
+  const device = await findDevice(tenant, deviceId);
   if (!device) {
     return c.json(notFound(deviceId), 404);
   }
@@ -113,7 +113,7 @@ app.post(
     const ctx = { tenantId: tenant.id, correlationId };
     const provider = getDeviceProvider();
 
-    const device = await provider.getDevice(ctx, deviceId);
+    const device = await findDevice(tenant, deviceId);
     if (!device) {
       return c.json(notFound(deviceId), 404);
     }
@@ -163,7 +163,7 @@ app.post(
     const ctx = { tenantId: tenant.id, correlationId };
     const provider = getDeviceProvider();
 
-    const device = await provider.getDevice(ctx, deviceId);
+    const device = await findDevice(tenant, deviceId);
     if (!device) {
       return c.json(notFound(deviceId), 404);
     }

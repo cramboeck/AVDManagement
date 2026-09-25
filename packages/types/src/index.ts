@@ -414,7 +414,47 @@ export interface DeviceInventory {
   items: Device[];
   intune: CapabilityResult<{ count: number }>;
   defender: CapabilityResult<{ count: number }>;
+  // Gesetzt, wenn die Antwort aus dem Bestands-Snapshot stammt
+  snapshot?: SnapshotMeta;
 }
+
+// ============================================
+// Bestands-Snapshot (Cache je Tenant)
+// ============================================
+
+export type InventoryKind = 'devices' | 'vulnerabilities';
+
+// missing: noch nie geladen; running: Sync laeuft; ready: Stand vorhanden;
+// error: letzter Sync fehlgeschlagen (ein aelterer Stand kann trotzdem vorliegen)
+export type SnapshotStatus = 'missing' | 'running' | 'ready' | 'error';
+
+export interface SnapshotMeta {
+  kind: InventoryKind;
+  status: SnapshotStatus;
+  // Zeitpunkt des letzten erfolgreichen Stands
+  syncedAt: string | null;
+  startedAt: string | null;
+  durationMs: number | null;
+  itemCount: number;
+  error: string | null;
+  // Aelter als das Zielintervall dieser Bestandsart
+  stale: boolean;
+  // Gerade aus Microsoft geladen statt aus dem Snapshot
+  live: boolean;
+}
+
+export interface TenantInventoryStatus {
+  tenantId: TenantId;
+  snapshots: SnapshotMeta[];
+  generatedAt: string;
+}
+
+export interface TenantVulnerabilitySet {
+  items: TenantVulnerability[];
+  truncated: boolean;
+}
+
+export type TenantVulnerabilityList = CapabilityResult<TenantVulnerabilitySet> & { snapshot?: SnapshotMeta };
 
 export type VulnerabilitySeverity = 'Critical' | 'High' | 'Medium' | 'Low' | 'Unknown';
 

@@ -10,6 +10,7 @@ import { ErrorState } from '@/components/ui/error-state';
 import { NoTenantSelected, EmptyState } from '@/components/ui/empty-state';
 import { DataTable, type ColumnDef } from '@/components/ui/data-table';
 import { CapabilityNotice } from '@/components/identity/capability-notice';
+import { SnapshotStatus } from '@/components/inventory/snapshot-status';
 import {
   ComplianceBadge,
   ExposureBadge,
@@ -149,13 +150,7 @@ export default function DevicesPage() {
             Alle Endpunkte aus Intune und Defender for Endpoint — Compliance, Exposure und offene Sicherheitsupdates.
           </p>
         </div>
-        <button
-          onClick={() => inventoryQuery.refetch()}
-          disabled={inventoryQuery.isFetching}
-          className="rounded-md border px-3 py-1.5 text-sm hover:bg-accent disabled:opacity-50"
-        >
-          {inventoryQuery.isFetching ? 'Aktualisiere...' : 'Aktualisieren'}
-        </button>
+        <SnapshotStatus tenantId={activeTenant.id} kinds={['devices']} invalidate={[['devices', activeTenant.id]]} />
       </div>
 
       {inventoryQuery.isLoading ? (

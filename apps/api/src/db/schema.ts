@@ -2,7 +2,7 @@
  * Datenbank-Schema mit Drizzle ORM
  */
 
-import { pgTable, uuid, varchar, text, boolean, timestamp, jsonb, integer } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, varchar, text, boolean, timestamp, jsonb, integer, primaryKey } from 'drizzle-orm/pg-core';
 
 // MSP-Organisationen
 export const mspOrganizations = pgTable('msp_organizations', {
@@ -122,6 +122,30 @@ export const cveExplanations = pgTable('cve_explanations', {
   content: jsonb('content').notNull(),
   generatedAt: timestamp('generated_at', { withTimezone: true }).notNull().defaultNow(),
 });
+
+// Bestands-Snapshot je Tenant und Bestandsart (Geraete, Schwachstellen).
+// Ein Datensatz je Paar; der Stand liegt als Ganzes im Payload, ein
+// fehlgeschlagener Sync laesst ihn stehen. Wird mit dem Tenant geloescht.
+export const inventorySnapshots = pgTable(
+  'inventory_snapshots',
+  {
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => managedTenants.id, { onDelete: 'cascade' }),
+    mspId: uuid('msp_id').notNull().references(() => mspOrganizations.id),
+    kind: varchar('kind', { length: 40 }).notNull(),
+    status: varchar('status', { length: 20 }).notNull(),
+    payload: jsonb('payload'),
+    itemCount: integer('item_count').notNull().default(0),
+    syncedAt: timestamp('synced_at', { withTimezone: true }),
+    startedAt: timestamp('started_at', { withTimezone: true }),
+    durationMs: integer('duration_ms'),
+    error: text('error'),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.tenantId, table.kind] }),
+  })
+);
 
 // ============================================
 // AVD-Tabellen (Azure Virtual Desktop)

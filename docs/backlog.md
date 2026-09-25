@@ -24,7 +24,8 @@ vor dem Bau klar sind.
 
 - Bestand beider Quellen zusammengefuehrt ueber Entra-Geraete-ID, Detail mit Schwachstellen und fehlenden KBs
 - Aktionen als Jobs: Sync, Neustart, Defender-Schnellscan
-- Offen: Inventar-Cache (jeder Detailaufruf laedt heute den ganzen Bestand), Isolieren/Freigeben ueber Defender (`Machine.Isolate`), Retire/Wipe mit verschaerfter Preview, Softwareinventar, tenant-uebergreifende Sicht "kritische Luecken aelter als 30 Tage"
+- Bestand liegt als Snapshot je Tenant vor (15 Min Geraete, 60 Min Schwachstellen), Detail und Sicherheitslage lesen daraus
+- Offen: Isolieren/Freigeben ueber Defender (`Machine.Isolate`), Retire/Wipe mit verschaerfter Preview, Softwareinventar, tenant-uebergreifende Sicht "kritische Luecken aelter als 30 Tage" auf dem Snapshot
 
 ## Naechste Schritte (Reihenfolge vorgeschlagen)
 
@@ -35,7 +36,7 @@ vor dem Bau klar sind.
 | 3 | LAPS + BitLocker im Geraetedetail (Tab Wiederherstellung) | `DeviceLocalCredential.Read.All`, `BitLockerKey.Read.All`, LAPS mit Entra-Sicherung | Anzeige nur mit Begruendung, Engineer-Rolle, Audit, 60 s sichtbar; nie in Listen oder Logs |
 | 4 | Softwareinventar + winget-Gegencheck | Defender `Software.Read.All`; Windows-Build-Worker mit winget; Zuordnung Produkt -> winget-ID | Installiert vs. aktuell, geschlossene CVEs je Update |
 | 5 | Automatische Deployments (Apps-Plan Stufen C/D) | Worker, Paketkatalog, Azure Storage EU | Update -> Paket -> Preview -> Freigabe -> Ringe; Auto nur per Regel |
-| 6 | Bestands-Cache: Snapshot je Tenant in Postgres, Sync-Job, "Stand vor n Minuten" | — | Plan in docs/implementation/remote-actions-plan.md Teil C; Grundlage fuer 4 und tenant-uebergreifende Sichten |
+| 6 | Bestands-Cache: Snapshot je Tenant in Postgres, Sync-Worker, "Stand vor n Minuten" | — | Umgesetzt fuer Geraete und Schwachstellen (`inventory_snapshots`, Queue `inventory-sync`). Offen: Benutzer, tenant-uebergreifende Sichten auf dem Snapshot |
 | 7 | Remote-Befehle ohne eigenen Agent: Skriptbibliothek, Intune Remediations auf Abruf, Azure Run Command, Defender Live Response | `DeviceManagementConfiguration.ReadWrite.All`, VM Contributor, Defender `Machine.LiveResponse` | Plan Teil A; Update-Stand und Update-Scan als erste Skripte |
 | 8 | Remotehilfe: TeamViewer-Start aus dem Geraetekopf, spaeter RustDesk hinter demselben Interface | TeamViewer-API-Token im Key Vault | Plan Teil B; Konsole startet und protokolliert nur, kein eigener Sitzungsbroker |
 

@@ -21,7 +21,9 @@ import { securityRouter } from './routes/security.js';
 import { tenantDashboardRouter, dashboardRouter } from './routes/dashboard.js';
 import { devicesRouter } from './routes/devices.js';
 import { vulnerabilitiesRouter } from './routes/vulnerabilities.js';
+import { inventoryRouter } from './routes/inventory.js';
 import { getJobQueue, getJobHealth } from './services/job-queue.js';
+import { startInventorySync, getInventoryHealth } from './services/inventory.js';
 
 const app = new Hono();
 
@@ -45,10 +47,12 @@ app.onError(errorHandler);
 // Health-Check
 app.get('/health', (c) => {
   const jobs = getJobHealth();
+  const inventory = getInventoryHealth();
   return c.json({
-    status: jobs.worker && jobs.redis === 'ready' ? 'ok' : 'degraded',
+    status: jobs.worker && jobs.redis === 'ready' && inventory.worker ? 'ok' : 'degraded',
     timestamp: new Date().toISOString(),
     jobs,
+    inventory,
   });
 });
 
@@ -86,6 +90,7 @@ app.route('/tenants/:tenantId/security', securityRouter);
 app.route('/tenants/:tenantId/dashboard', tenantDashboardRouter);
 app.route('/tenants/:tenantId/devices', devicesRouter);
 app.route('/tenants/:tenantId/vulnerabilities', vulnerabilitiesRouter);
+app.route('/tenants/:tenantId/inventory', inventoryRouter);
 app.route('/dashboard', dashboardRouter);
 
 // Session-Info (fuer Frontend)
@@ -116,3 +121,8 @@ console.log(`ZeroStress API running at http://localhost:${port}`);
 
 // Worker sofort starten, damit Jobs nicht erst nach dem ersten /jobs-Aufruf laufen
 getJobQueue();
+
+// Bestands-Sync: erster Takt sofort, danach alle fuenf Minuten
+startInventorySync().catch((error: Error) => {
+  console.error('Inventory sync could not start:', error.message);
+});

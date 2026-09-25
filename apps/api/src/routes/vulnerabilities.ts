@@ -8,6 +8,7 @@ import { Hono } from 'hono';
 import { authMiddleware, requireRole } from '../middleware/auth.js';
 import { tenantContextMiddleware, requireConnectedTenant } from '../middleware/tenant-context.js';
 import { getDeviceProvider } from '../services/microsoft-clients.js';
+import { getTenantVulnerabilities } from '../services/inventory.js';
 import { enrichCve, CVE_PATTERN } from '../services/cve-enrichment.js';
 import { explainCve, getCachedExplanation, isExplainerConfigured } from '../services/cve-explainer.js';
 import { DrizzleAuditLogger } from '../services/audit-logger.js';
@@ -30,16 +31,13 @@ function invalidCve(cveId: string) {
   };
 }
 
-// Schwachstellen im Tenant, nach CVE zusammengefasst
+// Schwachstellen im Tenant, nach CVE zusammengefasst, aus dem Snapshot
 app.get('/', requireConnectedTenant, async (c) => {
   const tenant = c.get('tenant');
   const severityParam = c.req.query('severity');
   const severity = SEVERITIES.find((s) => s === severityParam);
 
-  const result = await getDeviceProvider().getTenantVulnerabilities(
-    { tenantId: tenant.id, correlationId: c.req.header('X-Correlation-ID') ?? randomUUID() },
-    { severity, top: parseInt(c.req.query('top') ?? '300', 10) }
-  );
+  const result = await getTenantVulnerabilities(tenant, { severity, top: parseInt(c.req.query('top') ?? '300', 10) });
 
   return c.json(result);
 });

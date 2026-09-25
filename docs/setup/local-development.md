@@ -50,8 +50,30 @@ Erwartete erste Zeile der API:
 `Environment: <pfad>\.env.local (DEV_AUTH_BYPASS active)`
 
 Nach einem `git pull`, das `apps/api/src/db/schema.ts` aendert, einmal
-`npm run db:push` ausfuehren, damit neue Tabellen (z. B. `cve_explanations`)
-angelegt werden.
+`npm run db:push` ausfuehren, damit neue Tabellen (z. B. `cve_explanations`,
+`inventory_snapshots`) angelegt werden.
+
+## Bestands-Snapshot
+
+Geraete und Schwachstellen werden nicht bei jedem Seitenaufruf aus Intune
+und Defender geladen, sondern je Tenant als Snapshot in Postgres gehalten
+(`inventory_snapshots`). Ein Worker (BullMQ-Queue `inventory-sync`, Redis)
+prueft alle fuenf Minuten alle verbundenen Tenants und laedt Geraete nach
+15 Minuten, Schwachstellen nach 60 Minuten neu. Die Seiten zeigen "Stand
+vor n Minuten" und einen Knopf "Jetzt aktualisieren"; fehlt der Snapshot
+noch, wird beim ersten Aufruf einmal direkt geladen. Ein fehlgeschlagener
+Abgleich laesst den alten Stand stehen und zeigt den Fehler an.
+
+Live bleiben: Scores, MFA-Report, Alerts, Anmelde- und Auditprotokolle,
+Wiederherstellungsschluessel, alle Jobs. `/health` meldet unter `inventory`,
+ob der Sync-Worker laeuft.
+
+Integrationstest der Tenant-Isolation des Snapshot-Speichers:
+
+```powershell
+$env:TEST_DATABASE_URL = "postgresql://zerostress:dev_password_only@localhost:5432/zerostress"
+npm test --workspace=@zerostress/api
+```
 
 ## DEV_AUTH_BYPASS
 

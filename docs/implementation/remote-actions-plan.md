@@ -99,8 +99,10 @@ Begruendung ins Audit.
 | H2 | Ad-hoc-Sitzungscode fuer Benutzer ohne verwaltetes Geraet (Service-Queue), Code per Mail aus der Konsole | 1 Tag |
 | H3 | RustDesk als zweiter Anbieter hinter demselben Interface `RemoteSupportProvider` | 2 Tage |
 
-Offene Entscheidung: welcher TeamViewer-Tarif liegt vor (Service-Queue ja/nein),
-und sollen Kunden-Geraete in einer TeamViewer-Gruppe je Tenant liegen?
+Entschieden: die Service-Queue ist im vorhandenen TeamViewer-Tarif enthalten,
+H2 (Ad-hoc-Sitzungscodes) ist damit moeglich. Offen: sollen Kunden-Geraete
+in einer TeamViewer-Gruppe je Tenant liegen? Ob Live Response im Defender-
+Portal aktiv ist, wird noch geprueft; R3 haengt davon ab.
 
 ## Teil C: Bestands-Cache
 
@@ -114,30 +116,38 @@ Minuten im Browser (React Query). Jeder Aufruf eines Geraetedetails laedt den
 gesamten Bestand aus Intune und Defender neu; bei 300 Geraeten sind das zwei
 bis vier Sekunden und unnoetige Graph-Last.
 
-### Ziel
+### Umgesetzt (Stufe 1: Geraete und Schwachstellen)
 
-Ein Bestands-Snapshot in Postgres je Tenant, den ein wiederkehrender Job
-fuellt. Lesende Seiten lesen den Snapshot und zeigen "Stand vor n Minuten"
-mit Knopf "Jetzt aktualisieren". Schreibende Aktionen und Geheimnisse
-(Schluessel, Passwoerter, Anmeldeprotokolle) gehen weiterhin live an Graph.
+Ein Bestands-Snapshot in Postgres je Tenant und Bestandsart, den ein
+Worker fuellt. Lesende Seiten lesen den Snapshot und zeigen "Stand vor n
+Minuten" mit Knopf "Jetzt aktualisieren". Schreibende Aktionen und
+Geheimnisse (Schluessel, Passwoerter, Anmeldeprotokolle) gehen weiterhin
+live an Graph.
 
-| Element | Entwurf |
+| Element | Umsetzung |
 |---|---|
-| Tabellen | `inventory_devices`, `inventory_users`, `inventory_vulnerabilities`, jeweils mit `tenant_id`, `source`, `external_id`, `payload jsonb`, `synced_at`; Primaerschluessel `(tenant_id, source, external_id)` |
-| Sync-Job | BullMQ-Wiederholjob je Tenant alle 15 Minuten (Geraete, Benutzer), 60 Minuten (Schwachstellen), mit Delta-Erkennung ueber `payload`-Hash; Fehler je Quelle als Capability gespeichert, nicht als Jobfehler |
-| Manuell | "Jetzt aktualisieren" legt denselben Job mit hoher Prioritaet an; Anzeige des Fortschritts wie bei jedem Job |
-| Tenant-Isolation | Jede Query filtert auf `tenant_id`; Test beweist, dass Tenant A nach Sync von Tenant B nichts Fremdes sieht |
-| Kurzfrist-Cache | Redis, Schluessel `graph:<tenantId>:<pfad>`, 60 Sekunden, nur fuer identische GETs innerhalb einer Seite (z. B. Detail und Sicherheit desselben Geraets); kein Ersatz fuer den Snapshot |
-| Loeschung | Snapshot wird beim Entfernen eines Tenants geloescht; keine personenbezogenen Felder ausserhalb des `payload` |
+| Tabelle | `inventory_snapshots` mit Primaerschluessel `(tenant_id, kind)`, `payload jsonb` (der ganze Stand inkl. Capability-Zustand der Quellen), `status`, `synced_at`, `started_at`, `duration_ms`, `error`; `ON DELETE CASCADE` zum Tenant. Ein Datensatz je Paar statt Zeilen je Objekt: atomar, ein Lesezugriff, kein Teilstand. Zeilen je Objekt kommen erst, wenn eine tenant-uebergreifende SQL-Abfrage sie wirklich braucht |
+| Sync | `InventorySyncEngine` (Core, ohne Queue, getestet) plus `InventorySyncService` (BullMQ-Queue `inventory-sync`). Takt alle 5 Minuten ueber `upsertJobScheduler`, faellig sind Geraete nach 15 und Schwachstellen nach 60 Minuten; haengende Syncs nach 10 Minuten, Fehler nach 5 Minuten erneut |
+| Erster Aufruf | Ohne Snapshot laedt die Seite einmal direkt und legt ihn an; parallele Aufrufe teilen sich den Ladevorgang |
+| Fehler | Ein fehlgeschlagener Abgleich laesst den alten Stand stehen; Status und Fehlertext erscheinen an der Anzeige, nicht als Seitenfehler |
+| Manuell | `POST /tenants/:id/inventory/refresh` reiht mit hoher Prioritaet ein; Job-Id `sync_<tenant>_<kind>` legt Doppelte zusammen. Das Web pollt den Stand alle 3 Sekunden und laedt die Seitenabfragen neu, sobald `synced_at` wechselt |
+| Tenant-Isolation | Jede Abfrage filtert auf `tenant_id`; Core-Test mit zwei Tenants und Integrationstest gegen Postgres (`TEST_DATABASE_URL`) inkl. Fehler- und Loeschfall |
+| Leser | Geraeteliste, Geraetedetail (mit einmaligem Direktabgleich bei unbekannter Geraete-Id), Schwachstellenliste, Sicherheitslage (Verteilungen) |
 
-Aufwand: 3 Tage. Gewinn: Dashboard und Listen in unter 200 ms, tenant-
-uebergreifende Sichten ("kritische Luecken aelter als 30 Tage") werden
-ueberhaupt erst moeglich, und der Softwareinventar-Abgleich mit winget aus
-Schritt 4 braucht genau diesen Snapshot als Grundlage.
+### Offen
+
+- Benutzer-Snapshot (heute serverseitig paginiert ueber Graph, schnell genug)
+- Tenant-uebergreifende Sichten auf dem Snapshot ("kritische Luecken aelter als 30 Tage")
+- Delta-Erkennung ueber Payload-Hash, um unveraenderte Staende nicht neu zu schreiben
+- Kurzfrist-Cache in Redis fuer identische Live-GETs innerhalb einer Seite
+
+Gewinn: Listen und Sicherheitslage antworten aus Postgres statt aus zwei
+Microsoft-APIs, Graph-Last sinkt auf einen Abgleich je Intervall, und der
+Softwareinventar-Abgleich mit winget aus Schritt 4 hat seine Grundlage.
 
 ## Empfohlene Gesamtreihenfolge
 
-1. Teil C Cache (Grundlage fuer alles Weitere, auch fuer Schritt 4 winget)
+1. Teil C Cache: umgesetzt fuer Geraete und Schwachstellen
 2. Teil A Stufe R1 und R2 (Update-Stand und Skripte auf Intune-Geraeten und AVD-Hosts)
 3. Teil B Stufe H1 (TeamViewer-Start aus dem Geraetekopf)
 4. Rest nach Bedarf

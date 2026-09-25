@@ -8,12 +8,13 @@ import { randomUUID } from 'node:crypto';
 import type {
   CapabilityResult,
   DistributionBucket,
+  ManagedTenant,
   SecurityPosture,
   SignInsByDay,
-  TenantId,
   VulnerabilitySeverity,
 } from '@zerostress/types';
 import { getDeviceProvider, getIdentityProvider, getSecurityProvider } from './microsoft-clients.js';
+import { getDeviceInventory, getTenantVulnerabilities } from './inventory.js';
 
 const SIGN_IN_DAYS = 7;
 const SIGN_IN_SAMPLE = 500;
@@ -71,8 +72,8 @@ function bucketise(values: string[], labels: Record<string, string>, order?: str
   return [...keys, ...rest].map((key) => ({ key, label: labels[key] ?? key, count: counts.get(key) ?? 0 }));
 }
 
-export async function buildSecurityPosture(tenantId: TenantId): Promise<SecurityPosture> {
-  const ctx = { tenantId, correlationId: randomUUID() };
+export async function buildSecurityPosture(tenant: ManagedTenant): Promise<SecurityPosture> {
+  const ctx = { tenantId: tenant.id, correlationId: randomUUID() };
   const security = getSecurityProvider();
   const devices = getDeviceProvider();
   const identity = getIdentityProvider();
@@ -82,8 +83,9 @@ export async function buildSecurityPosture(tenantId: TenantId): Promise<Security
     guarded('exposure-score', 10000, () => devices.getExposureScore(ctx)),
     guarded('mfa-registration', 20000, () => security.getMfaRegistration(ctx)),
     guarded('alerts', 10000, () => security.getOpenAlerts(ctx)),
+    // Geraete und Schwachstellen kommen aus dem Bestands-Snapshot
     guarded('devices', 25000, async () => {
-      const inventory = await devices.listDevices(ctx);
+      const inventory = await getDeviceInventory(tenant);
       if (!inventory.intune.available && !inventory.defender.available) {
         return inventory.intune;
       }
@@ -113,7 +115,7 @@ export async function buildSecurityPosture(tenantId: TenantId): Promise<Security
       };
     }),
     guarded('vulnerabilities', 25000, async () => {
-      const result = await devices.getTenantVulnerabilities(ctx, { top: 5000 });
+      const result = await getTenantVulnerabilities(tenant);
       if (!result.available) return result;
       return {
         available: true,

@@ -25,7 +25,7 @@ function parseTop(value: string | undefined, fallback: number): number {
 // Sicherheitslage: Scores, MFA, Alerts, Verteilungen (nur Kennzahlen)
 app.get('/posture', requireConnectedTenant, async (c) => {
   const tenant = c.get('tenant');
-  return c.json(await buildSecurityPosture(tenant.id));
+  return c.json(await buildSecurityPosture(tenant));
 });
 
 // Anmeldungen im Tenant (Sicherheitsmonitoring: woher, womit, mit welchem Ergebnis)
