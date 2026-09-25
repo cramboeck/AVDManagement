@@ -11,10 +11,16 @@ const envLocalPath = resolve(process.cwd(), '.env.local');
 const envPath = resolve(process.cwd(), '.env');
 
 if (existsSync(envLocalPath)) {
+  console.log('Loading .env.local from:', envLocalPath);
   config({ path: envLocalPath });
 } else if (existsSync(envPath)) {
+  console.log('Loading .env from:', envPath);
   config({ path: envPath });
+} else {
+  console.log('No .env file found');
 }
+
+console.log('DEV_AUTH_BYPASS:', process.env.DEV_AUTH_BYPASS);
 
 import { serve } from '@hono/node-server';
 import { Hono } from 'hono';
