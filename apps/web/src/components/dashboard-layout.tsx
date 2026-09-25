@@ -84,6 +84,7 @@ const navItems = [
   { href: '/avd', label: 'Virtual Desktop', icon: DesktopIcon },
   { href: '/users', label: 'Benutzer', icon: UsersIcon },
   { href: '/groups', label: 'Gruppen', icon: GroupsIcon },
+  { href: '/mail', label: 'Exchange', icon: MailIcon },
   { href: '/devices', label: 'Geraete', icon: DeviceIcon },
   { href: '/network', label: 'Netzwerk', icon: NetworkIcon },
   { href: '/security', label: 'Sicherheit', icon: ShieldIcon },
@@ -186,6 +187,15 @@ function GroupsIcon({ className }: { className?: string }) {
       <circle cx="9" cy="8" r="3" />
       <circle cx="17" cy="9" r="2.5" />
       <path d="M3 19a6 6 0 0 1 12 0M14.5 18a4.5 4.5 0 0 1 6.5 0" />
+    </svg>
+  );
+}
+
+function MailIcon({ className }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={className}>
+      <rect x="3" y="5" width="18" height="14" rx="2" />
+      <path d="M3 7l9 6 9-6" />
     </svg>
   );
 }

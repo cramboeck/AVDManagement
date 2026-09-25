@@ -20,6 +20,8 @@ export interface GraphRequestOptions {
   headers?: Record<string, string>;
   retries?: number;
   timeoutMs?: number;
+  // Berichte liefern CSV ueber eine Weiterleitung; dann Text statt JSON lesen
+  responseType?: 'json' | 'text';
 }
 
 export interface GraphResponse<T> {
@@ -54,6 +56,7 @@ export class GraphClient {
       headers = {},
       retries = this.defaultRetries,
       timeoutMs = this.defaultTimeoutMs,
+      responseType = 'json',
     } = options;
 
     const accessToken = await this.getAccessToken(tenantId, scopes);
@@ -82,6 +85,9 @@ export class GraphClient {
         if (response.ok) {
           if (response.status === 204) {
             return undefined as T;
+          }
+          if (responseType === 'text') {
+            return (await response.text()) as T;
           }
           return (await response.json()) as T;
         }

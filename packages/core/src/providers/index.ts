@@ -14,3 +14,4 @@ export * from './device-provider.js';
 export * from './security-provider.js';
 export * from './remediation-provider.js';
 export * from './group-provider.js';
+export * from './mail-provider.js';

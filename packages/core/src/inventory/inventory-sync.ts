@@ -19,6 +19,7 @@ import type {
   DeviceInventory,
   GroupInventorySet,
   InventoryKind,
+  MailOverviewSet,
   MspId,
   SnapshotMeta,
   TenantId,
@@ -27,13 +28,15 @@ import type {
 import type { ProviderContext } from '../providers/resource-provider.js';
 import type { InventorySnapshotStore, SnapshotRecord } from './snapshot-store.js';
 
-export const INVENTORY_KINDS: InventoryKind[] = ['devices', 'vulnerabilities', 'groups'];
+export const INVENTORY_KINDS: InventoryKind[] = ['devices', 'vulnerabilities', 'groups', 'mail'];
 
 // Zielintervalle: Geraete aendern sich oefter als die CVE-Zuordnung
 export const DEFAULT_SYNC_INTERVALS: Record<InventoryKind, number> = {
   devices: 15 * 60 * 1000,
   vulnerabilities: 60 * 60 * 1000,
   groups: 60 * 60 * 1000,
+  // Berichte aendern sich einmal am Tag
+  mail: 6 * 60 * 60 * 1000,
 };
 
 // Ein Sync, der laenger als das laeuft, gilt als abgebrochen (Prozessneustart)
@@ -51,6 +54,7 @@ export interface InventoryPayloads {
   devices: DeviceInventory;
   vulnerabilities: CapabilityResult<TenantVulnerabilitySet>;
   groups: CapabilityResult<GroupInventorySet>;
+  mail: CapabilityResult<MailOverviewSet>;
 }
 
 export type InventoryLoaders = {
@@ -144,6 +148,10 @@ function countItems<K extends InventoryKind>(kind: K, payload: InventoryPayloads
   if (kind === 'devices') {
     return (payload as DeviceInventory).items.length;
   }
+  if (kind === 'mail') {
+    const mail = payload as CapabilityResult<MailOverviewSet>;
+    return mail.available ? mail.data.mailboxes.length : 0;
+  }
   const result = payload as CapabilityResult<{ items: unknown[] }>;
   return result.available ? result.data.items.length : 0;
 }
@@ -175,6 +183,7 @@ export class InventorySyncEngine {
       devices: options.intervals?.devices ?? DEFAULT_SYNC_INTERVALS.devices,
       vulnerabilities: options.intervals?.vulnerabilities ?? DEFAULT_SYNC_INTERVALS.vulnerabilities,
       groups: options.intervals?.groups ?? DEFAULT_SYNC_INTERVALS.groups,
+      mail: options.intervals?.mail ?? DEFAULT_SYNC_INTERVALS.mail,
     };
     this.now = options.now ?? (() => new Date());
   }

@@ -79,6 +79,18 @@ Minuten), die Zaehlungen laufen ueber `$batch` mit zwei Anfragen je Gruppe.
 `resourceProvisioningOptions`, ein Teams-Scope ist nicht noetig. Das Detail
 laedt Besitzer und Mitglieder live (bis 2000).
 
+## Exchange Online
+
+Die Seite **Exchange** liest vier Nutzungsberichte aus Graph
+(`getMailboxUsageDetail`, `getEmailActivityUserDetail`,
+`getEmailActivityCounts`, `getMailboxUsageStorage`, jeweils 30 Tage) und
+haelt sie sechs Stunden im Snapshot. Die Berichte laufen etwa 48 Stunden
+nach. Verbirgt der Tenant Namen in Berichten (Microsoft 365 Admin Center >
+Einstellungen > Organisationseinstellungen > Berichte), erscheinen UPNs als
+Hash; die Seite weist darauf hin. Jeder Abruf der Postfachliste steht im
+Audit (`mail.usage.view`), weil sie personenbezogen ist. Weiterleitungen,
+Delegierungen und Regeln brauchen Exchange-PowerShell und sind noch offen.
+
 ## Skriptbibliothek (Geraet > Skripte)
 
 Befehle auf Geraeten laufen ohne eigenen Agenten ueber Intune Remediations
@@ -175,6 +187,7 @@ Secret ab (`AADSTS700025`).
 | `BitLockerKey.Read.All` | BitLocker-Wiederherstellungsschluessel (Geraet > Wiederherstellung) | Karte "Berechtigung fehlt" |
 | `DeviceLocalCredential.Read.All` | Windows-LAPS-Passwoerter; setzt LAPS mit Entra-Sicherung in der Intune-Richtlinie voraus | Karte "Berechtigung fehlt" |
 | `DeviceManagementConfiguration.ReadWrite.All` | Skriptbibliothek als Intune Remediations im Tenant anlegen und aktuell halten (Geraet > Skripte) | Karte "Berechtigung fehlt" im Tab Skripte |
+| `Reports.Read.All` | Exchange-Nutzungsberichte: Postfachgroessen, Kontingente, Mailvolumen (Seite Exchange) | Karte "Berechtigung fehlt" |
 
 Schluessel und Passwoerter werden nie gelistet oder exportiert: Anzeige nur
 nach Begruendung (mindestens 10 Zeichen), Rolle Engineer, Audit-Eintrag mit

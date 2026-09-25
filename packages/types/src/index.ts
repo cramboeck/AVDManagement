@@ -470,7 +470,72 @@ export interface DeviceInventory {
 // Bestands-Snapshot (Cache je Tenant)
 // ============================================
 
-export type InventoryKind = 'devices' | 'vulnerabilities' | 'groups';
+export type InventoryKind = 'devices' | 'vulnerabilities' | 'groups' | 'mail';
+
+// ============================================
+// Exchange Online: Postfaecher und Mailaktivitaet (Graph-Berichte)
+// ============================================
+
+export type MailboxRecipientType = 'UserMailbox' | 'SharedMailbox' | 'RoomMailbox' | 'EquipmentMailbox' | 'unknown';
+
+export interface MailboxUsage {
+  userPrincipalName: string;
+  displayName: string;
+  recipientType: MailboxRecipientType;
+  isDeleted: boolean;
+  createdAt: string | null;
+  lastActivityAt: string | null;
+  itemCount: number | null;
+  storageUsedBytes: number | null;
+  warningQuotaBytes: number | null;
+  prohibitSendQuotaBytes: number | null;
+  prohibitSendReceiveQuotaBytes: number | null;
+  // Belegung relativ zur Sendesperre in Prozent
+  usagePercent: number | null;
+  hasArchive: boolean | null;
+  // Aus dem Aktivitaetsbericht des gleichen Zeitraums
+  sentCount: number | null;
+  receivedCount: number | null;
+  readCount: number | null;
+}
+
+export interface MailActivityDay {
+  date: string;
+  sent: number;
+  received: number;
+  read: number;
+}
+
+export interface MailStorageDay {
+  date: string;
+  storageUsedBytes: number;
+}
+
+export interface MailTotals {
+  mailboxes: number;
+  userMailboxes: number;
+  sharedMailboxes: number;
+  storageUsedBytes: number;
+  over80Percent: number;
+  over95Percent: number;
+  inactive30Days: number;
+  sentInPeriod: number;
+  receivedInPeriod: number;
+}
+
+export interface MailOverviewSet {
+  periodDays: number;
+  // Stand des Berichts laut Microsoft (Berichte laufen etwa 48 Stunden nach)
+  refreshedAt: string | null;
+  // true: der Tenant verbirgt Namen in Berichten (Einstellung "Anzeigenamen verbergen")
+  anonymised: boolean;
+  totals: MailTotals;
+  mailboxes: MailboxUsage[];
+  activityByDay: MailActivityDay[];
+  storageByDay: MailStorageDay[];
+}
+
+export type MailOverview = CapabilityResult<MailOverviewSet> & { snapshot?: SnapshotMeta };
 
 // ============================================
 // Gruppen (Teams, Microsoft 365, Sicherheit, Verteiler)

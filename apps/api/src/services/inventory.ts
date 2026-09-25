@@ -14,6 +14,7 @@ import type {
   DeviceInventory,
   GroupInventory,
   InventoryKind,
+  MailOverview,
   ManagedTenant,
   SnapshotMeta,
   TenantInventoryStatus,
@@ -22,7 +23,7 @@ import type {
 } from '@zerostress/types';
 import { db, managedTenants } from '../db/index.js';
 import { DrizzleSnapshotStore } from './inventory-store.js';
-import { getDeviceProvider, getGroupProvider, rememberMicrosoftTenantId } from './microsoft-clients.js';
+import { getDeviceProvider, getGroupProvider, getMailProvider, rememberMicrosoftTenantId } from './microsoft-clients.js';
 
 // Der Snapshot haelt alle CVEs; die Route schneidet je Anfrage zu
 const VULNERABILITY_SNAPSHOT_LIMIT = 5000;
@@ -56,6 +57,7 @@ export function getInventoryService(): InventorySyncService {
         devices: (ctx) => getDeviceProvider().listDevices(ctx),
         vulnerabilities: (ctx) => getDeviceProvider().getTenantVulnerabilities(ctx, { top: VULNERABILITY_SNAPSHOT_LIMIT }),
         groups: (ctx) => getGroupProvider().listGroups(ctx),
+        mail: (ctx) => getMailProvider().getMailOverview(ctx, 'D30'),
       },
       onSynced: async (target, kind) => {
         if (kind === 'devices') {
@@ -123,6 +125,11 @@ export async function getTenantVulnerabilities(
 
 export async function getGroupInventory(tenant: ManagedTenant): Promise<GroupInventory> {
   const read = await getInventoryService().getOrLoad(targetOf(tenant), 'groups');
+  return { ...read.payload, snapshot: read.meta };
+}
+
+export async function getMailOverview(tenant: ManagedTenant): Promise<MailOverview> {
+  const read = await getInventoryService().getOrLoad(targetOf(tenant), 'mail');
   return { ...read.payload, snapshot: read.meta };
 }
 

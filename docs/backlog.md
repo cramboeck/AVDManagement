@@ -52,8 +52,8 @@ vor dem Bau klar sind.
 | Intune-Geraete | Graph deviceManagement/managedDevices | DeviceManagementManagedDevices.Read.All | Beta-Scope: Sync, Compliance, Neustart, Suche, Wipe/Retire |
 | Apps (Application Management) | Graph deviceAppManagement, eigener Paketkatalog, Windows-Build-Worker | DeviceManagementApps.Read/ReadWrite.All, Azure Storage EU | Plan in docs/implementation/apps-module-plan.md; Stufen A Inventar, B Zuweisungen, C Katalog + Upload, D Build-Worker |
 | Defender | Graph security/alerts_v2, incidents; Defender for Endpoint API | SecurityAlert.Read.All, eigene Consent fuer MDE | Zweite API-Welt, eigener Consent-Flow |
-| Exchange-Postfaecher | Graph reports/getMailboxUsage*, EXO PowerShell fuer Einstellungen | Reports.Read.All | Postfachgroesse, Weiterleitungen, Delegierungen |
-| Mail-Statistiken | Graph reports/getEmailActivity* | Reports.Read.All | Volumen pro Tenant/Benutzer, Trend |
+| Exchange-Postfaecher | Graph reports/getMailboxUsage*, EXO PowerShell fuer Einstellungen | Reports.Read.All | Umgesetzt: Seite Exchange mit Groesse, Kontingent, Aktivitaet, Archiv, Snapshot 6 h. Offen: Weiterleitungen, Delegierungen, Regeln (EXO PowerShell) |
+| Mail-Statistiken | Graph reports/getEmailActivity* | Reports.Read.All | Umgesetzt: Volumen je Tag und je Postfach (30 Tage). Offen: Trend ueber laengere Zeitraeume, tenant-uebergreifend |
 | Hornetsecurity | Hornetsecurity REST-API | API-Key je Kunde im Key Vault | Spam-/Quarantaene-Kennzahlen |
 | SharePoint/Teams: extern geteilte Inhalte | Graph sites, drives permissions; sharing reports | Sites.Read.All | Anonyme Links, externe Gaeste je Site/Team |
 | Teams-/M365-Gruppen | Graph groups, members, owners | Directory.Read.All (vorhanden) | Umgesetzt: Seite Gruppen mit Snapshot, Auffaelligkeiten (ohne Besitzer, ein Besitzer, oeffentliches Team, Gaeste, dynamisch, leer), Detail mit Besitzern und Mitgliedern. Offen: externe Freigaben je Gruppe (SharePoint), Aktionen (Besitzer setzen) als Jobs |
