@@ -152,9 +152,43 @@ function parseCount(body: unknown): number | null {
 export class GroupProvider extends BaseResourceProvider {
   readonly name = 'groups';
   readonly requiredScopes = ['Directory.Read.All'];
+  // Mitglieder und Besitzer aendern
+  readonly writeScopes = ['Group.ReadWrite.All'];
 
   constructor(private readonly graphClient: GraphClient) {
     super();
+  }
+
+  /**
+   * Ist das Objekt Mitglied bzw. Besitzer? Direkte Mitgliedschaft, kein transitives Ergebnis.
+   */
+  async hasRelation(ctx: ProviderContext, groupId: string, relation: 'members' | 'owners', objectId: string): Promise<boolean> {
+    this.validateContext(ctx);
+    const response = await this.graphClient.get<GraphResponse<{ id: string }[]>>(
+      ctx.tenantId as string,
+      `/groups/${encodeURIComponent(groupId)}/${relation}?$filter=id eq '${objectId.replace(/'/g, "''")}'&$select=id&$count=true`,
+      this.requiredScopes,
+      { headers: { ConsistencyLevel: 'eventual' } }
+    );
+    return response.value.length > 0;
+  }
+
+  async addRelation(ctx: ProviderContext, groupId: string, relation: 'members' | 'owners', objectId: string): Promise<void> {
+    this.validateContext(ctx);
+    await this.graphClient.post(ctx.tenantId as string, `/groups/${encodeURIComponent(groupId)}/${relation}/$ref`, this.writeScopes, {
+      '@odata.id': `https://graph.microsoft.com/v1.0/directoryObjects/${encodeURIComponent(objectId)}`,
+    });
+  }
+
+  async removeRelation(ctx: ProviderContext, groupId: string, relation: 'members' | 'owners', objectId: string): Promise<void> {
+    this.validateContext(ctx);
+    await this.graphClient.delete(ctx.tenantId as string, `/groups/${encodeURIComponent(groupId)}/${relation}/${encodeURIComponent(objectId)}/$ref`, this.writeScopes);
+  }
+
+  async countOwners(ctx: ProviderContext, groupId: string): Promise<number> {
+    this.validateContext(ctx);
+    const response = await this.graphClient.get<GraphResponse<{ id: string }[]>>(ctx.tenantId as string, `/groups/${encodeURIComponent(groupId)}/owners?$select=id&$top=100`, this.requiredScopes);
+    return response.value.length;
   }
 
   async listGroups(ctx: ProviderContext): Promise<CapabilityResult<GroupInventorySet>> {

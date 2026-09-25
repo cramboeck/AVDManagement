@@ -14,6 +14,8 @@ import { AssignLicenseDialog } from '@/components/assign-license-dialog';
 import { CapabilityNotice } from '@/components/identity/capability-notice';
 import { SignInTable, formatDateTime } from '@/components/identity/sign-in-table';
 import { AuditTable } from '@/components/identity/audit-table';
+import { DataTable, type ColumnDef } from '@/components/ui/data-table';
+import { MembershipJobDialog } from '@/components/groups/membership-dialogs';
 import type {
   UserDetail,
   UserLicense,
@@ -203,7 +205,7 @@ export default function UserDetailPage({ params }: { params: { userId: string } 
       <div role="tabpanel">
         {tab === 'overview' && <OverviewTab user={user} base={base} tenantId={activeTenant.id} />}
         {tab === 'security' && <SecurityTab base={base} tenantId={activeTenant.id} userId={userId} />}
-        {tab === 'groups' && <GroupsTab base={base} tenantId={activeTenant.id} userId={userId} />}
+        {tab === 'groups' && <GroupsTab base={base} tenantId={activeTenant.id} userId={userId} user={user} />}
         {tab === 'history' && <HistoryTab base={base} tenantId={activeTenant.id} userId={userId} />}
         {tab === 'jobs' && <JobsTab tenantId={activeTenant.id} microsoftId={user.microsoftId} />}
       </div>
@@ -400,7 +402,9 @@ function AuthMethods({ summary }: { summary: AuthenticationMethodsSummary }) {
   );
 }
 
-function GroupsTab({ base, tenantId, userId }: { base: string; tenantId: string; userId: string }) {
+function GroupsTab({ base, tenantId, userId, user }: { base: string; tenantId: string; userId: string; user: UserDetail }) {
+  const queryClient = useQueryClient();
+  const [removing, setRemoving] = useState<UserGroup | null>(null);
   const groupsQuery = useQuery({
     queryKey: ['user-groups', tenantId, userId],
     queryFn: () => api.get<{ items: UserGroup[] }>(`${base}/groups`),
@@ -411,22 +415,72 @@ function GroupsTab({ base, tenantId, userId }: { base: string; tenantId: string;
   const groups = groupsQuery.data?.items ?? [];
   if (groups.length === 0) return <EmptyState title="Keine Gruppenmitgliedschaften" />;
 
-  const kinds = (Object.keys(groupKindLabels) as UserGroupKind[]).filter((kind) => groups.some((g) => g.kind === kind));
+  const counts = (Object.keys(groupKindLabels) as UserGroupKind[]).map((kind) => ({ kind, count: groups.filter((g) => g.kind === kind).length })).filter((c) => c.count > 0);
+  const columns: ColumnDef<UserGroup>[] = [
+    {
+      id: 'name',
+      header: 'Gruppe',
+      accessor: (g) => g.displayName,
+      cell: (g) => (
+        <Link href={`/groups/${encodeURIComponent(g.id)}`} className="font-medium text-primary hover:underline" onClick={(e) => e.stopPropagation()}>
+          {g.displayName}
+        </Link>
+      ),
+    },
+    {
+      id: 'kind',
+      header: 'Typ',
+      accessor: (g) => g.kind,
+      filterOptions: (Object.keys(groupKindLabels) as UserGroupKind[]).map((k) => ({ value: k, label: groupKindLabels[k] })),
+      cell: (g) => <span className="inline-flex rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">{groupKindLabels[g.kind]}</span>,
+      searchable: false,
+    },
+    {
+      id: 'actions',
+      header: '',
+      accessor: () => null,
+      sortable: false,
+      searchable: false,
+      align: 'right',
+      cell: (g) => (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            setRemoving(g);
+          }}
+          className="rounded-md border border-destructive/40 px-2 py-1 text-xs text-destructive hover:bg-destructive/10"
+        >
+          Entfernen
+        </button>
+      ),
+    },
+  ];
 
   return (
-    <div className="grid gap-4 md:grid-cols-2">
-      {kinds.map((kind) => (
-        <section key={kind} className="rounded-lg border p-4">
-          <h2 className="mb-2 font-medium">{groupKindLabels[kind]}</h2>
-          <ul className="space-y-1 text-sm">
-            {groups
-              .filter((g) => g.kind === kind)
-              .map((g) => (
-                <li key={g.id}>{g.displayName}</li>
-              ))}
-          </ul>
-        </section>
-      ))}
+    <div className="space-y-3">
+      <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+        {counts.map((c) => (
+          <span key={c.kind} className="rounded-full border px-2 py-0.5">
+            {groupKindLabels[c.kind]}: {c.count}
+          </span>
+        ))}
+      </div>
+      <DataTable rows={groups} columns={columns} getRowId={(g) => g.id} storageKey="user-groups" initialSort={{ columnId: 'name', direction: 'asc' }} searchPlaceholder="Gruppe..." exportFileName={`gruppen-${user.displayName}`} dense />
+      <p className="text-xs text-muted-foreground">Entfernen erzeugt einen Job mit Vorschau; dynamische und aus dem lokalen AD synchronisierte Gruppen lehnen die Aenderung ab.</p>
+      {removing && (
+        <MembershipJobDialog
+          tenantId={tenantId}
+          groupId={removing.id}
+          groupName={removing.displayName}
+          action="remove-member"
+          target={{ objectId: user.microsoftId, objectDisplayName: user.displayName, objectUpn: user.userPrincipalName }}
+          onClose={() => setRemoving(null)}
+          onCompleted={() => {
+            queryClient.invalidateQueries({ queryKey: ['user-groups', tenantId, userId] });
+            queryClient.invalidateQueries({ queryKey: ['groups', tenantId] });
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -75,9 +75,17 @@ Verteilergruppen mit Besitzern, Mitglieder- und Gastzahlen und
 Auffaelligkeiten (ohne Besitzer, ein Besitzer, oeffentliches Team, Gaeste,
 dynamisch, leer). Die Liste kommt aus dem Bestands-Snapshot (Intervall 60
 Minuten), die Zaehlungen laufen ueber `$batch` mit zwei Anfragen je Gruppe.
-`Directory.Read.All` reicht; ob eine M365-Gruppe ein Team ist, steht in
-`resourceProvisioningOptions`, ein Teams-Scope ist nicht noetig. Das Detail
-laedt Besitzer und Mitglieder live (bis 2000).
+`Directory.Read.All` reicht zum Lesen; ob eine M365-Gruppe ein Team ist,
+steht in `resourceProvisioningOptions`, ein Teams-Scope ist nicht noetig.
+Das Detail laedt Besitzer und Mitglieder live (bis 2000).
+
+Aenderungen an Mitgliedern und Besitzern sind Jobs (`group.add-member`,
+`group.remove-member`, `group.add-owner`, `group.remove-owner`) mit
+Vorschau, Freigabe durch Engineer und Audit; sie brauchen
+`Group.ReadWrite.All`. Dynamische und aus dem lokalen AD synchronisierte
+Gruppen lehnen Aenderungen ab, der letzte Besitzer einer Microsoft
+365-Gruppe wird nicht entfernt. Auf der Benutzerseite laesst sich ein
+Benutzer im Tab Gruppen direkt aus einer Gruppe entfernen.
 
 ## Apps (Intune-Anwendungen)
 
@@ -314,7 +322,7 @@ Secret ab (`AADSTS700025`).
 | `DeviceManagementConfiguration.ReadWrite.All` | Skriptbibliothek als Intune Remediations im Tenant anlegen und aktuell halten (Geraet > Skripte) | Karte "Berechtigung fehlt" im Tab Skripte |
 | `Reports.Read.All` | Exchange-Nutzungsberichte: Postfachgroessen, Kontingente, Mailvolumen (Seite Exchange) | Karte "Berechtigung fehlt" |
 | `DeviceManagementApps.ReadWrite.All` | Apps: Bestand, Installationsstatus, Zuweisungen als Jobs (Seite Apps) | Karte "Berechtigung fehlt" |
-| `Group.ReadWrite.All` | Bereitstellungsgruppen je App anlegen (Apps > Bereitstellungsgruppen anlegen) | Job schlaegt mit 403 fehl |
+| `Group.ReadWrite.All` | Mitglieder und Besitzer von Gruppen aendern (Gruppe > Mitglied hinzufuegen/entfernen, Benutzer > Gruppen > Entfernen), Bereitstellungsgruppen je App anlegen | Jobs schlagen mit 403 fehl |
 | `Policy.Read.All` | Best-Practice-Checks: Conditional Access, Sicherheitsstandards, Authentifizierungsmethoden, Autorisierungsrichtlinie (Sicherheit > Best Practices) | Betroffene Checks "nicht pruefbar" |
 
 Schluessel und Passwoerter werden nie gelistet oder exportiert: Anzeige nur
