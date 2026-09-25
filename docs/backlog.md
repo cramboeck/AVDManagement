@@ -36,7 +36,7 @@ vor dem Bau klar sind.
 | AVD Image-Management D: Rollout auf Host Pool | AVD + Compute | wie oben | Drain -> Sessions -> Reimage -> Validierung -> Undrain, Batches |
 | Alerts: Anmelde-Anomalien | Graph signIns (P1) | AuditLog.Read.All | Regeln: n Fehlversuche/Benutzer/Zeitfenster, neues Land, Legacy-Auth, Risiko. Kanal: E-Mail/Teams. Regel-Engine als Job |
 | Intune-Geraete | Graph deviceManagement/managedDevices | DeviceManagementManagedDevices.Read.All | Beta-Scope: Sync, Compliance, Neustart, Suche, Wipe/Retire |
-| Intune-Apps | Graph deviceAppManagement | DeviceManagementApps.Read.All | Zuordnung, Installationsstatus; kein Paketieren (PatchMyPC/RoboPack) |
+| Apps (Application Management) | Graph deviceAppManagement, eigener Paketkatalog, Windows-Build-Worker | DeviceManagementApps.Read/ReadWrite.All, Azure Storage EU | Plan in docs/implementation/apps-module-plan.md; Stufen A Inventar, B Zuweisungen, C Katalog + Upload, D Build-Worker |
 | Defender | Graph security/alerts_v2, incidents; Defender for Endpoint API | SecurityAlert.Read.All, eigene Consent fuer MDE | Zweite API-Welt, eigener Consent-Flow |
 | Exchange-Postfaecher | Graph reports/getMailboxUsage*, EXO PowerShell fuer Einstellungen | Reports.Read.All | Postfachgroesse, Weiterleitungen, Delegierungen |
 | Mail-Statistiken | Graph reports/getEmailActivity* | Reports.Read.All | Volumen pro Tenant/Benutzer, Trend |
