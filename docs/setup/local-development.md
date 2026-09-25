@@ -98,6 +98,19 @@ verwendet bestehende Gruppen gleichen Namens wieder und weist sie auf
 Wunsch sofort zu. Paketkatalog, Upload und Build-Worker (Stufen C/D) sind
 im Plan `docs/implementation/apps-module-plan.md` beschrieben und offen.
 
+## Remotehilfe (TeamViewer)
+
+Mit `TEAMVIEWER_API_TOKEN` (Skript-Token aus der TeamViewer Management
+Console, Berechtigung "Geraete lesen") zeigt das Geraetedetail den Knopf
+**Remote-Sitzung**. Die Konsole sucht das Geraet in der TeamViewer-
+Geraeteliste ueber den Alias (muss dem Hostnamen entsprechen, Zusaetze wie
+"AOEPC239 (Buero)" sind erlaubt), fragt eine Begruendung ab, schreibt
+`remote.session.start` ins Audit und oeffnet `teamviewer10://control`,
+worauf der TeamViewer-Client auf dem Technikerrechner die Verbindung
+aufbaut. Die Konsole speichert keine Sitzungsdaten und kein Passwort.
+Ad-hoc-Sitzungscodes (Service-Queue) und RustDesk als zweiter Anbieter
+sind im Plan `docs/implementation/remote-actions-plan.md` beschrieben.
+
 ## MCP-Server
 
 Die API stellt unter `POST /mcp` einen MCP-Server (Model Context Protocol,

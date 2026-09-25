@@ -20,6 +20,7 @@ import {
   MailProvider,
   PolicyProvider,
   AppProvider,
+  TeamViewerProvider,
   DEFENDER_API_BASE_URL,
   NotFoundError,
 } from '@zerostress/core';
@@ -137,6 +138,16 @@ export function getAppProvider(): AppProvider {
     appProvider = new AppProvider(getGraphClient());
   }
   return appProvider;
+}
+
+let teamViewerProvider: TeamViewerProvider | null = null;
+
+// Token je MSP; heute aus der Umgebung, spaeter aus dem Key Vault
+export function getTeamViewerProvider(): TeamViewerProvider {
+  if (!teamViewerProvider) {
+    teamViewerProvider = new TeamViewerProvider({ token: process.env.TEAMVIEWER_API_TOKEN || null });
+  }
+  return teamViewerProvider;
 }
 
 let securityProvider: SecurityProvider | null = null;

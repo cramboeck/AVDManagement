@@ -38,7 +38,7 @@ vor dem Bau klar sind.
 | 5 | Automatische Deployments (Apps-Plan Stufen C/D) | Worker, Paketkatalog, Azure Storage EU | Update -> Paket -> Preview -> Freigabe -> Ringe; Auto nur per Regel |
 | 6 | Bestands-Cache: Snapshot je Tenant in Postgres, Sync-Worker, "Stand vor n Minuten" | — | Umgesetzt fuer Geraete und Schwachstellen (`inventory_snapshots`, Queue `inventory-sync`). Offen: Benutzer, tenant-uebergreifende Sichten auf dem Snapshot |
 | 7 | Remote-Befehle ohne eigenen Agent: Skriptbibliothek, Intune Remediations auf Abruf, Azure Run Command, Defender Live Response | `DeviceManagementConfiguration.ReadWrite.All`, VM Contributor, Defender `Machine.LiveResponse` | R1 und R2 umgesetzt: sechs Skripte (Update-Stand, Update-Scan, Systeminfo, winget, Netzwerk, Speicher), Jobs `device.run-script` und `avd.run-script`, Tab Skripte und Knopf "Skript" je Session-Host. Offen: R3 Live Response (im Partnertenant aktiviert), R4 Bulk, Signatur der Skripte |
-| 8 | Remotehilfe: TeamViewer-Start aus dem Geraetekopf, spaeter RustDesk hinter demselben Interface | TeamViewer-API-Token im Key Vault | Plan Teil B; Konsole startet und protokolliert nur, kein eigener Sitzungsbroker |
+| 8 | Remotehilfe: TeamViewer-Start aus dem Geraetekopf, spaeter RustDesk hinter demselben Interface | TeamViewer-API-Token (`TEAMVIEWER_API_TOKEN`, spaeter Key Vault) | H1 umgesetzt, mit echtem Token zu testen. Offen: H2 Sitzungscodes (Service-Queue), H3 RustDesk |
 
 ## Naechste Module
 

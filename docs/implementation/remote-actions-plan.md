@@ -95,7 +95,7 @@ Begruendung ins Audit.
 
 | Stufe | Inhalt | Aufwand |
 |---|---|---|
-| H1 | TeamViewer: Token je MSP im Key Vault, Geraeteabgleich, Button "Remote-Sitzung starten" im Geraetekopf mit Begruendung und Audit, Capability-Karte wenn kein Treffer | 2 Tage |
+| H1 | TeamViewer: Token je MSP im Key Vault, Geraeteabgleich, Button "Remote-Sitzung starten" im Geraetekopf mit Begruendung und Audit, Capability-Karte wenn kein Treffer. **Umgesetzt** (Token vorerst aus `TEAMVIEWER_API_TOKEN`, Abgleich ueber Alias), gegen die TeamViewer-API noch nicht mit echtem Token getestet | 2 Tage |
 | H2 | Ad-hoc-Sitzungscode fuer Benutzer ohne verwaltetes Geraet (Service-Queue), Code per Mail aus der Konsole | 1 Tag |
 | H3 | RustDesk als zweiter Anbieter hinter demselben Interface `RemoteSupportProvider` | 2 Tage |
 

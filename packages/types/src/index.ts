@@ -629,6 +629,22 @@ export interface MailOverviewSet {
 export type MailOverview = CapabilityResult<MailOverviewSet> & { snapshot?: SnapshotMeta };
 
 // ============================================
+// Remotehilfe (TeamViewer)
+// ============================================
+
+export interface RemoteSupportMatch {
+  provider: 'teamviewer';
+  found: boolean;
+  deviceId: string | null;
+  alias: string | null;
+  online: boolean | null;
+  // URI fuer den Client auf dem Technikerrechner
+  uri: string | null;
+  // Diagnose: wie viele Geraete die Liste hat bzw. wie viele auf den Namen passen
+  candidates: number;
+}
+
+// ============================================
 // Alerts: Auffaelligkeiten bei Anmeldungen (Regelwerk, kein ML)
 // ============================================
 

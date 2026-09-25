@@ -15,6 +15,7 @@ import { formatDateTime } from '@/components/identity/sign-in-table';
 import { RecoveryTab } from '@/components/devices/recovery-tab';
 import { ScriptsTab } from '@/components/devices/scripts-tab';
 import { SoftwareTab } from '@/components/devices/software-tab';
+import { RemoteSessionButton } from '@/components/devices/remote-session';
 import {
   ComplianceBadge,
   ExposureBadge,
@@ -153,7 +154,8 @@ export default function DeviceDetailPage({ params }: { params: { deviceId: strin
         </div>
 
         {device.intune ? (
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <RemoteSessionButton base={base} tenantId={activeTenant.id} deviceId={deviceId} />
             <ActionButton onClick={() => setAction('sync-device')}>Synchronisieren</ActionButton>
             <ActionButton onClick={() => setAction('defender-scan')}>Defender-Scan</ActionButton>
             <ActionButton onClick={() => setAction('restart-device')} tone="destructive">Neu starten</ActionButton>

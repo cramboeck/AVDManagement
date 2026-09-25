@@ -8,7 +8,7 @@ import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
 import { authMiddleware, requireRole } from '../middleware/auth.js';
 import { tenantContextMiddleware, requireConnectedTenant } from '../middleware/tenant-context.js';
-import { getDeviceProvider } from '../services/microsoft-clients.js';
+import { getDeviceProvider, getTeamViewerProvider } from '../services/microsoft-clients.js';
 import { mergeSoftware } from '@zerostress/core';
 import { getDeviceInventory, findDevice } from '../services/inventory.js';
 import { DrizzleAuditLogger } from '../services/audit-logger.js';
@@ -132,6 +132,44 @@ app.get('/:deviceId/software', requireConnectedTenant, async (c) => {
     },
   };
   return c.json(inventory);
+});
+
+// Remotehilfe: Geraet in TeamViewer finden (kein Sitzungsstart)
+app.get('/:deviceId/remote-support', requireConnectedTenant, async (c) => {
+  const tenant = c.get('tenant');
+  const device = await findDevice(tenant, c.req.param('deviceId'));
+  if (!device) return c.json(notFound(c.req.param('deviceId')), 404);
+  return c.json(await getTeamViewerProvider().findByHostname(device.name));
+});
+
+// Remotehilfe: Sitzungsstart mit Begruendung und Audit; der Client baut die Verbindung auf
+app.post('/:deviceId/remote-support/session', requireRole('engineer'), requireConnectedTenant, zValidator('json', revealSchema), async (c) => {
+  const tenant = c.get('tenant');
+  const auth = c.get('auth');
+  const deviceId = c.req.param('deviceId');
+  const { reason } = c.req.valid('json');
+  const correlationId = (c.req.header('X-Correlation-ID') ?? randomUUID()) as CorrelationId;
+  const device = await findDevice(tenant, deviceId);
+  if (!device) return c.json(notFound(deviceId), 404);
+
+  const auditBase = {
+    mspId: auth.mspId,
+    tenantId: tenant.id,
+    userId: auth.user.id,
+    action: 'remote.session.start',
+    targetType: 'device',
+    targetId: device.id,
+    targetDisplayName: device.name,
+    afterState: { provider: 'teamviewer', reason },
+    correlationId,
+  };
+  const match = await getTeamViewerProvider().findByHostname(device.name);
+  if (!match.available || !match.data.found || !match.data.uri) {
+    await audit.log({ ...auditBase, result: 'failure', errorMessage: match.available ? 'Device not found in TeamViewer' : match.reason });
+    return c.json({ type: 'https://api.zerostress.io/problems/not-found', title: 'Device not found in TeamViewer', status: 404 }, 404);
+  }
+  await audit.log({ ...auditBase, afterState: { ...auditBase.afterState, teamViewerDeviceId: match.data.deviceId }, result: 'success' });
+  return c.json({ uri: match.data.uri, alias: match.data.alias, online: match.data.online });
 });
 
 // Wiederherstellung: nur Metadaten (welche Schluessel existieren)
