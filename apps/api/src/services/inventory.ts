@@ -16,6 +16,7 @@ import type {
   GroupInventory,
   InventoryKind,
   MailOverview,
+  SharePointOverview,
   ManagedTenant,
   SnapshotMeta,
   TenantInventoryStatus,
@@ -24,7 +25,7 @@ import type {
 } from '@zerostress/types';
 import { db, managedTenants } from '../db/index.js';
 import { DrizzleSnapshotStore } from './inventory-store.js';
-import { getAppProvider, getDeviceProvider, getGroupProvider, getMailProvider, rememberMicrosoftTenantId } from './microsoft-clients.js';
+import { getAppProvider, getDeviceProvider, getGroupProvider, getMailProvider, getSharePointProvider, rememberMicrosoftTenantId } from './microsoft-clients.js';
 
 // Der Snapshot haelt alle CVEs; die Route schneidet je Anfrage zu
 const VULNERABILITY_SNAPSHOT_LIMIT = 5000;
@@ -60,6 +61,7 @@ export function getInventoryService(): InventorySyncService {
         groups: (ctx) => getGroupProvider().listGroups(ctx),
         mail: (ctx) => getMailProvider().getMailOverview(ctx, 'D30'),
         apps: (ctx) => getAppProvider().listApps(ctx),
+        sharepoint: (ctx) => getSharePointProvider().getOverview(ctx, 'D30'),
       },
       onSynced: async (target, kind) => {
         if (kind === 'devices') {
@@ -152,6 +154,11 @@ export async function getAppInventory(tenant: ManagedTenant): Promise<AppInvento
     assignments: app.assignments.map((a) => ({ ...a, groupName: a.groupId ? (names.get(a.groupId) ?? null) : null })),
   }));
   return { available: true, data: { ...apps.payload.data, items }, snapshot: apps.meta };
+}
+
+export async function getSharePointOverview(tenant: ManagedTenant): Promise<SharePointOverview> {
+  const read = await getInventoryService().getOrLoad(targetOf(tenant), 'sharepoint');
+  return { ...read.payload, snapshot: read.meta };
 }
 
 export async function getInventoryStatus(tenant: ManagedTenant): Promise<TenantInventoryStatus> {

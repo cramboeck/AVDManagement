@@ -470,7 +470,60 @@ export interface DeviceInventory {
 // Bestands-Snapshot (Cache je Tenant)
 // ============================================
 
-export type InventoryKind = 'devices' | 'vulnerabilities' | 'groups' | 'mail' | 'apps';
+export type InventoryKind = 'devices' | 'vulnerabilities' | 'groups' | 'mail' | 'apps' | 'sharepoint';
+
+// ============================================
+// SharePoint und OneDrive: Websites und externe Freigaben (Graph-Berichte)
+// ============================================
+
+export interface SharePointSite {
+  siteId: string;
+  url: string | null;
+  kind: 'team' | 'communication' | 'classic' | 'onedrive' | 'other';
+  template: string | null;
+  ownerPrincipalName: string | null;
+  ownerDisplayName: string | null;
+  lastActivityAt: string | null;
+  fileCount: number | null;
+  activeFileCount: number | null;
+  storageUsedBytes: number | null;
+  storageAllocatedBytes: number | null;
+  // Freigabelinks laut Bericht (je Website)
+  secureLinkForGuestCount: number | null;
+  secureLinkForMemberCount: number | null;
+  anonymousLinkCount: number | null;
+  companyLinkCount: number | null;
+}
+
+export interface SharingUser {
+  userPrincipalName: string;
+  lastActivityAt: string | null;
+  sharedExternallyFileCount: number;
+  sharedInternallyFileCount: number;
+  viewedOrEditedFileCount: number;
+}
+
+export interface SharePointTotals {
+  sites: number;
+  teamSites: number;
+  storageUsedBytes: number;
+  sitesWithAnonymousLinks: number;
+  sitesWithGuestLinks: number;
+  usersSharingExternally: number;
+  filesSharedExternally: number;
+  inactiveSites90Days: number;
+}
+
+export interface SharePointOverviewSet {
+  periodDays: number;
+  refreshedAt: string | null;
+  anonymised: boolean;
+  sites: SharePointSite[];
+  sharingUsers: SharingUser[];
+  totals: SharePointTotals;
+}
+
+export type SharePointOverview = CapabilityResult<SharePointOverviewSet> & { snapshot?: SnapshotMeta };
 
 // ============================================
 // Apps (Intune-Anwendungen, Zuweisungen, Installationsstatus)

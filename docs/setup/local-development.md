@@ -180,6 +180,17 @@ Hash; die Seite weist darauf hin. Jeder Abruf der Postfachliste steht im
 Audit (`mail.usage.view`), weil sie personenbezogen ist. Weiterleitungen,
 Delegierungen und Regeln brauchen Exchange-PowerShell und sind noch offen.
 
+## SharePoint und OneDrive
+
+Die Seite **SharePoint** liest `getSharePointSiteUsageDetail`,
+`getSharePointActivityUserDetail` und `getOneDriveActivityUserDetail` (30
+Tage, `Reports.Read.All`, Snapshot 6 h): Websites mit Speicher, Dateien,
+anonymen Links, Gastlinks und Aktivitaet sowie je Benutzer die Zahl extern
+und intern geteilter Dateien. Das ist die Uebersicht "wer teilt extern"
+ohne Dateiliste; die Freigabeliste je Datei braucht `Sites.Read.All` und
+eine Suche ueber alle Bibliotheken und ist im Backlog. Jeder Abruf steht
+im Audit (`sharepoint.usage.view`).
+
 ## Skriptbibliothek (Geraet > Skripte)
 
 Befehle auf Geraeten laufen ohne eigenen Agenten ueber Intune Remediations

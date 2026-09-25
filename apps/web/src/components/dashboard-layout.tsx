@@ -85,6 +85,7 @@ const navItems = [
   { href: '/users', label: 'Benutzer', icon: UsersIcon },
   { href: '/groups', label: 'Gruppen', icon: GroupsIcon },
   { href: '/mail', label: 'Exchange', icon: MailIcon },
+  { href: '/sharepoint', label: 'SharePoint', icon: FolderIcon },
   { href: '/devices', label: 'Geraete', icon: DeviceIcon },
   { href: '/apps', label: 'Apps', icon: AppsIcon },
   { href: '/network', label: 'Netzwerk', icon: NetworkIcon },
@@ -209,6 +210,14 @@ function BellIcon({ className }: { className?: string }) {
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={className}>
       <path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15L6 16z" />
       <path d="M10 20a2 2 0 0 0 4 0" />
+    </svg>
+  );
+}
+
+function FolderIcon({ className }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={className}>
+      <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z" />
     </svg>
   );
 }

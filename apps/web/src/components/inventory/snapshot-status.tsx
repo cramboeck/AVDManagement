@@ -13,6 +13,7 @@ const kindLabels: Record<InventoryKind, string> = {
   groups: 'Gruppen',
   mail: 'Postfaecher',
   apps: 'Apps',
+  sharepoint: 'SharePoint',
 };
 
 export function formatAge(iso: string | null, now = Date.now()): string {

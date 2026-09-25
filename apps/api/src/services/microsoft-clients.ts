@@ -21,6 +21,7 @@ import {
   PolicyProvider,
   AppProvider,
   TeamViewerProvider,
+  SharePointProvider,
   DEFENDER_API_BASE_URL,
   NotFoundError,
 } from '@zerostress/core';
@@ -148,6 +149,15 @@ export function getTeamViewerProvider(): TeamViewerProvider {
     teamViewerProvider = new TeamViewerProvider({ token: process.env.TEAMVIEWER_API_TOKEN || null });
   }
   return teamViewerProvider;
+}
+
+let sharePointProvider: SharePointProvider | null = null;
+
+export function getSharePointProvider(): SharePointProvider {
+  if (!sharePointProvider) {
+    sharePointProvider = new SharePointProvider(getGraphClient());
+  }
+  return sharePointProvider;
 }
 
 let securityProvider: SecurityProvider | null = null;

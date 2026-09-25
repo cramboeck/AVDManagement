@@ -21,6 +21,7 @@ import type {
   InventoryKind,
   MailOverviewSet,
   AppInventorySet,
+  SharePointOverviewSet,
   MspId,
   SnapshotMeta,
   TenantId,
@@ -29,7 +30,7 @@ import type {
 import type { ProviderContext } from '../providers/resource-provider.js';
 import type { InventorySnapshotStore, SnapshotRecord } from './snapshot-store.js';
 
-export const INVENTORY_KINDS: InventoryKind[] = ['devices', 'vulnerabilities', 'groups', 'mail', 'apps'];
+export const INVENTORY_KINDS: InventoryKind[] = ['devices', 'vulnerabilities', 'groups', 'mail', 'apps', 'sharepoint'];
 
 // Zielintervalle: Geraete aendern sich oefter als die CVE-Zuordnung
 export const DEFAULT_SYNC_INTERVALS: Record<InventoryKind, number> = {
@@ -39,6 +40,7 @@ export const DEFAULT_SYNC_INTERVALS: Record<InventoryKind, number> = {
   // Berichte aendern sich einmal am Tag
   mail: 6 * 60 * 60 * 1000,
   apps: 30 * 60 * 1000,
+  sharepoint: 6 * 60 * 60 * 1000,
 };
 
 // Ein Sync, der laenger als das laeuft, gilt als abgebrochen (Prozessneustart)
@@ -58,6 +60,7 @@ export interface InventoryPayloads {
   groups: CapabilityResult<GroupInventorySet>;
   mail: CapabilityResult<MailOverviewSet>;
   apps: CapabilityResult<AppInventorySet>;
+  sharepoint: CapabilityResult<SharePointOverviewSet>;
 }
 
 export type InventoryLoaders = {
@@ -155,6 +158,10 @@ function countItems<K extends InventoryKind>(kind: K, payload: InventoryPayloads
     const mail = payload as CapabilityResult<MailOverviewSet>;
     return mail.available ? mail.data.mailboxes.length : 0;
   }
+  if (kind === 'sharepoint') {
+    const sp = payload as CapabilityResult<SharePointOverviewSet>;
+    return sp.available ? sp.data.sites.length : 0;
+  }
   const result = payload as CapabilityResult<{ items: unknown[] }>;
   return result.available ? result.data.items.length : 0;
 }
@@ -188,6 +195,7 @@ export class InventorySyncEngine {
       groups: options.intervals?.groups ?? DEFAULT_SYNC_INTERVALS.groups,
       mail: options.intervals?.mail ?? DEFAULT_SYNC_INTERVALS.mail,
       apps: options.intervals?.apps ?? DEFAULT_SYNC_INTERVALS.apps,
+      sharepoint: options.intervals?.sharepoint ?? DEFAULT_SYNC_INTERVALS.sharepoint,
     };
     this.now = options.now ?? (() => new Date());
   }

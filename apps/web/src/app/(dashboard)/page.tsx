@@ -309,6 +309,7 @@ function AllTenantsTable({
             <th className="px-3 py-2 font-medium">Benutzer</th>
             <th className="px-3 py-2 font-medium">Anmeldefehler 24 h</th>
             <th className="px-3 py-2 font-medium">Offene Jobs</th>
+            <th className="px-3 py-2 font-medium">Alerts</th>
             <th className="px-3 py-2 font-medium">Aufmerksamkeit</th>
           </tr>
         </thead>
@@ -348,6 +349,14 @@ function AllTenantsTable({
               <td className="px-3 py-2 tabular-nums">
                 {cell(d.jobs, (j) => (
                   <span className={j.pendingApproval > 0 ? 'text-warning' : undefined}>{j.pendingApproval + j.running}</span>
+                ))}
+              </td>
+              <td className="px-3 py-2 tabular-nums">
+                {cell(d.alerts, (a) => (
+                  <span className={a.high > 0 ? 'text-destructive' : a.open > 0 ? 'text-warning' : undefined}>
+                    {a.open}
+                    {a.high > 0 && <span className="ml-1 text-xs">({a.high} hoch)</span>}
+                  </span>
                 ))}
               </td>
               <td className="px-3 py-2">

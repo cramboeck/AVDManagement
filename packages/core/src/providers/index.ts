@@ -18,3 +18,4 @@ export * from './mail-provider.js';
 export * from './policy-provider.js';
 export * from './app-provider.js';
 export * from './remote-support-provider.js';
+export * from './sharepoint-provider.js';
