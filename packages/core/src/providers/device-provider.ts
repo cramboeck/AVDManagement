@@ -32,6 +32,11 @@ import type {
   RevealedBitLockerKey,
   RevealedLaps,
   DetectedApp,
+  DeviceNetworkInfo,
+  NetworkTopology,
+  NetworkTopologyDevice,
+  NetworkSite,
+  NetworkSubnet,
 } from '@zerostress/types';
 import { BaseResourceProvider, type ProviderContext } from './resource-provider.js';
 import { GraphClient, type GraphResponse } from './graph-client.js';
@@ -56,6 +61,10 @@ interface GraphManagedDevice {
   serialNumber: string | null;
   isEncrypted: boolean | null;
   managementAgent: string | null;
+  totalStorageSpaceInBytes: number | null;
+  freeStorageSpaceInBytes: number | null;
+  physicalMemoryInBytes: number | null;
+  wiFiMacAddress: string | null;
 }
 
 interface GraphDetectedApp {
@@ -75,6 +84,7 @@ interface DefenderMachine {
   osVersion: string | null;
   osBuild: number | string | null;
   lastIpAddress: string | null;
+  lastExternalIpAddress?: string | null;
   healthStatus: string | null;
   riskScore: string | null;
   exposureLevel: string | null;
@@ -82,6 +92,8 @@ interface DefenderMachine {
   aadDeviceId: string | null;
   machineTags: string[] | null;
   onboardingStatus: string | null;
+  // Nur beim Einzelabruf /api/machines/{id}
+  ipAddresses?: { ipAddress: string | null; macAddress: string | null; type: string | null; operationalStatus: string | null }[] | null;
 }
 
 interface DefenderVulnerability {
@@ -181,6 +193,10 @@ const INTUNE_SELECT = [
   'serialNumber',
   'isEncrypted',
   'managementAgent',
+  'totalStorageSpaceInBytes',
+  'freeStorageSpaceInBytes',
+  'physicalMemoryInBytes',
+  'wiFiMacAddress',
 ].join(',');
 
 const COMPLIANCE_STATES: DeviceComplianceState[] = [
@@ -608,6 +624,29 @@ export class DeviceProvider extends BaseResourceProvider {
   }
 
   /**
+   * Netzwerkschnittstellen laut Defender-Sensor (nur im Einzelabruf enthalten).
+   */
+  async getDeviceNetwork(ctx: ProviderContext, machineId: string): Promise<CapabilityResult<DeviceNetworkInfo>> {
+    this.validateContext(ctx);
+    let machine: DefenderMachine;
+    try {
+      machine = await this.defenderClient.get<DefenderMachine>(ctx.tenantId as string, `/api/machines/${encodeURIComponent(machineId)}`, DEFENDER_SCOPES);
+    } catch (error) {
+      const unavailable = asUnavailable(error, 'Machine.Read.All');
+      if (unavailable) return unavailable;
+      throw error;
+    }
+    const interfaces = (machine.ipAddresses ?? [])
+      .filter((i): i is { ipAddress: string; macAddress: string | null; type: string | null; operationalStatus: string | null } => !!i.ipAddress)
+      .map((i) => ({ ipAddress: i.ipAddress, macAddress: formatMac(i.macAddress), type: i.type, status: i.operationalStatus }))
+      .sort((a, b) => Number(b.status === 'Up') - Number(a.status === 'Up') || compareIp(a.ipAddress, b.ipAddress));
+    return {
+      available: true,
+      data: { lastIpAddress: machine.lastIpAddress, lastExternalIpAddress: machine.lastExternalIpAddress ?? null, interfaces },
+    };
+  }
+
+  /**
    * Vom Intune-Client erkannte Software eines Geraets (Inventar, nicht live).
    */
   async listDetectedApps(ctx: ProviderContext, managedDeviceId: string): Promise<CapabilityResult<DetectedApp[]>> {
@@ -826,7 +865,92 @@ function mapIntune(md: GraphManagedDevice): DeviceIntuneInfo {
     manufacturer: md.manufacturer,
     serialNumber: md.serialNumber,
     managementAgent: md.managementAgent,
+    totalStorageBytes: positiveOrNull(md.totalStorageSpaceInBytes),
+    freeStorageBytes: positiveOrNull(md.freeStorageSpaceInBytes),
+    physicalMemoryBytes: positiveOrNull(md.physicalMemoryInBytes),
+    wifiMacAddress: md.wiFiMacAddress || null,
   };
+}
+
+// Intune meldet 0, wenn der Client den Wert nicht kennt
+function positiveOrNull(value: number | null | undefined): number | null {
+  return typeof value === 'number' && value > 0 ? value : null;
+}
+
+/**
+ * Topologie aus dem Bestand: externe Adresse als Standort, /24 als Subnetz.
+ * Reine Ableitung, keine Abfrage.
+ */
+export function buildNetworkTopology(devices: Device[]): Omit<NetworkTopology, 'snapshot' | 'generatedAt'> {
+  const sites = new Map<string | null, Map<string, NetworkTopologyDevice[]>>();
+  const withoutAddress: NetworkTopologyDevice[] = [];
+
+  for (const device of devices) {
+    const ip = device.defender?.lastIpAddress ?? null;
+    const entry: NetworkTopologyDevice = {
+      id: device.id,
+      name: device.name,
+      ipAddress: ip ?? '',
+      operatingSystem: device.operatingSystem,
+      lastActivityAt: device.lastActivityAt,
+    };
+    if (!ip) {
+      withoutAddress.push(entry);
+      continue;
+    }
+    const siteKey = device.defender?.lastExternalIpAddress || null;
+    const subnetKey = subnetOf(ip);
+    let subnets = sites.get(siteKey);
+    if (!subnets) {
+      subnets = new Map();
+      sites.set(siteKey, subnets);
+    }
+    const list = subnets.get(subnetKey) ?? [];
+    list.push(entry);
+    subnets.set(subnetKey, list);
+  }
+
+  const result: NetworkSite[] = Array.from(sites.entries()).map(([externalIp, subnets]) => {
+    const subnetList: NetworkSubnet[] = Array.from(subnets.entries())
+      .map(([cidr, list]) => ({ cidr, devices: list.sort((a, b) => compareIp(a.ipAddress, b.ipAddress)) }))
+      .sort((a, b) => b.devices.length - a.devices.length || a.cidr.localeCompare(b.cidr));
+    return { externalIp, deviceCount: subnetList.reduce((n, s) => n + s.devices.length, 0), subnets: subnetList };
+  });
+  // Bekannte Standorte zuerst, groesste zuerst; "unbekannt" ans Ende
+  result.sort((a, b) => Number(a.externalIp === null) - Number(b.externalIp === null) || b.deviceCount - a.deviceCount);
+
+  return { sites: result, withoutAddress: withoutAddress.sort((a, b) => a.name.localeCompare(b.name)) };
+}
+
+// Defender liefert MACs ohne Trenner (001122AABBCC)
+function formatMac(mac: string | null): string | null {
+  if (!mac) return null;
+  const clean = mac.replace(/[^0-9a-fA-F]/g, '').toUpperCase();
+  if (clean.length !== 12) return mac;
+  return clean.match(/.{2}/g)?.join(':') ?? mac;
+}
+
+export function subnetOf(ip: string): string {
+  const v4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.\d{1,3}$/.exec(ip);
+  if (v4) return `${v4[1]}.${v4[2]}.${v4[3]}.0/24`;
+  if (ip.includes(':')) {
+    // IPv6: die ersten vier Gruppen als /64
+    const groups = ip.split(':').slice(0, 4);
+    return `${groups.join(':')}::/64`;
+  }
+  return 'unbekannt';
+}
+
+function compareIp(a: string, b: string): number {
+  const pa = a.split('.').map(Number);
+  const pb = b.split('.').map(Number);
+  if (pa.length === 4 && pb.length === 4 && pa.every(Number.isFinite) && pb.every(Number.isFinite)) {
+    for (let i = 0; i < 4; i += 1) {
+      if (pa[i] !== pb[i]) return pa[i] - pb[i];
+    }
+    return 0;
+  }
+  return a.localeCompare(b);
 }
 
 function mapDefender(machine: DefenderMachine): DeviceDefenderInfo {
@@ -838,6 +962,7 @@ function mapDefender(machine: DefenderMachine): DeviceDefenderInfo {
     onboardingStatus: machine.onboardingStatus,
     lastSeenAt: machine.lastSeen,
     lastIpAddress: machine.lastIpAddress,
+    lastExternalIpAddress: machine.lastExternalIpAddress ?? null,
     osPlatform: machine.osPlatform,
     osBuild: machine.osBuild === null || machine.osBuild === undefined ? null : String(machine.osBuild),
     isAadJoined: machine.isAadJoined,

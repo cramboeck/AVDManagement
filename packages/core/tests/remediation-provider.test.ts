@@ -52,6 +52,8 @@ describe('RemediationProvider', () => {
       ['update-scan', 'outdated'],
       ['system-info', 'missing'],
       ['winget-updates', 'missing'],
+      ['network-info', 'missing'],
+      ['storage-info', 'missing'],
     ]);
     expect(status.data[1].tenantHash).toBe('a'.repeat(64));
     expect(graph.get.mock.calls[0][1]).toContain(`${GRAPH_BETA}/deviceManagement/deviceHealthScripts`);

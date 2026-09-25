@@ -23,7 +23,9 @@ import {
   formatRelative,
 } from '@/components/devices/device-badges';
 import type {
+  CapabilityResult,
   Device,
+  DeviceNetworkInfo,
   DeviceSecurityPosture,
   DeviceVulnerability,
   MissingKb,
@@ -178,7 +180,7 @@ export default function DeviceDetailPage({ params }: { params: { deviceId: strin
       </div>
 
       <div role="tabpanel">
-        {tab === 'overview' && <OverviewTab device={device} />}
+        {tab === 'overview' && <OverviewTab base={base} tenantId={activeTenant.id} device={device} />}
         {tab === 'security' && <SecurityTab base={base} tenantId={activeTenant.id} deviceId={deviceId} />}
         {tab === 'recovery' && <RecoveryTab base={base} tenantId={activeTenant.id} deviceId={deviceId} />}
         {tab === 'software' && <SoftwareTab base={base} tenantId={activeTenant.id} device={device} />}
@@ -201,12 +203,126 @@ export default function DeviceDetailPage({ params }: { params: { deviceId: strin
   );
 }
 
-function OverviewTab({ device }: { device: Device }) {
+function formatBytes(bytes: number | null): string {
+  if (bytes === null || bytes <= 0) return '—';
+  const gb = bytes / 1024 / 1024 / 1024;
+  return gb >= 100 ? `${Math.round(gb)} GB` : `${gb.toFixed(1)} GB`;
+}
+
+function StorageBar({ total, free }: { total: number | null; free: number | null }) {
+  if (!total || free === null) return <span>—</span>;
+  const used = total - free;
+  const percent = Math.min(100, Math.max(0, Math.round((used / total) * 100)));
+  const tone = percent >= 90 ? 'bg-destructive' : percent >= 75 ? 'bg-warning' : 'bg-primary';
+  return (
+    <div>
+      <div className="flex items-center justify-between text-sm">
+        <span>
+          {formatBytes(used)} belegt von {formatBytes(total)}
+        </span>
+        <span className={clsx('tabular-nums', percent >= 90 && 'text-destructive', percent >= 75 && percent < 90 && 'text-warning')}>{percent} %</span>
+      </div>
+      <div className="mt-1 h-2 w-full overflow-hidden rounded-full bg-muted" role="progressbar" aria-valuenow={percent} aria-valuemin={0} aria-valuemax={100} aria-label="Speicherbelegung">
+        <div className={clsx('h-full rounded-full', tone)} style={{ width: `${percent}%` }} />
+      </div>
+      <p className="mt-1 text-xs text-muted-foreground">{formatBytes(free)} frei · Stand vom letzten Intune-Check-in</p>
+    </div>
+  );
+}
+
+function NetworkSection({ base, tenantId, device }: { base: string; tenantId: string; device: Device }) {
+  const query = useQuery({
+    queryKey: ['device-network', tenantId, device.id],
+    queryFn: () => api.get<CapabilityResult<DeviceNetworkInfo>>(`${base}/network`),
+    enabled: !!device.defender,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  if (!device.defender) {
+    return <p className="text-sm text-muted-foreground">Adressen kommen vom Defender-Sensor; dieses Geraet ist nicht in Defender onboarded.</p>;
+  }
+  if (query.isLoading) return <LoadingTable rows={2} />;
+  if (query.error) return <ErrorState error={query.error as Error} onRetry={query.refetch} />;
+  const result = query.data;
+  if (!result) return null;
+  if (!result.available) return <CapabilityNotice what="die Netzwerkschnittstellen" reason={result.reason} missingPermission={result.missingPermission} detail={result.detail} compact />;
+  const net = result.data;
+
+  return (
+    <div className="space-y-3">
+      <Fields
+        fields={[
+          ['Letzte interne IP', net.lastIpAddress ?? '—'],
+          ['Oeffentliche IP (Standort)', net.lastExternalIpAddress ?? '—'],
+        ]}
+      />
+      {net.interfaces.length > 0 ? (
+        <div className="overflow-x-auto rounded-md border">
+          <table className="w-full text-sm">
+            <thead className="border-b bg-muted/50 text-left">
+              <tr>
+                <th className="px-3 py-1.5 font-medium">Adresse</th>
+                <th className="px-3 py-1.5 font-medium">MAC</th>
+                <th className="px-3 py-1.5 font-medium">Typ</th>
+                <th className="px-3 py-1.5 font-medium">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {net.interfaces.map((i) => (
+                <tr key={`${i.ipAddress}-${i.macAddress ?? ''}`} className="border-b last:border-0">
+                  <td className="px-3 py-1.5 font-mono text-xs">{i.ipAddress}</td>
+                  <td className="px-3 py-1.5 font-mono text-xs">{i.macAddress ?? '—'}</td>
+                  <td className="px-3 py-1.5">{i.type ?? '—'}</td>
+                  <td className="px-3 py-1.5">{i.status ?? '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <p className="text-sm text-muted-foreground">Der Sensor hat keine Schnittstellen gemeldet.</p>
+      )}
+      <p className="text-xs text-muted-foreground">Gateway, DNS und Verbindungsart liefert das Skript Netzwerkinfo im Tab Skripte.</p>
+    </div>
+  );
+}
+
+function OverviewTab({ base, tenantId, device }: { base: string; tenantId: string; device: Device }) {
   const intune = device.intune;
   const defender = device.defender;
 
   return (
     <div className="grid gap-6 lg:grid-cols-2">
+      <section className="rounded-lg border p-4">
+        <h2 className="mb-3 font-medium">Hardware</h2>
+        {intune ? (
+          <div className="space-y-3">
+            <Fields
+              fields={[
+                ['Hersteller', intune.manufacturer ?? '—'],
+                ['Modell', intune.model ?? '—'],
+                ['Seriennummer', <span key="s" className="font-mono text-xs">{intune.serialNumber ?? '—'}</span>],
+                ['Arbeitsspeicher', formatBytes(intune.physicalMemoryBytes)],
+                ['WLAN-MAC', <span key="m" className="font-mono text-xs">{intune.wifiMacAddress ?? '—'}</span>],
+                ['Verschluesselt', intune.isEncrypted === null ? '—' : intune.isEncrypted ? 'ja' : 'nein'],
+              ]}
+            />
+            <div>
+              <p className="mb-1 text-xs text-muted-foreground">Systemspeicher</p>
+              <StorageBar total={intune.totalStorageBytes} free={intune.freeStorageBytes} />
+            </div>
+            <p className="text-xs text-muted-foreground">Firmware, TPM, Secure Boot und alle Laufwerke liefern die Skripte Systeminfo und Speicherinfo im Tab Skripte.</p>
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">Hardwaredaten kommen aus Intune; dieses Geraet ist nicht in Intune verwaltet.</p>
+        )}
+      </section>
+
+      <section className="rounded-lg border p-4">
+        <h2 className="mb-3 font-medium">Netzwerk</h2>
+        <NetworkSection base={base} tenantId={tenantId} device={device} />
+      </section>
+
       <section className="rounded-lg border p-4">
         <h2 className="mb-3 font-medium">Intune</h2>
         {intune ? (
@@ -216,9 +332,6 @@ function OverviewTab({ device }: { device: Device }) {
               ['Letzter Sync', intune.lastSyncAt ? formatDateTime(intune.lastSyncAt) : '—'],
               ['Registriert', intune.enrolledAt ? formatDateTime(intune.enrolledAt) : '—'],
               ['Besitz', intune.ownerType ?? '—'],
-              ['Verschluesselt', intune.isEncrypted === null ? '—' : intune.isEncrypted ? 'ja' : 'nein'],
-              ['Modell', [intune.manufacturer, intune.model].filter(Boolean).join(' ') || '—'],
-              ['Seriennummer', intune.serialNumber ?? '—'],
               ['Verwaltung', intune.managementAgent ?? '—'],
             ]}
           />
@@ -237,7 +350,6 @@ function OverviewTab({ device }: { device: Device }) {
               ['Exposure', <ExposureBadge key="e" level={defender.exposureLevel} />],
               ['Risiko', <RiskBadge key="r" score={defender.riskScore} />],
               ['Zuletzt gesehen', defender.lastSeenAt ? formatDateTime(defender.lastSeenAt) : '—'],
-              ['Letzte IP', defender.lastIpAddress ?? '—'],
               ['OS-Build', defender.osBuild ?? '—'],
               ['Entra-Join', defender.isAadJoined === null ? '—' : defender.isAadJoined ? 'ja' : 'nein'],
               ['Tags', defender.tags.length ? defender.tags.join(', ') : '—'],

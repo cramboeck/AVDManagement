@@ -76,6 +76,27 @@ const definitions: ScriptDefinition[] = [
     remediationSummary: null,
     expectedDurationSeconds: 240,
   },
+  {
+    id: 'network-info',
+    displayName: 'Netzwerkinfo',
+    description:
+      'Aktive Netzwerkadapter mit IPv4, Praefix, Gateway, DNS, DHCP, MAC, Verbindungsart und Geschwindigkeit, bei WLAN die SSID; Domaene und WinHTTP-Proxy. Nur lesend.',
+    version: '1.0.0',
+    detectionFile: 'network-info.detect.ps1',
+    remediationFile: null,
+    remediationSummary: null,
+    expectedDurationSeconds: 120,
+  },
+  {
+    id: 'storage-info',
+    displayName: 'Speicherinfo',
+    description: 'Alle festen Laufwerke mit Belegung und Zustand sowie die physischen Datentraeger mit Typ, Bus, Groesse, Zustand und Firmware. Nur lesend.',
+    version: '1.0.0',
+    detectionFile: 'storage-info.detect.ps1',
+    remediationFile: null,
+    remediationSummary: null,
+    expectedDurationSeconds: 120,
+  },
 ];
 
 // Marker in der Beschreibung des Remediation-Objekts im Tenant

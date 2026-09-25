@@ -84,6 +84,15 @@ Job mit Preview; Name, Version und Hash stehen im Audit.
 | Update-Scan starten | Online-Scan gegen die konfigurierte Quelle, installiert nichts | Ergebnis des frischen Scans |
 | Systeminfo | nur lesend | OS, Laufzeit, Systemlaufwerk, TPM, Secure Boot, BitLocker, Defender |
 | Software-Updates mit winget pruefen | nur lesend, `winget upgrade` im Maschinenkontext, Quelle winget | verfuegbare Updates mit Id, installierter und neuer Version; markiert die Zeilen im Tab Software |
+| Netzwerkinfo | nur lesend | aktive Adapter mit IPv4, Praefix, Gateway, DNS, DHCP, MAC, Verbindungsart, SSID; Domaene, Proxy |
+| Speicherinfo | nur lesend | alle festen Laufwerke mit Belegung und Zustand, physische Datentraeger mit SSD/HDD, Bus, Groesse, Zustand, Firmware |
+
+Ohne Skript zeigt das Geraetedetail bereits Hersteller, Modell, Seriennummer,
+Arbeitsspeicher, WLAN-MAC und die Belegung des Systemspeichers (Intune)
+sowie letzte interne und oeffentliche IP und die Schnittstellen laut
+Defender-Sensor. Die Seite **Netzwerk** leitet daraus je Tenant Standorte
+(gleiche oeffentliche IP) und Subnetze (/24) ab; sie braucht Defender, weil
+Intune keine Adressen meldet.
 
 Der Tab **Software** zeigt das Intune-Inventar (`detectedApps`, vom Client
 etwa woechentlich gemeldet) und die letzte winget-Pruefung. winget im

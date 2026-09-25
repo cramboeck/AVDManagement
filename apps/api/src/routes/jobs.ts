@@ -191,7 +191,7 @@ app.post(
 const runScriptSchema = z.object({
   managedDeviceId: z.string().min(1),
   deviceName: z.string().min(1),
-  scriptId: z.enum(['update-status', 'update-scan', 'system-info', 'winget-updates']),
+  scriptId: z.enum(['update-status', 'update-scan', 'system-info', 'winget-updates', 'network-info', 'storage-info']),
 });
 
 app.post('/run-script', requireRole('engineer'), requireConnectedTenant, zValidator('json', runScriptSchema), async (c) => {

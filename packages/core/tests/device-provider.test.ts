@@ -3,10 +3,10 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { DeviceProvider, mergeDevices } from '../src/providers/device-provider.js';
+import { DeviceProvider, mergeDevices, buildNetworkTopology, subnetOf } from '../src/providers/device-provider.js';
 import { GraphClient } from '../src/providers/graph-client.js';
 import { GraphApiError } from '../src/errors.js';
-import type { TenantId } from '@zerostress/types';
+import type { Device, TenantId } from '@zerostress/types';
 
 const intuneDevice = (overrides: Record<string, unknown> = {}) => ({
   id: 'md-1',
@@ -442,5 +442,91 @@ describe('DeviceProvider', () => {
     graph.get.mockRejectedValue(new GraphApiError(403, 'Forbidden', 'Application is not authorized'));
     const result = await provider.listDetectedApps(ctx, 'md-1');
     expect(result).toMatchObject({ available: false, reason: 'permission-missing', missingPermission: 'DeviceManagementManagedDevices.Read.All' });
+  });
+});
+
+describe('buildNetworkTopology', () => {
+  const device = (id: string, ip: string | null, external: string | null): Device => ({
+    id,
+    name: id.toUpperCase(),
+    azureAdDeviceId: null,
+    operatingSystem: 'Windows',
+    osVersion: null,
+    primaryUser: null,
+    lastActivityAt: null,
+    intune: null,
+    defender:
+      ip === null && external === null
+        ? null
+        : {
+            machineId: `m-${id}`,
+            healthStatus: 'Active',
+            exposureLevel: 'Low',
+            riskScore: 'Low',
+            onboardingStatus: 'Onboarded',
+            lastSeenAt: null,
+            lastIpAddress: ip,
+            lastExternalIpAddress: external,
+            osPlatform: 'Windows11',
+            osBuild: null,
+            isAadJoined: true,
+            tags: [],
+          },
+  });
+
+  it('groups devices by external address and /24 subnet, biggest first', () => {
+    const topology = buildNetworkTopology([
+      device('a', '10.0.1.20', '203.0.113.5'),
+      device('b', '10.0.1.3', '203.0.113.5'),
+      device('c', '10.0.2.7', '203.0.113.5'),
+      device('d', '192.168.178.40', '198.51.100.9'),
+      device('e', '10.0.9.1', null),
+      device('f', null, null),
+    ]);
+
+    expect(topology.sites.map((s) => [s.externalIp, s.deviceCount])).toEqual([
+      ['203.0.113.5', 3],
+      ['198.51.100.9', 1],
+      [null, 1],
+    ]);
+    expect(topology.sites[0].subnets.map((s) => s.cidr)).toEqual(['10.0.1.0/24', '10.0.2.0/24']);
+    expect(topology.sites[0].subnets[0].devices.map((d) => d.ipAddress)).toEqual(['10.0.1.3', '10.0.1.20']);
+    expect(topology.withoutAddress.map((d) => d.id)).toEqual(['f']);
+  });
+
+  it('derives subnets for IPv4 and IPv6', () => {
+    expect(subnetOf('172.16.5.200')).toBe('172.16.5.0/24');
+    expect(subnetOf('fe80:1:2:3:4:5:6:7')).toBe('fe80:1:2:3::/64');
+    expect(subnetOf('garbage')).toBe('unbekannt');
+  });
+});
+
+describe('DeviceProvider network detail', () => {
+  it('reads interfaces from the single machine and formats MAC addresses', async () => {
+    const graph = { get: vi.fn(), post: vi.fn() };
+    const defender = {
+      get: vi.fn(async () => ({
+        id: 'mde-1',
+        lastIpAddress: '10.0.1.20',
+        lastExternalIpAddress: '203.0.113.5',
+        ipAddresses: [
+          { ipAddress: 'fe80::1', macAddress: '001122AABBCC', type: 'Ethernet', operationalStatus: 'Down' },
+          { ipAddress: '10.0.1.20', macAddress: '001122AABBCC', type: 'Ethernet', operationalStatus: 'Up' },
+          { ipAddress: null, macAddress: null, type: null, operationalStatus: null },
+        ],
+      })),
+    };
+    const provider = new DeviceProvider(graph as unknown as GraphClient, defender as unknown as GraphClient);
+
+    const result = await provider.getDeviceNetwork({ tenantId: 'tenant-1' as TenantId, correlationId: 'c' }, 'mde-1');
+
+    expect(result.available).toBe(true);
+    if (!result.available) return;
+    expect(result.data.lastExternalIpAddress).toBe('203.0.113.5');
+    expect(result.data.interfaces).toEqual([
+      { ipAddress: '10.0.1.20', macAddress: '00:11:22:AA:BB:CC', type: 'Ethernet', status: 'Up' },
+      { ipAddress: 'fe80::1', macAddress: '00:11:22:AA:BB:CC', type: 'Ethernet', status: 'Down' },
+    ]);
+    expect(defender.get.mock.calls[0][1]).toBe('/api/machines/mde-1');
   });
 });

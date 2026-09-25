@@ -84,6 +84,7 @@ const navItems = [
   { href: '/avd', label: 'Virtual Desktop', icon: DesktopIcon },
   { href: '/users', label: 'Benutzer', icon: UsersIcon },
   { href: '/devices', label: 'Geraete', icon: DeviceIcon },
+  { href: '/network', label: 'Netzwerk', icon: NetworkIcon },
   { href: '/security', label: 'Sicherheit', icon: ShieldIcon },
   { href: '/jobs', label: 'Jobs', icon: JobsIcon },
   { href: '/audit', label: 'Audit-Log', icon: AuditIcon },
@@ -174,6 +175,17 @@ function DeviceIcon({ className }: { className?: string }) {
     >
       <rect x="3" y="4" width="18" height="12" rx="2" />
       <path d="M7 20h10M12 16v4" />
+    </svg>
+  );
+}
+
+function NetworkIcon({ className }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={className}>
+      <rect x="9" y="3" width="6" height="5" rx="1" />
+      <rect x="3" y="16" width="6" height="5" rx="1" />
+      <rect x="15" y="16" width="6" height="5" rx="1" />
+      <path d="M12 8v4M6 16v-2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v2" />
     </svg>
   );
 }

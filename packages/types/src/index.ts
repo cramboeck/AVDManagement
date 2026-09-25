@@ -381,6 +381,10 @@ export interface DeviceIntuneInfo {
   manufacturer: string | null;
   serialNumber: string | null;
   managementAgent: string | null;
+  totalStorageBytes: number | null;
+  freeStorageBytes: number | null;
+  physicalMemoryBytes: number | null;
+  wifiMacAddress: string | null;
 }
 
 export interface DeviceDefenderInfo {
@@ -391,10 +395,54 @@ export interface DeviceDefenderInfo {
   onboardingStatus: string | null;
   lastSeenAt: string | null;
   lastIpAddress: string | null;
+  lastExternalIpAddress: string | null;
   osPlatform: string | null;
   osBuild: string | null;
   isAadJoined: boolean | null;
   tags: string[];
+}
+
+// Netzwerkschnittstellen laut Defender-Sensor (letzter bekannter Stand)
+export interface DeviceNetworkInterface {
+  ipAddress: string;
+  macAddress: string | null;
+  type: string | null;
+  status: string | null;
+}
+
+export interface DeviceNetworkInfo {
+  lastIpAddress: string | null;
+  lastExternalIpAddress: string | null;
+  interfaces: DeviceNetworkInterface[];
+}
+
+// Abgeleitete Topologie: oeffentliche IP = Standort, /24 = Subnetz
+export interface NetworkTopologyDevice {
+  id: string;
+  name: string;
+  ipAddress: string;
+  operatingSystem: string | null;
+  lastActivityAt: string | null;
+}
+
+export interface NetworkSubnet {
+  cidr: string;
+  devices: NetworkTopologyDevice[];
+}
+
+export interface NetworkSite {
+  // null: Defender kennt keine externe Adresse
+  externalIp: string | null;
+  deviceCount: number;
+  subnets: NetworkSubnet[];
+}
+
+export interface NetworkTopology {
+  sites: NetworkSite[];
+  // Geraete ohne bekannte interne Adresse (kein Defender oder nie gesehen)
+  withoutAddress: NetworkTopologyDevice[];
+  snapshot: SnapshotMeta | null;
+  generatedAt: string;
 }
 
 // Zusammengefuehrtes Geraet; id ist die Entra-Geraete-ID oder ein Quell-Praefix
@@ -460,7 +508,7 @@ export type TenantVulnerabilityList = CapabilityResult<TenantVulnerabilitySet> &
 // Skriptbibliothek (Intune Remediations auf Abruf)
 // ============================================
 
-export type LibraryScriptId = 'update-status' | 'update-scan' | 'system-info' | 'winget-updates';
+export type LibraryScriptId = 'update-status' | 'update-scan' | 'system-info' | 'winget-updates' | 'network-info' | 'storage-info';
 
 // Vom Intune-Client erkannte Software (Inventar, wird woechentlich gemeldet)
 export interface DetectedApp {

@@ -138,7 +138,7 @@ function LatestRun({ job }: { job: Job }) {
   );
 }
 
-const KNOWN_SCHEMAS = new Set(['zsc.update-status/1', 'zsc.update-scan/1', 'zsc.system-info/1', 'zsc.winget-updates/1']);
+const KNOWN_SCHEMAS = new Set(['zsc.update-status/1', 'zsc.update-scan/1', 'zsc.system-info/1', 'zsc.winget-updates/1', 'zsc.network-info/1', 'zsc.storage-info/1']);
 
 export interface WingetUpdate {
   name: string;
@@ -196,6 +196,8 @@ export function ScriptResultView({ result, error }: { result: ScriptRunResult | 
       {json && (schema === 'zsc.update-status/1' || schema === 'zsc.update-scan/1') && <UpdateResult data={json} />}
       {json && schema === 'zsc.system-info/1' && <SystemInfoResult data={json} />}
       {json && schema === 'zsc.winget-updates/1' && <WingetResult data={json} />}
+      {json && schema === 'zsc.network-info/1' && <NetworkInfoResult data={json} />}
+      {json && schema === 'zsc.storage-info/1' && <StorageInfoResult data={json} />}
       {json && !KNOWN_SCHEMAS.has(schema ?? '') && <pre className="overflow-x-auto rounded-md bg-muted p-3 text-xs">{JSON.stringify(json, null, 2)}</pre>}
     </div>
   );
@@ -277,6 +279,136 @@ function WingetResult({ data }: { data: Record<string, unknown> }) {
                   <td className="px-3 py-1.5 font-mono text-xs">{text(u.id)}</td>
                   <td className="px-3 py-1.5 font-mono text-xs">{text(u.installed)}</td>
                   <td className="px-3 py-1.5 font-mono text-xs text-warning">{text(u.available)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {data.truncated === true && <p className="text-xs text-muted-foreground">Es werden nur die ersten Eintraege gezeigt; Intune begrenzt die Ausgabe.</p>}
+    </div>
+  );
+}
+
+function list(value: unknown): string {
+  return Array.isArray(value) && value.length > 0 ? value.map(String).join(', ') : '—';
+}
+
+const adapterKinds: Record<string, string> = { wifi: 'WLAN', ethernet: 'Ethernet', vpn: 'VPN', other: 'Sonstige' };
+
+function NetworkInfoResult({ data }: { data: Record<string, unknown> }) {
+  const adapters = Array.isArray(data.adapters) ? data.adapters.map(asRecord).filter((a): a is Record<string, unknown> => a !== null) : [];
+  return (
+    <div className="space-y-2">
+      <div className="grid gap-2 sm:grid-cols-3">
+        <Stat label="Domaene / Arbeitsgruppe" value={`${text(data.domain)}${data.domainJoined === true ? ' (Domaene)' : ''}`} />
+        <Stat label="Aktive Adapter" value={String(adapters.length)} />
+        <Stat label="WinHTTP-Proxy" value={text(data.proxy)} />
+      </div>
+      {typeof data.error === 'string' && data.error && <p className="text-sm text-destructive">{data.error}</p>}
+      {adapters.length > 0 && (
+        <div className="overflow-x-auto rounded-md border">
+          <table className="w-full text-sm">
+            <thead className="border-b bg-muted/50 text-left">
+              <tr>
+                <th className="px-3 py-1.5 font-medium">Adapter</th>
+                <th className="px-3 py-1.5 font-medium">IPv4</th>
+                <th className="px-3 py-1.5 font-medium">Gateway</th>
+                <th className="px-3 py-1.5 font-medium">DNS</th>
+                <th className="px-3 py-1.5 font-medium">DHCP</th>
+                <th className="px-3 py-1.5 font-medium">MAC</th>
+                <th className="px-3 py-1.5 font-medium">Link</th>
+              </tr>
+            </thead>
+            <tbody>
+              {adapters.map((a, i) => (
+                <tr key={`${text(a.mac)}-${i}`} className="border-b last:border-0">
+                  <td className="px-3 py-1.5">
+                    <span className="block">{text(a.name)}</span>
+                    <span className="block text-xs text-muted-foreground">
+                      {adapterKinds[String(a.kind)] ?? text(a.kind)}
+                      {typeof a.ssid === 'string' && a.ssid && <> · SSID {a.ssid}</>}
+                    </span>
+                  </td>
+                  <td className="px-3 py-1.5 font-mono text-xs">
+                    {list(a.ipv4)}
+                    {a.prefix !== null && a.prefix !== undefined && <span className="text-muted-foreground">/{text(a.prefix)}</span>}
+                  </td>
+                  <td className="px-3 py-1.5 font-mono text-xs">{text(a.gateway)}</td>
+                  <td className="px-3 py-1.5 font-mono text-xs">{list(a.dns)}</td>
+                  <td className="px-3 py-1.5">{yesNo(a.dhcp)}</td>
+                  <td className="px-3 py-1.5 font-mono text-xs">{text(a.mac)}</td>
+                  <td className="px-3 py-1.5 text-xs">{text(a.speed)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {data.truncated === true && <p className="text-xs text-muted-foreground">Es werden nur die ersten Adapter gezeigt; Intune begrenzt die Ausgabe.</p>}
+    </div>
+  );
+}
+
+function StorageInfoResult({ data }: { data: Record<string, unknown> }) {
+  const volumes = Array.isArray(data.volumes) ? data.volumes.map(asRecord).filter((v): v is Record<string, unknown> => v !== null) : [];
+  const disks = Array.isArray(data.disks) ? data.disks.map(asRecord).filter((d): d is Record<string, unknown> => d !== null) : [];
+  return (
+    <div className="space-y-3">
+      {typeof data.error === 'string' && data.error && <p className="text-sm text-destructive">{data.error}</p>}
+      {volumes.length > 0 && (
+        <div>
+          <p className="mb-1 text-xs font-medium text-muted-foreground">Laufwerke</p>
+          <div className="space-y-2">
+            {volumes.map((v, i) => {
+              const total = Number(v.totalGb) || 0;
+              const free = Number(v.freeGb) || 0;
+              const percent = total > 0 ? Math.round(((total - free) / total) * 100) : 0;
+              const tone = percent >= 90 ? 'bg-destructive' : percent >= 75 ? 'bg-warning' : 'bg-primary';
+              return (
+                <div key={`${text(v.letter)}-${i}`} className="rounded-md border p-2">
+                  <div className="flex items-center justify-between text-sm">
+                    <span>
+                      <span className="font-mono font-medium">{text(v.letter)}</span> {typeof v.label === 'string' && v.label && <>{v.label} · </>}
+                      <span className="text-muted-foreground">
+                        {text(v.fs)} · {text(v.health)}
+                      </span>
+                    </span>
+                    <span className="tabular-nums">
+                      {free.toFixed(1)} GB frei von {total.toFixed(1)} GB ({percent} %)
+                    </span>
+                  </div>
+                  <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-muted" role="progressbar" aria-valuenow={percent} aria-valuemin={0} aria-valuemax={100} aria-label={`Belegung ${text(v.letter)}`}>
+                    <div className={clsx('h-full rounded-full', tone)} style={{ width: `${percent}%` }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+      {disks.length > 0 && (
+        <div className="overflow-x-auto rounded-md border">
+          <table className="w-full text-sm">
+            <thead className="border-b bg-muted/50 text-left">
+              <tr>
+                <th className="px-3 py-1.5 font-medium">Datentraeger</th>
+                <th className="px-3 py-1.5 font-medium">Typ</th>
+                <th className="px-3 py-1.5 font-medium">Bus</th>
+                <th className="px-3 py-1.5 font-medium">Groesse</th>
+                <th className="px-3 py-1.5 font-medium">Zustand</th>
+                <th className="px-3 py-1.5 font-medium">Firmware</th>
+              </tr>
+            </thead>
+            <tbody>
+              {disks.map((d, i) => (
+                <tr key={`${text(d.id)}-${i}`} className="border-b last:border-0">
+                  <td className="px-3 py-1.5">{text(d.model)}</td>
+                  <td className="px-3 py-1.5">{text(d.media)}</td>
+                  <td className="px-3 py-1.5">{text(d.bus)}</td>
+                  <td className="px-3 py-1.5 tabular-nums">{text(d.sizeGb)} GB</td>
+                  <td className={clsx('px-3 py-1.5', d.health !== 'Healthy' && d.health ? 'text-destructive' : '')}>{text(d.health)}</td>
+                  <td className="px-3 py-1.5 font-mono text-xs">{text(d.firmware)}</td>
                 </tr>
               ))}
             </tbody>

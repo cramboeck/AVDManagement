@@ -84,6 +84,23 @@ app.get('/:deviceId/security', requireConnectedTenant, async (c) => {
   return c.json(await getDeviceProvider().getSecurityPosture(ctx, device.defender.machineId));
 });
 
+// Netzwerkschnittstellen laut Defender-Sensor
+app.get('/:deviceId/network', requireConnectedTenant, async (c) => {
+  const tenant = c.get('tenant');
+  const deviceId = c.req.param('deviceId');
+  const ctx = ctxFor(tenant.id, c.req.header('X-Correlation-ID'));
+
+  const device = await findDevice(tenant, deviceId);
+  if (!device) {
+    return c.json(notFound(deviceId), 404);
+  }
+  if (!device.defender) {
+    return c.json({ available: false, reason: 'not-onboarded', missingPermission: null, detail: null });
+  }
+
+  return c.json(await getDeviceProvider().getDeviceNetwork(ctx, device.defender.machineId));
+});
+
 // Softwareinventar aus Intune (erkannte Apps des Geraets)
 app.get('/:deviceId/software', requireConnectedTenant, async (c) => {
   const tenant = c.get('tenant');
