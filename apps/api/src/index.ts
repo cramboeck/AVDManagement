@@ -47,6 +47,17 @@ app.get('/', (c) => {
   });
 });
 
+// Dev-Mode: Unauthenticated tenant list for testing
+if (process.env.NODE_ENV !== 'production') {
+  app.get('/dev/tenants', async (c) => {
+    const { db, managedTenants } = await import('./db/index.js');
+    const tenants = await db.query.managedTenants.findMany({
+      limit: 20,
+    });
+    return c.json({ items: tenants });
+  });
+}
+
 // Routen
 app.route('/tenants', tenantsRouter);
 app.route('/tenants/:tenantId/users', usersRouter);

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import clsx from 'clsx';
 import { TenantSwitcher } from './tenant-switcher';
 import { CommandPalette } from './command-palette';
+import { logout } from '@/lib/auth';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -48,11 +49,20 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           </nav>
 
           <div className="border-t p-4">
-            <div className="text-xs text-muted-foreground">
-              <kbd className="rounded bg-muted px-1.5 py-0.5 font-mono">
-                Cmd+K
-              </kbd>
-              <span className="ml-2">Schnellzugriff</span>
+            <div className="flex items-center justify-between">
+              <div className="text-xs text-muted-foreground">
+                <kbd className="rounded bg-muted px-1.5 py-0.5 font-mono">
+                  Cmd+K
+                </kbd>
+                <span className="ml-2">Schnellzugriff</span>
+              </div>
+              <button
+                onClick={() => logout()}
+                className="rounded p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+                title="Abmelden"
+              >
+                <LogoutIcon className="h-4 w-4" />
+              </button>
             </div>
           </div>
         </aside>
@@ -179,6 +189,23 @@ function DesktopIcon({ className }: { className?: string }) {
       <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
       <line x1="8" y1="21" x2="16" y2="21" />
       <line x1="12" y1="17" x2="12" y2="21" />
+    </svg>
+  );
+}
+
+function LogoutIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      className={className}
+    >
+      <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" />
+      <polyline points="16 17 21 12 16 7" />
+      <line x1="21" y1="12" x2="9" y2="12" />
     </svg>
   );
 }
