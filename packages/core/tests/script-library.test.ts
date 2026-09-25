@@ -23,8 +23,8 @@ const ALIAS_PATTERNS = [
 describe('script library', () => {
   const scripts = loadScriptLibrary();
 
-  it('loads the three scripts with stable hashes', () => {
-    expect(scripts.map((s) => s.id)).toEqual(['update-status', 'update-scan', 'system-info']);
+  it('loads the library scripts with stable hashes', () => {
+    expect(scripts.map((s) => s.id)).toEqual(['update-status', 'update-scan', 'system-info', 'winget-updates']);
     for (const script of scripts) {
       expect(script.hash).toMatch(/^[0-9a-f]{64}$/);
       expect(script.hash).toBe(computeScriptHash(script.version, script.detectionScript, script.remediationScript));

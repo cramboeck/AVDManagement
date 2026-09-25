@@ -65,6 +65,17 @@ const definitions: ScriptDefinition[] = [
     remediationSummary: null,
     expectedDurationSeconds: 120,
   },
+  {
+    id: 'winget-updates',
+    displayName: 'Software-Updates mit winget pruefen',
+    description:
+      'Fragt winget auf dem Geraet nach verfuegbaren Updates fuer installierte Software (Maschinenkontext, Quelle winget). Installiert nichts. Braucht den App Installer auf dem Geraet.',
+    version: '1.0.0',
+    detectionFile: 'winget-updates.detect.ps1',
+    remediationFile: null,
+    remediationSummary: null,
+    expectedDurationSeconds: 240,
+  },
 ];
 
 // Marker in der Beschreibung des Remediation-Objekts im Tenant

@@ -11,7 +11,7 @@ import { tenantContextMiddleware, requireConnectedTenant } from '../middleware/t
 import { getDeviceProvider } from '../services/microsoft-clients.js';
 import { getDeviceInventory, findDevice } from '../services/inventory.js';
 import { DrizzleAuditLogger } from '../services/audit-logger.js';
-import type { CorrelationId, DeviceSecurityPosture, TenantId } from '@zerostress/types';
+import type { CorrelationId, DeviceSecurityPosture, DeviceSoftwareInventory, TenantId } from '@zerostress/types';
 
 const app = new Hono();
 const audit = new DrizzleAuditLogger();
@@ -82,6 +82,29 @@ app.get('/:deviceId/security', requireConnectedTenant, async (c) => {
   }
 
   return c.json(await getDeviceProvider().getSecurityPosture(ctx, device.defender.machineId));
+});
+
+// Softwareinventar aus Intune (erkannte Apps des Geraets)
+app.get('/:deviceId/software', requireConnectedTenant, async (c) => {
+  const tenant = c.get('tenant');
+  const deviceId = c.req.param('deviceId');
+  const ctx = ctxFor(tenant.id, c.req.header('X-Correlation-ID'));
+
+  const device = await findDevice(tenant, deviceId);
+  if (!device) {
+    return c.json(notFound(deviceId), 404);
+  }
+  if (!device.intune) {
+    const inventory: DeviceSoftwareInventory = {
+      available: false,
+      reason: 'not-onboarded',
+      missingPermission: null,
+      detail: 'Device is not managed by Intune',
+    };
+    return c.json(inventory);
+  }
+
+  return c.json(await getDeviceProvider().listDetectedApps(ctx, device.intune.managedDeviceId));
 });
 
 // Wiederherstellung: nur Metadaten (welche Schluessel existieren)

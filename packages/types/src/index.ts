@@ -460,7 +460,19 @@ export type TenantVulnerabilityList = CapabilityResult<TenantVulnerabilitySet> &
 // Skriptbibliothek (Intune Remediations auf Abruf)
 // ============================================
 
-export type LibraryScriptId = 'update-status' | 'update-scan' | 'system-info';
+export type LibraryScriptId = 'update-status' | 'update-scan' | 'system-info' | 'winget-updates';
+
+// Vom Intune-Client erkannte Software (Inventar, wird woechentlich gemeldet)
+export interface DetectedApp {
+  id: string;
+  displayName: string;
+  version: string | null;
+  publisher: string | null;
+  platform: string | null;
+  sizeBytes: number | null;
+}
+
+export type DeviceSoftwareInventory = CapabilityResult<DetectedApp[]>;
 
 export interface ScriptLibraryEntry {
   id: LibraryScriptId;

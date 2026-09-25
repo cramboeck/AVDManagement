@@ -416,4 +416,31 @@ describe('DeviceProvider', () => {
       { quickScan: false }
     );
   });
+
+  it('lists detected apps across pages, sorted by name', async () => {
+    graph.get.mockImplementation(async (_tenant: string, path: string) => {
+      if (path.includes('$skiptoken=2')) {
+        return { value: [{ id: 'a2', displayName: 'Adobe Acrobat', version: '24.1', publisher: 'Adobe', platform: 'windows', sizeInByte: 1024 }] };
+      }
+      return {
+        value: [{ id: 'a1', displayName: 'Google Chrome', version: '129.0', publisher: 'Google LLC', platform: 'windows', sizeInByte: null }],
+        '@odata.nextLink': 'https://graph.microsoft.com/v1.0/deviceManagement/managedDevices/md-1/detectedApps?$skiptoken=2',
+      };
+    });
+
+    const result = await provider.listDetectedApps(ctx, 'md-1');
+
+    expect(result.available).toBe(true);
+    if (!result.available) return;
+    expect(result.data.map((a) => a.displayName)).toEqual(['Adobe Acrobat', 'Google Chrome']);
+    expect(result.data[0]).toMatchObject({ version: '24.1', publisher: 'Adobe', sizeBytes: 1024 });
+    expect(result.data[1].sizeBytes).toBeNull();
+    expect(graph.get.mock.calls[0][1]).toBe('/deviceManagement/managedDevices/md-1/detectedApps?$top=500');
+  });
+
+  it('reports a missing Intune read permission for detected apps', async () => {
+    graph.get.mockRejectedValue(new GraphApiError(403, 'Forbidden', 'Application is not authorized'));
+    const result = await provider.listDetectedApps(ctx, 'md-1');
+    expect(result).toMatchObject({ available: false, reason: 'permission-missing', missingPermission: 'DeviceManagementManagedDevices.Read.All' });
+  });
 });

@@ -31,6 +31,7 @@ import type {
   DeviceRecoveryMetadata,
   RevealedBitLockerKey,
   RevealedLaps,
+  DetectedApp,
 } from '@zerostress/types';
 import { BaseResourceProvider, type ProviderContext } from './resource-provider.js';
 import { GraphClient, type GraphResponse } from './graph-client.js';
@@ -55,6 +56,15 @@ interface GraphManagedDevice {
   serialNumber: string | null;
   isEncrypted: boolean | null;
   managementAgent: string | null;
+}
+
+interface GraphDetectedApp {
+  id: string;
+  displayName: string | null;
+  version: string | null;
+  publisher: string | null;
+  platform: string | null;
+  sizeInByte: number | null;
 }
 
 interface DefenderMachine {
@@ -595,6 +605,42 @@ export class DeviceProvider extends BaseResourceProvider {
       this.actionScopes,
       { quickScan }
     );
+  }
+
+  /**
+   * Vom Intune-Client erkannte Software eines Geraets (Inventar, nicht live).
+   */
+  async listDetectedApps(ctx: ProviderContext, managedDeviceId: string): Promise<CapabilityResult<DetectedApp[]>> {
+    this.validateContext(ctx);
+    const tenantId = ctx.tenantId as string;
+    const apps: GraphDetectedApp[] = [];
+    let next: string | null = `/deviceManagement/managedDevices/${encodeURIComponent(managedDeviceId)}/detectedApps?$top=500`;
+
+    try {
+      while (next) {
+        const page: GraphResponse<GraphDetectedApp[]> = await this.graphClient.get<GraphResponse<GraphDetectedApp[]>>(tenantId, next, this.requiredScopes);
+        apps.push(...page.value);
+        next = page['@odata.nextLink'] ?? null;
+      }
+    } catch (error) {
+      const unavailable = asUnavailable(error, 'DeviceManagementManagedDevices.Read.All');
+      if (unavailable) return unavailable;
+      throw error;
+    }
+
+    return {
+      available: true,
+      data: apps
+        .map((a) => ({
+          id: a.id,
+          displayName: a.displayName ?? 'Unbekannt',
+          version: a.version || null,
+          publisher: a.publisher || null,
+          platform: a.platform ?? null,
+          sizeBytes: typeof a.sizeInByte === 'number' ? a.sizeInByte : null,
+        }))
+        .sort((a, b) => a.displayName.localeCompare(b.displayName, 'de')),
+    };
   }
 
   private async loadIntuneDevices(ctx: ProviderContext): Promise<CapabilityResult<GraphManagedDevice[]>> {

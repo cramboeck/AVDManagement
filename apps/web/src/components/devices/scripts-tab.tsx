@@ -138,6 +138,25 @@ function LatestRun({ job }: { job: Job }) {
   );
 }
 
+const KNOWN_SCHEMAS = new Set(['zsc.update-status/1', 'zsc.update-scan/1', 'zsc.system-info/1', 'zsc.winget-updates/1']);
+
+export interface WingetUpdate {
+  name: string;
+  id: string;
+  installed: string;
+  available: string;
+}
+
+// Updates aus einem winget-Lauf, fuer die Software-Tabelle
+export function wingetUpdatesFrom(result: ScriptRunResult | null): WingetUpdate[] {
+  const json = result?.outputJson;
+  if (!json || json.schema !== 'zsc.winget-updates/1' || !Array.isArray(json.updates)) return [];
+  return json.updates
+    .map(asRecord)
+    .filter((u): u is Record<string, unknown> => u !== null)
+    .map((u) => ({ name: text(u.name), id: text(u.id), installed: text(u.installed), available: text(u.available) }));
+}
+
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
 }
@@ -176,9 +195,8 @@ export function ScriptResultView({ result, error }: { result: ScriptRunResult | 
       {!json && result.output && <pre className="overflow-x-auto rounded-md bg-muted p-3 text-xs">{result.output}</pre>}
       {json && (schema === 'zsc.update-status/1' || schema === 'zsc.update-scan/1') && <UpdateResult data={json} />}
       {json && schema === 'zsc.system-info/1' && <SystemInfoResult data={json} />}
-      {json && schema !== 'zsc.update-status/1' && schema !== 'zsc.update-scan/1' && schema !== 'zsc.system-info/1' && (
-        <pre className="overflow-x-auto rounded-md bg-muted p-3 text-xs">{JSON.stringify(json, null, 2)}</pre>
-      )}
+      {json && schema === 'zsc.winget-updates/1' && <WingetResult data={json} />}
+      {json && !KNOWN_SCHEMAS.has(schema ?? '') && <pre className="overflow-x-auto rounded-md bg-muted p-3 text-xs">{JSON.stringify(json, null, 2)}</pre>}
     </div>
   );
 }
@@ -219,6 +237,46 @@ function UpdateResult({ data }: { data: Record<string, unknown> }) {
                   <td className="px-3 py-1.5">{text(p.title)}</td>
                   <td className="px-3 py-1.5">{text(p.severity)}</td>
                   <td className="px-3 py-1.5">{yesNo(p.downloaded)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {data.truncated === true && <p className="text-xs text-muted-foreground">Es werden nur die ersten Eintraege gezeigt; Intune begrenzt die Ausgabe.</p>}
+    </div>
+  );
+}
+
+function WingetResult({ data }: { data: Record<string, unknown> }) {
+  const updates = Array.isArray(data.updates) ? data.updates.map(asRecord).filter((u): u is Record<string, unknown> => u !== null) : [];
+  const count = typeof data.updateCount === 'number' ? data.updateCount : updates.length;
+  return (
+    <div className="space-y-2">
+      <div className="grid gap-2 sm:grid-cols-3">
+        <Stat label="Updates verfuegbar" value={String(count)} tone={count > 0 ? 'warning' : 'good'} />
+        <Stat label="winget-Version" value={text(data.wingetVersion)} />
+        <Stat label="Geprueft" value={dateText(data.collectedAt)} />
+      </div>
+      {typeof data.error === 'string' && data.error && <p className="text-sm text-destructive">{data.error}</p>}
+      {updates.length > 0 && (
+        <div className="overflow-x-auto rounded-md border">
+          <table className="w-full text-sm">
+            <thead className="border-b bg-muted/50 text-left">
+              <tr>
+                <th className="px-3 py-1.5 font-medium">Software</th>
+                <th className="px-3 py-1.5 font-medium">winget-Id</th>
+                <th className="px-3 py-1.5 font-medium">Installiert</th>
+                <th className="px-3 py-1.5 font-medium">Verfuegbar</th>
+              </tr>
+            </thead>
+            <tbody>
+              {updates.map((u, i) => (
+                <tr key={`${text(u.id)}-${i}`} className="border-b last:border-0">
+                  <td className="px-3 py-1.5">{text(u.name)}</td>
+                  <td className="px-3 py-1.5 font-mono text-xs">{text(u.id)}</td>
+                  <td className="px-3 py-1.5 font-mono text-xs">{text(u.installed)}</td>
+                  <td className="px-3 py-1.5 font-mono text-xs text-warning">{text(u.available)}</td>
                 </tr>
               ))}
             </tbody>

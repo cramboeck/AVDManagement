@@ -83,6 +83,14 @@ Job mit Preview; Name, Version und Hash stehen im Audit.
 | Update-Stand | nur lesend, Update-Cache des Geraets | ausstehende Updates, Neustartbedarf, letzte Suche/Installation |
 | Update-Scan starten | Online-Scan gegen die konfigurierte Quelle, installiert nichts | Ergebnis des frischen Scans |
 | Systeminfo | nur lesend | OS, Laufzeit, Systemlaufwerk, TPM, Secure Boot, BitLocker, Defender |
+| Software-Updates mit winget pruefen | nur lesend, `winget upgrade` im Maschinenkontext, Quelle winget | verfuegbare Updates mit Id, installierter und neuer Version; markiert die Zeilen im Tab Software |
+
+Der Tab **Software** zeigt das Intune-Inventar (`detectedApps`, vom Client
+etwa woechentlich gemeldet) und die letzte winget-Pruefung. winget im
+Maschinenkontext sieht nur maschinenweit installierte Software; Apps, die
+nur im Benutzerprofil liegen (z. B. per-user Teams), fehlen. Braucht den App
+Installer (`Microsoft.DesktopAppInstaller`) auf dem Geraet; fehlt er, meldet
+das Skript das im Ergebnis.
 
 Voraussetzungen im Kundentenant: Windows 10/11 Pro oder Enterprise mit
 Intune Management Extension, Entra-joined oder hybrid, Lizenz Business
