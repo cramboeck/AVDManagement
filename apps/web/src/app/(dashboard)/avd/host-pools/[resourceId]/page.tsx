@@ -5,7 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTenant } from '@/hooks/use-tenant';
 import { api } from '@/lib/api';
 import { LoadingTable } from '@/components/ui/loading';
-import { ErrorState } from '@/components/ui/error-state';
+import { ErrorState, ErrorBanner } from '@/components/ui/error-state';
 import { NoTenantSelected } from '@/components/ui/empty-state';
 import { SessionList } from '@/components/avd/session-list';
 import Link from 'next/link';
@@ -43,12 +43,21 @@ interface ActionDialogProps {
   host: SyncedSessionHost;
   action: 'start' | 'stop' | 'drain-on' | 'drain-off';
   hostPoolName: string;
+  hostPoolResourceId: string;
 }
 
-function ActionDialog({ isOpen, onClose, host, action, hostPoolName }: ActionDialogProps) {
+function ActionDialog({
+  isOpen,
+  onClose,
+  host,
+  action,
+  hostPoolName,
+  hostPoolResourceId,
+}: ActionDialogProps) {
   const { activeTenant } = useTenant();
   const queryClient = useQueryClient();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
 
   const actionLabels = {
     start: 'Session-Host starten',
@@ -67,11 +76,12 @@ function ActionDialog({ isOpen, onClose, host, action, hostPoolName }: ActionDia
   const handleSubmit = async () => {
     if (!activeTenant) return;
     setIsSubmitting(true);
+    setError(null);
 
     try {
       const endpoint = actionEndpoints[action];
       const payload: Record<string, unknown> = {
-        hostPoolId: host.hostPoolId,
+        hostPoolId: hostPoolResourceId,
         hostPoolName,
         sessionHostId: host.id,
         sessionHostName: host.name,
@@ -90,8 +100,8 @@ function ActionDialog({ isOpen, onClose, host, action, hostPoolName }: ActionDia
       queryClient.invalidateQueries({ queryKey: ['sessionHosts'] });
       queryClient.invalidateQueries({ queryKey: ['jobs'] });
       onClose();
-    } catch (error) {
-      console.error('Action failed:', error);
+    } catch (err) {
+      setError(err as Error);
     } finally {
       setIsSubmitting(false);
     }
@@ -109,7 +119,8 @@ function ActionDialog({ isOpen, onClose, host, action, hostPoolName }: ActionDia
         <div className="border-b p-4">
           <h2 className="text-lg font-semibold">{actionLabels[action]}</h2>
         </div>
-        <div className="p-4">
+        <div className="space-y-3 p-4">
+          <ErrorBanner error={error} onDismiss={() => setError(null)} />
           <p className="text-sm text-muted-foreground">
             {action === 'start' && (
               <>Die VM <strong>{host.name}</strong> wird gestartet. Dies kann bis zu 2 Minuten dauern.</>
@@ -320,6 +331,7 @@ function BulkActionBar({
   const { activeTenant } = useTenant();
   const queryClient = useQueryClient();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
 
   const selectedHosts = hosts.filter((h) => selectedIds.has(h.id));
   const canStartAny = selectedHosts.some(
@@ -338,6 +350,7 @@ function BulkActionBar({
   ) => {
     if (!activeTenant) return;
     setIsSubmitting(true);
+    setError(null);
 
     const hostsToProcess = selectedHosts.filter(filterFn);
     const endpoint =
@@ -371,14 +384,16 @@ function BulkActionBar({
       queryClient.invalidateQueries({ queryKey: ['sessionHosts'] });
       queryClient.invalidateQueries({ queryKey: ['jobs'] });
       onClearSelection();
-    } catch (error) {
-      console.error('Bulk action failed:', error);
+    } catch (err) {
+      setError(err as Error);
     } finally {
       setIsSubmitting(false);
     }
   };
 
   return (
+    <div className="space-y-2">
+    <ErrorBanner error={error} onDismiss={() => setError(null)} />
     <div className="flex items-center gap-4 rounded-lg border bg-accent/50 px-4 py-2">
       <span className="text-sm font-medium">{selectedCount} ausgewaehlt</span>
       <div className="flex gap-2">
@@ -432,6 +447,7 @@ function BulkActionBar({
         Auswahl aufheben
       </button>
     </div>
+    </div>
   );
 }
 
@@ -440,7 +456,8 @@ export default function HostPoolDetailPage({
 }: {
   params: { resourceId: string };
 }) {
-  const resourceId = '/' + decodeURIComponent(params.resourceId);
+  // Die Liste verlinkt die vollstaendige ARM-Resource-ID URL-kodiert als ein Segment
+  const resourceId = decodeURIComponent(params.resourceId);
   const { activeTenant, isLoading: tenantLoading } = useTenant();
   const [selectedHost, setSelectedHost] = useState<SyncedSessionHost | null>(null);
   const [selectedAction, setSelectedAction] = useState<'start' | 'stop' | 'drain-on' | 'drain-off' | null>(null);
@@ -648,6 +665,7 @@ export default function HostPoolDetailPage({
           host={selectedHost}
           action={selectedAction}
           hostPoolName={pool?.name || ''}
+          hostPoolResourceId={resourceId}
         />
       )}
     </div>

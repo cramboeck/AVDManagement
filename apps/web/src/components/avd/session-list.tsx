@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTenant } from '@/hooks/use-tenant';
 import { api } from '@/lib/api';
+import { ErrorBanner } from '@/components/ui/error-state';
 import type { UserSession } from '@zerostress/types';
 
 interface SessionListProps {
@@ -52,17 +53,19 @@ function SendMessageDialog({
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeTenant || !title || !body) return;
 
     setIsSubmitting(true);
+    setError(null);
     try {
       await api.post(`/tenants/${activeTenant.id}/avd/actions/send-message`, {
         hostPoolId: hostPoolResourceId,
         hostPoolName,
-        sessionHostId: sessionHostName,
+        sessionHostId: `${hostPoolResourceId}/sessionHosts/${sessionHostName}`,
         sessionHostName,
         sessionId: session.id,
         userPrincipalName: session.userPrincipalName,
@@ -74,8 +77,8 @@ function SendMessageDialog({
       onClose();
       setTitle('');
       setBody('');
-    } catch (error) {
-      console.error('Send message failed:', error);
+    } catch (err) {
+      setError(err as Error);
     } finally {
       setIsSubmitting(false);
     }
@@ -94,6 +97,7 @@ function SendMessageDialog({
             </p>
           </div>
           <div className="space-y-4 p-4">
+            <ErrorBanner error={error} onDismiss={() => setError(null)} />
             <div>
               <label className="mb-1 block text-sm font-medium">Titel</label>
               <input
@@ -150,12 +154,14 @@ export function SessionList({
   const { activeTenant } = useTenant();
   const queryClient = useQueryClient();
   const [messageSession, setMessageSession] = useState<UserSession | null>(null);
+  const [actionError, setActionError] = useState<Error | null>(null);
+  const sessionHostId = `${hostPoolResourceId}/sessionHosts/${sessionHostName}`;
 
   const { data, isLoading, error } = useQuery<SessionsResponse>({
     queryKey: ['userSessions', activeTenant?.id, hostPoolResourceId, sessionHostName],
     queryFn: () =>
       api.get<SessionsResponse>(
-        `/tenants/${activeTenant!.id}/avd/host-pools/${encodeURIComponent(hostPoolResourceId)}/session-hosts/${sessionHostName}/sessions`
+        `/tenants/${activeTenant!.id}/avd/host-pools/${encodeURIComponent(hostPoolResourceId)}/session-hosts/${encodeURIComponent(sessionHostName)}/sessions`
       ),
     enabled: !!activeTenant,
     refetchInterval: 15000,
@@ -163,12 +169,13 @@ export function SessionList({
 
   const disconnectSession = async (session: UserSession) => {
     if (!activeTenant) return;
+    setActionError(null);
 
     try {
       await api.post(`/tenants/${activeTenant.id}/avd/actions/disconnect-session`, {
         hostPoolId: hostPoolResourceId,
         hostPoolName,
-        sessionHostId: sessionHostName,
+        sessionHostId,
         sessionHostName,
         sessionId: session.id,
         userPrincipalName: session.userPrincipalName,
@@ -176,8 +183,8 @@ export function SessionList({
 
       queryClient.invalidateQueries({ queryKey: ['userSessions'] });
       queryClient.invalidateQueries({ queryKey: ['jobs'] });
-    } catch (error) {
-      console.error('Disconnect failed:', error);
+    } catch (err) {
+      setActionError(err as Error);
     }
   };
 
@@ -188,11 +195,12 @@ export function SessionList({
       return;
     }
 
+    setActionError(null);
     try {
       await api.post(`/tenants/${activeTenant.id}/avd/actions/logoff-session`, {
         hostPoolId: hostPoolResourceId,
         hostPoolName,
-        sessionHostId: sessionHostName,
+        sessionHostId,
         sessionHostName,
         sessionId: session.id,
         userPrincipalName: session.userPrincipalName,
@@ -201,8 +209,8 @@ export function SessionList({
 
       queryClient.invalidateQueries({ queryKey: ['userSessions'] });
       queryClient.invalidateQueries({ queryKey: ['jobs'] });
-    } catch (error) {
-      console.error('Logoff failed:', error);
+    } catch (err) {
+      setActionError(err as Error);
     }
   };
 
@@ -232,6 +240,7 @@ export function SessionList({
 
   return (
     <>
+      <ErrorBanner error={actionError} onDismiss={() => setActionError(null)} className="mb-2" />
       <div className="overflow-x-auto rounded-lg border">
         <table className="w-full">
           <thead className="border-b bg-muted/50">

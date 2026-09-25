@@ -69,6 +69,45 @@ describe('AvdProvider', () => {
   });
 
   describe('listHostPools', () => {
+    const subscriptions = (...ids: string[]) => ({
+      value: ids.map((id) => ({ subscriptionId: id, displayName: id, state: 'Enabled' })),
+    });
+
+    it('returns a warning instead of an empty list when no subscription is visible', async () => {
+      mockArmClient.get.mockResolvedValueOnce({ value: [] });
+
+      const result = await provider.listHostPools(ctx);
+
+      expect(result.items).toEqual([]);
+      expect(result.warnings[0]).toMatch(/no access to any Azure subscription/);
+      expect(mockArmClient.getAllPages).not.toHaveBeenCalled();
+    });
+
+    it('throws when every subscription fails instead of reporting an empty list', async () => {
+      mockArmClient.get.mockResolvedValueOnce(subscriptions('sub-1', 'sub-2'));
+      mockArmClient.getAllPages.mockRejectedValue(
+        new ArmApiError(403, 'AuthorizationFailed', 'The client does not have authorization')
+      );
+
+      await expect(provider.listHostPools(ctx)).rejects.toMatchObject({ statusCode: 403 });
+    });
+
+    it('returns partial results with a warning when one subscription fails', async () => {
+      mockArmClient.get.mockResolvedValueOnce(subscriptions('sub-ok', 'sub-denied'));
+      mockArmClient.getAllPages.mockImplementation(async (_tenant: string, path: string) => {
+        if (path.includes('sub-denied')) {
+          throw new ArmApiError(403, 'AuthorizationFailed', 'denied');
+        }
+        return [];
+      });
+
+      const result = await provider.listHostPools(ctx);
+
+      expect(result.items).toEqual([]);
+      expect(result.warnings).toHaveLength(1);
+      expect(result.warnings[0]).toMatch(/sub-denied/);
+    });
+
     it('queries host pools per enabled subscription with the AVD api-version', async () => {
       mockArmClient.get.mockResolvedValueOnce({
         value: [

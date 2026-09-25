@@ -134,7 +134,7 @@ export class AvdProvider extends BaseResourceProvider {
   async listHostPools(
     ctx: ProviderContext,
     _options: { pageSize?: number; pageToken?: string } = {}
-  ): Promise<{ items: SyncedHostPool[]; nextPageToken: string | null }> {
+  ): Promise<{ items: SyncedHostPool[]; nextPageToken: string | null; warnings: string[] }> {
     this.validateContext(ctx);
     const tenantId = ctx.tenantId as string;
 
@@ -144,7 +144,19 @@ export class AvdProvider extends BaseResourceProvider {
           subs.map((s) => s.subscriptionId as AzureSubscriptionId)
         );
 
+    if (subscriptions.length === 0) {
+      return {
+        items: [],
+        nextPageToken: null,
+        warnings: [
+          'The service principal has no access to any Azure subscription. Assign Reader and Desktop Virtualization Contributor on the AVD subscription.',
+        ],
+      };
+    }
+
     const allHostPools: SyncedHostPool[] = [];
+    const warnings: string[] = [];
+    const failures: unknown[] = [];
 
     for (const subscriptionId of subscriptions) {
       try {
@@ -159,13 +171,21 @@ export class AvdProvider extends BaseResourceProvider {
           allHostPools.push(this.mapAzureHostPoolToSynced(ctx, pool, sessionHosts.length));
         }
       } catch (error) {
-        console.warn(`Failed to list host pools in subscription ${subscriptionId}:`, error);
+        failures.push(error);
+        const message = error instanceof Error ? error.message : String(error);
+        warnings.push(`Subscription ${subscriptionId}: ${message}`);
       }
+    }
+
+    // Scheitern alle Subscriptions, ist es ein Fehler und kein Teilergebnis
+    if (failures.length === subscriptions.length) {
+      throw failures[0];
     }
 
     return {
       items: allHostPools,
       nextPageToken: null,
+      warnings,
     };
   }
 

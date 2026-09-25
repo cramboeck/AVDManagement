@@ -15,6 +15,12 @@ const app = new Hono();
 app.use('*', authMiddleware);
 app.use('*', tenantContextMiddleware);
 
+// Die ARM-Resource-ID kommt URL-kodiert als ein Segment an; Hono dekodiert
+// sie inklusive fuehrendem Slash. Defensiv auf genau einen Slash normieren.
+function toArmResourceId(param: string): string {
+  return '/' + param.replace(/^\/+/, '');
+}
+
 // ============================================
 // Host Pools
 // ============================================
@@ -33,12 +39,13 @@ app.get('/host-pools', requireConnectedTenant, async (c) => {
   return c.json({
     items: result.items,
     nextPageToken: result.nextPageToken,
+    warnings: result.warnings,
   });
 });
 
-app.get('/host-pools/:resourceId{.+}', requireConnectedTenant, async (c) => {
+app.get('/host-pools/:resourceId', requireConnectedTenant, async (c) => {
   const tenant = c.get('tenant');
-  const resourceId = '/' + c.req.param('resourceId');
+  const resourceId = toArmResourceId(c.req.param('resourceId'));
   const provider = getAvdProvider();
 
   const hostPool = await provider.getHostPool(
@@ -64,9 +71,9 @@ app.get('/host-pools/:resourceId{.+}', requireConnectedTenant, async (c) => {
   return c.json(hostPool);
 });
 
-app.get('/host-pools/:resourceId{.+}/summary', requireConnectedTenant, async (c) => {
+app.get('/host-pools/:resourceId/summary', requireConnectedTenant, async (c) => {
   const tenant = c.get('tenant');
-  const resourceId = '/' + c.req.param('resourceId');
+  const resourceId = toArmResourceId(c.req.param('resourceId'));
   const provider = getAvdProvider();
 
   const summary = await provider.getHostPoolSummary(
@@ -95,9 +102,9 @@ app.get('/host-pools/:resourceId{.+}/summary', requireConnectedTenant, async (c)
 // Session Hosts
 // ============================================
 
-app.get('/host-pools/:resourceId{.+}/session-hosts', requireConnectedTenant, async (c) => {
+app.get('/host-pools/:resourceId/session-hosts', requireConnectedTenant, async (c) => {
   const tenant = c.get('tenant');
-  const resourceId = '/' + c.req.param('resourceId');
+  const resourceId = toArmResourceId(c.req.param('resourceId'));
   const provider = getAvdProvider();
 
   const sessionHosts = await provider.listSessionHosts(
@@ -112,11 +119,11 @@ app.get('/host-pools/:resourceId{.+}/session-hosts', requireConnectedTenant, asy
 });
 
 app.get(
-  '/host-pools/:resourceId{.+}/session-hosts/:sessionHostName',
+  '/host-pools/:resourceId/session-hosts/:sessionHostName',
   requireConnectedTenant,
   async (c) => {
     const tenant = c.get('tenant');
-    const resourceId = '/' + c.req.param('resourceId');
+    const resourceId = toArmResourceId(c.req.param('resourceId'));
     const sessionHostName = c.req.param('sessionHostName');
     const provider = getAvdProvider();
 
@@ -149,11 +156,11 @@ app.get(
 // ============================================
 
 app.get(
-  '/host-pools/:resourceId{.+}/session-hosts/:sessionHostName/sessions',
+  '/host-pools/:resourceId/session-hosts/:sessionHostName/sessions',
   requireConnectedTenant,
   async (c) => {
     const tenant = c.get('tenant');
-    const resourceId = '/' + c.req.param('resourceId');
+    const resourceId = toArmResourceId(c.req.param('resourceId'));
     const sessionHostName = c.req.param('sessionHostName');
     const provider = getAvdProvider();
 

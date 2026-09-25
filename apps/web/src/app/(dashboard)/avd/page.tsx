@@ -11,6 +11,7 @@ import type { SyncedHostPool, HostPoolSummary } from '@zerostress/types';
 
 interface HostPoolsResponse {
   items: SyncedHostPool[];
+  warnings: string[];
 }
 
 const statusColors: Record<string, string> = {
@@ -151,6 +152,20 @@ export default function AvdPage() {
         </button>
       </div>
 
+      {data && data.warnings.length > 0 && (
+        <div
+          className="rounded-md border border-warning/30 bg-warning/10 px-4 py-3 text-sm"
+          role="status"
+        >
+          <p className="font-medium">Eingeschraenkter Zugriff</p>
+          <ul className="mt-1 list-disc space-y-0.5 pl-5 text-xs">
+            {data.warnings.map((warning) => (
+              <li key={warning}>{warning}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {isLoading ? (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {[1, 2, 3].map((i) => (
@@ -160,7 +175,7 @@ export default function AvdPage() {
       ) : error ? (
         <ErrorState error={error as Error} onRetry={refetch} />
       ) : !data?.items.length ? (
-        <NoResults query="" />
+        data?.warnings.length ? null : <NoResults query="" />
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {data.items.map((pool) => (
