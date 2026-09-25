@@ -2,7 +2,20 @@
  * ZeroStress Cockpit API
  */
 
-import 'dotenv/config';
+import { config } from 'dotenv';
+import { existsSync } from 'fs';
+import { resolve } from 'path';
+
+// .env.local hat Prioritaet, dann .env
+const envLocalPath = resolve(process.cwd(), '.env.local');
+const envPath = resolve(process.cwd(), '.env');
+
+if (existsSync(envLocalPath)) {
+  config({ path: envLocalPath });
+} else if (existsSync(envPath)) {
+  config({ path: envPath });
+}
+
 import { serve } from '@hono/node-server';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
