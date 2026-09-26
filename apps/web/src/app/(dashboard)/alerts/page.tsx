@@ -26,6 +26,7 @@ const ruleLabels: Record<AnomalyRuleId, string> = {
   'country-hop': 'Laenderwechsel',
   'legacy-auth-success': 'Legacy-Authentifizierung',
   'risky-success': 'Riskante Anmeldung',
+  'blocked-software': 'Gesperrte Software',
 };
 
 const statusLabels: Record<AlertStatus, string> = { open: 'Offen', acknowledged: 'In Bearbeitung', resolved: 'Geschlossen' };

@@ -8,6 +8,13 @@ Alle nennenswerten Aenderungen an ZeroStress Cockpit. Format angelehnt an
 
 ### Hinzugefuegt
 
+- Software (neue Seite): alle von Intune erkannten Programme des Tenants
+  mit Versionen und Geraetezahl (Snapshot `software`), Abgleich mit dem
+  winget-Katalog (eigene Pakete, Basis-Set, Versionscache) mit Stand
+  aktuell/veraltet, Sammelaktion Aktualisieren/Deinstallieren auf bis zu
+  25 Geraete je Job (`device.winget-bulk`, Vorschau je Geraet, Ergebnis je
+  Geraet), Sperrliste je MSP mit Alert "Gesperrte Software" nach jedem
+  Sync.
 - Geraete: Skript `winget-inventory` liefert die winget-Ids installierter
   Software; der Tab Software ordnet sie den Zeilen zu und bietet je Zeile
   **Deinstallieren** per winget (Job `device.winget-install`, Modus

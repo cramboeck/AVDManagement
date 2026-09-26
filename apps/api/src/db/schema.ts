@@ -149,6 +149,24 @@ export const inventorySnapshots = pgTable(
   })
 );
 
+// Zuletzt bekannte Katalogversion je winget-Id (Basis-Set-Abgleich fuer die Softwaresicht)
+export const wingetVersions = pgTable('winget_versions', {
+  packageId: varchar('package_id', { length: 128 }).primaryKey(),
+  latestVersion: varchar('latest_version', { length: 40 }),
+  checkedAt: timestamp('checked_at', { withTimezone: true }).notNull(),
+});
+
+// Unerwuenschte Software je MSP: Treffer im Inventar erzeugen Alerts
+export const softwareBlocklist = pgTable('software_blocklist', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  mspId: uuid('msp_id').notNull().references(() => mspOrganizations.id),
+  kind: varchar('kind', { length: 20 }).notNull(),
+  pattern: varchar('pattern', { length: 200 }).notNull(),
+  note: text('note'),
+  createdBy: uuid('created_by').notNull().references(() => mspUsers.id),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
 // Alerts aus dem Anmelde-Regelwerk. Ein Datensatz je Fingerabdruck und Tenant;
 // wiederholte Treffer erhoehen occurrences statt neue Zeilen anzulegen.
 export const alerts = pgTable(

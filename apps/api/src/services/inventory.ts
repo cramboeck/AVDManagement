@@ -62,10 +62,16 @@ export function getInventoryService(): InventorySyncService {
         mail: (ctx) => getMailProvider().getMailOverview(ctx, 'D30'),
         apps: (ctx) => getAppProvider().listApps(ctx),
         sharepoint: (ctx) => getSharePointProvider().getOverview(ctx, 'D30'),
+        software: (ctx) => getDeviceProvider().listTenantDetectedApps(ctx),
       },
       onSynced: async (target, kind) => {
         if (kind === 'devices') {
           await db.update(managedTenants).set({ lastSyncAt: new Date() }).where(eq(managedTenants.id, target.tenantId));
+        }
+        if (kind === 'software') {
+          // Sperrliste anwenden; der Import bleibt lazy, weil software.ts diesen Dienst selbst nutzt
+          const { onSoftwareSynced } = await import('./software.js');
+          await onSoftwareSynced(target.tenantId).catch((error: Error) => console.error('Blocklist evaluation failed:', error.message));
         }
       },
     });

@@ -8,6 +8,7 @@
  */
 
 import type {
+  SoftwareInventorySet,
   CapabilityResult,
   Device,
   DeviceComplianceState,
@@ -718,6 +719,64 @@ export class DeviceProvider extends BaseResourceProvider {
         }))
         .sort((a, b) => a.displayName.localeCompare(b.displayName, 'de')),
     };
+  }
+
+  /**
+   * Tenantweites Softwareinventar: alle von Intune erkannten Apps mit Geraetezahl (Graph beta).
+   */
+  async listTenantDetectedApps(ctx: ProviderContext): Promise<CapabilityResult<SoftwareInventorySet>> {
+    this.validateContext(ctx);
+    const tenantId = ctx.tenantId as string;
+    const apps: Array<GraphDetectedApp & { deviceCount?: number }> = [];
+    let next: string | null = `${GRAPH_BETA_BASE}/deviceManagement/detectedApps?$top=1000`;
+    try {
+      while (next) {
+        const page: GraphResponse<Array<GraphDetectedApp & { deviceCount?: number }>> = await this.graphClient.get(tenantId, next, this.requiredScopes);
+        apps.push(...page.value);
+        next = page['@odata.nextLink'] ?? null;
+      }
+    } catch (error) {
+      const unavailable = asUnavailable(error, 'DeviceManagementManagedDevices.Read.All');
+      if (unavailable) return unavailable;
+      throw error;
+    }
+    return {
+      available: true,
+      data: {
+        items: apps
+          .filter((a) => (a.deviceCount ?? 0) > 0)
+          .map((a) => ({
+            id: a.id,
+            displayName: a.displayName?.trim() || 'Unbekannt',
+            version: a.version?.trim() || null,
+            publisher: a.publisher?.trim() || null,
+            platform: a.platform ?? null,
+            sizeBytes: typeof a.sizeInByte === 'number' ? a.sizeInByte : null,
+            deviceCount: a.deviceCount ?? 0,
+          }))
+          .sort((a, b) => b.deviceCount - a.deviceCount || a.displayName.localeCompare(b.displayName, 'de')),
+      },
+    };
+  }
+
+  /** Geraete, auf denen eine erkannte App installiert ist. */
+  async listDetectedAppDevices(ctx: ProviderContext, detectedAppId: string): Promise<CapabilityResult<Array<{ managedDeviceId: string; deviceName: string }>>> {
+    this.validateContext(ctx);
+    const tenantId = ctx.tenantId as string;
+    const devices: Array<{ id: string; deviceName: string | null }> = [];
+    let next: string | null = `${GRAPH_BETA_BASE}/deviceManagement/detectedApps/${encodeURIComponent(detectedAppId)}/managedDevices?$select=id,deviceName&$top=500`;
+    try {
+      while (next) {
+        const page: GraphResponse<Array<{ id: string; deviceName: string | null }>> = await this.graphClient.get(tenantId, next, this.requiredScopes);
+        devices.push(...page.value);
+        next = page['@odata.nextLink'] ?? null;
+      }
+    } catch (error) {
+      const unavailable = asUnavailable(error, 'DeviceManagementManagedDevices.Read.All');
+      if (unavailable) return unavailable;
+      throw error;
+    }
+    return { available: true, data: devices.map((d) => ({ managedDeviceId: d.id, deviceName: d.deviceName ?? d.id })).sort((a, b) => a.deviceName.localeCompare(b.deviceName)) };
   }
 
   private async loadIntuneDevices(ctx: ProviderContext): Promise<CapabilityResult<GraphManagedDevice[]>> {

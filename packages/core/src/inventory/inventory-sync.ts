@@ -26,11 +26,12 @@ import type {
   SnapshotMeta,
   TenantId,
   TenantVulnerabilitySet,
+  SoftwareInventorySet,
 } from '@zerostress/types';
 import type { ProviderContext } from '../providers/resource-provider.js';
 import type { InventorySnapshotStore, SnapshotRecord } from './snapshot-store.js';
 
-export const INVENTORY_KINDS: InventoryKind[] = ['devices', 'vulnerabilities', 'groups', 'mail', 'apps', 'sharepoint'];
+export const INVENTORY_KINDS: InventoryKind[] = ['devices', 'vulnerabilities', 'groups', 'mail', 'apps', 'sharepoint', 'software'];
 
 // Zielintervalle: Geraete aendern sich oefter als die CVE-Zuordnung
 export const DEFAULT_SYNC_INTERVALS: Record<InventoryKind, number> = {
@@ -41,6 +42,8 @@ export const DEFAULT_SYNC_INTERVALS: Record<InventoryKind, number> = {
   mail: 6 * 60 * 60 * 1000,
   apps: 30 * 60 * 1000,
   sharepoint: 6 * 60 * 60 * 1000,
+  // Intune meldet das Softwareinventar etwa woechentlich
+  software: 6 * 60 * 60 * 1000,
 };
 
 // Ein Sync, der laenger als das laeuft, gilt als abgebrochen (Prozessneustart)
@@ -63,6 +66,7 @@ export interface InventoryPayloads {
   mail: CapabilityResult<MailOverviewSet>;
   apps: CapabilityResult<AppInventorySet>;
   sharepoint: CapabilityResult<SharePointOverviewSet>;
+  software: CapabilityResult<SoftwareInventorySet>;
 }
 
 export type InventoryLoaders = {
@@ -203,6 +207,7 @@ export class InventorySyncEngine {
       mail: options.intervals?.mail ?? DEFAULT_SYNC_INTERVALS.mail,
       apps: options.intervals?.apps ?? DEFAULT_SYNC_INTERVALS.apps,
       sharepoint: options.intervals?.sharepoint ?? DEFAULT_SYNC_INTERVALS.sharepoint,
+      software: options.intervals?.software ?? DEFAULT_SYNC_INTERVALS.software,
     };
     this.now = options.now ?? (() => new Date());
   }

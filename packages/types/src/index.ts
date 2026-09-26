@@ -637,7 +637,7 @@ export interface DeviceInventory {
 // Bestands-Snapshot (Cache je Tenant)
 // ============================================
 
-export type InventoryKind = 'devices' | 'vulnerabilities' | 'groups' | 'mail' | 'apps' | 'sharepoint';
+export type InventoryKind = 'devices' | 'vulnerabilities' | 'groups' | 'mail' | 'apps' | 'sharepoint' | 'software';
 
 // ============================================
 // SharePoint und OneDrive: Websites und externe Freigaben (Graph-Berichte)
@@ -1220,7 +1220,7 @@ export interface RemoteSupportMatch {
 export type AlertSeverity_ = 'high' | 'medium' | 'low';
 export type AlertStatus = 'open' | 'acknowledged' | 'resolved';
 
-export type AnomalyRuleId = 'failed-burst' | 'password-spray' | 'success-after-failures' | 'country-hop' | 'legacy-auth-success' | 'risky-success';
+export type AnomalyRuleId = 'failed-burst' | 'password-spray' | 'success-after-failures' | 'country-hop' | 'legacy-auth-success' | 'risky-success' | 'blocked-software';
 
 export interface AnomalyFinding {
   ruleId: AnomalyRuleId;
@@ -1403,6 +1403,71 @@ export interface DetectedApp {
   platform: string | null;
   sizeBytes: number | null;
   source: 'intune' | 'defender';
+}
+
+// Tenantweites Softwareinventar (Intune detectedApps mit Geraetezahl)
+
+export interface SoftwareInventoryItem {
+  id: string;
+  displayName: string;
+  version: string | null;
+  publisher: string | null;
+  platform: string | null;
+  sizeBytes: number | null;
+  deviceCount: number;
+}
+
+export interface SoftwareInventorySet {
+  items: SoftwareInventoryItem[];
+}
+
+export type SoftwareCatalogStatus = 'current' | 'outdated' | 'unknown';
+
+/** Eine Software ueber alle Versionen hinweg, mit Katalogstand und Sperre. */
+export interface SoftwareOverviewRow {
+  key: string;
+  displayName: string;
+  publisher: string | null;
+  platform: string | null;
+  versions: Array<{ id: string; version: string | null; deviceCount: number }>;
+  deviceCount: number;
+  wingetId: string | null;
+  // Paket im eigenen Katalog, falls vorhanden
+  packageId: string | null;
+  latestVersion: string | null;
+  status: SoftwareCatalogStatus;
+  outdatedDevices: number;
+  blockedBy: string | null;
+}
+
+export interface SoftwareOverviewSet {
+  rows: SoftwareOverviewRow[];
+  totals: { software: number; matched: number; outdated: number; blocked: number };
+}
+
+export type SoftwareOverview = CapabilityResult<SoftwareOverviewSet> & { snapshot?: SnapshotMeta };
+
+export interface SoftwareBlockRule {
+  id: string;
+  // name: Anzeigename enthaelt (ohne Gross/Klein); winget-id: exakte winget-Id
+  kind: 'name' | 'winget-id';
+  pattern: string;
+  note: string | null;
+  createdByEmail: string;
+  createdAt: string;
+}
+
+export interface BulkWingetDevice {
+  managedDeviceId: string;
+  deviceName: string;
+}
+
+export interface BulkWingetOutcome {
+  managedDeviceId: string;
+  deviceName: string;
+  success: boolean;
+  message: string | null;
+  installedVersion: string | null;
 }
 
 export interface DeviceSoftwareSet {

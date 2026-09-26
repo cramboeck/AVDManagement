@@ -321,6 +321,31 @@ app.post('/winget-install', requireRole('engineer'), requireConnectedTenant, zVa
   return c.json(job, 202);
 });
 
+// Sammelaktion: dasselbe winget-Kommando auf bis zu 25 Geraeten
+const wingetBulkSchema = z.object({
+  packageId: z.string().min(3).max(128),
+  mode: z.enum(['install', 'upgrade', 'uninstall']),
+  version: z.string().max(40).nullable().default(null),
+  displayName: z.string().max(200).nullable().default(null),
+  devices: z.array(z.object({ managedDeviceId: z.string().min(1).max(64), deviceName: z.string().min(1).max(200) })).min(1).max(25),
+  reason: z.string().trim().max(500).nullable().default(null),
+});
+
+app.post('/winget-bulk', requireRole('engineer'), requireConnectedTenant, zValidator('json', wingetBulkSchema), async (c) => {
+  const auth = c.get('auth');
+  const tenant = c.get('tenant');
+  const body = c.req.valid('json');
+  const job = await getJobQueue().createJob({
+    type: 'device.winget-bulk',
+    tenantId: tenant.id,
+    mspId: auth.mspId,
+    userId: auth.user.id,
+    userEmail: auth.user.email,
+    payload: { ...body, targetType: 'device', targetId: body.packageId, targetDisplayName: `${body.devices.length} Geraete: winget ${body.mode} ${body.packageId}` },
+  });
+  return c.json(job, 202);
+});
+
 // Versiegeltes Ergebnis anzeigen: Begruendung, Rolle Engineer, Audit; der Klartext verlaesst nie die Antwort
 const revealSchema = z.object({ reason: z.string().trim().min(10).max(500) });
 

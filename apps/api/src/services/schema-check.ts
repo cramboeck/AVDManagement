@@ -18,6 +18,8 @@ const REQUIRED_COLUMNS: ReadonlyArray<readonly [table: string, column: string]> 
   ['build_jobs', 'id'],
   ['exchange_jobs', 'id'],
   ['exchange_facts', 'tenant_id'],
+  ['winget_versions', 'package_id'],
+  ['software_blocklist', 'id'],
   ['cve_explanations', 'cve_id'],
 ];
 

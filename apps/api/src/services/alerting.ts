@@ -114,7 +114,7 @@ export function isAlertMailConfigured(): boolean {
   return !!process.env.ALERT_MAIL_FROM && !!process.env.ALERT_MAIL_TO;
 }
 
-async function notify(tenantName: string, created: Alert[]): Promise<void> {
+export async function notify(tenantName: string, created: Alert[]): Promise<void> {
   if (!isAlertMailConfigured()) return;
   const from = process.env.ALERT_MAIL_FROM as string;
   const to = (process.env.ALERT_MAIL_TO as string)

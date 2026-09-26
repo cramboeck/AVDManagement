@@ -210,6 +210,35 @@ Gruppen). Die Kostenschaetzung ruft `prices.azure.com` ohne Anmeldung ab;
 ohne Netz fehlt sie und die Vorschau sagt das. Plan und offene Stufen:
 `docs/implementation/azure-vm-plan.md`.
 
+## Software (tenantweit)
+
+Die Seite **Software** liest alle von Intune erkannten Programme des
+Tenants mit Geraetezahl (Graph beta `deviceManagement/detectedApps`,
+Snapshot-Art `software`, alle 6 Stunden) und fasst sie je Name und
+Hersteller mit allen Versionen zusammen. Jede Zeile wird per Name dem
+winget-Katalog zugeordnet (eigene Pakete zuerst, dann das Basis-Set); die
+neueste Katalogversion kommt aus dem Paket oder aus einem taeglichen
+Versionscache (`winget_versions`, hoechstens acht Nachfragen je Aufruf,
+damit das GitHub-Ratenlimit reicht). Daraus entsteht der Stand "aktuell",
+"veraltet" (mit Anzahl alter Geraete) oder "unbekannt".
+
+Aktionen je Zeile: **Aktualisieren** und **Deinstallieren** oeffnen die
+Sammelaktion: Geraete der Software laut Intune laden, bis zu 25 waehlen,
+dann Job `device.winget-bulk` mit einer Vorschau je Geraet, bis zu drei
+Geraete gleichzeitig, Ergebnis je Geraet im Job (Teilerfolge werden als
+Fehler mit Einzelheiten gemeldet). **Paket** oder **Als Paket** springt in
+den Katalog, **Sperren** legt eine Regel an.
+
+**Sperrliste** (unten auf der Seite, MSP-weit): Regeln "Name enthaelt" oder
+"winget-Id". Nach jedem Software-Sync wird die Liste gegen das Inventar
+geprueft; Treffer erzeugen den Alert "Gesperrte Software" mit Geraetezahl
+und Versionen (Regel `blocked-software`, ein Alert je Regel und Programm,
+Mail wie bei den Anmelde-Alerts). Zeilen mit Treffer sind in der Tabelle
+markiert. Es wird nichts automatisch entfernt; Deinstallieren bleibt eine
+Sammelaktion mit Vorschau. Audit `software.blocklist.add` und
+`software.blocklist.remove`. Braucht `npm run db:push` (Tabellen
+`winget_versions`, `software_blocklist`).
+
 ## Software je Geraet: winget-Aktionen
 
 Der Tab **Software** ordnet jede Inventarzeile dem winget-Katalog zu: erst

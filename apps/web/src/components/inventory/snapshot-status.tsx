@@ -14,6 +14,7 @@ const kindLabels: Record<InventoryKind, string> = {
   mail: 'Postfaecher',
   apps: 'Apps',
   sharepoint: 'SharePoint',
+  software: 'Software',
 };
 
 export function formatAge(iso: string | null, now = Date.now()): string {

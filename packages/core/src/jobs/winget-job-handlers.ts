@@ -9,7 +9,7 @@
  * Tenant hat.
  */
 
-import type { LibraryScriptId, ScriptRunResult } from '@zerostress/types';
+import type { BulkWingetDevice, BulkWingetOutcome, LibraryScriptId, ScriptRunResult } from '@zerostress/types';
 import { registerJob, type JobContext, type JobResult, type PreviewContext, type PreviewResult } from './job-types.js';
 import { parseScriptOutput } from '../scripts/library.js';
 import { renderWingetInstall, type WingetInstallMode } from '../scripts/templates.js';
@@ -134,6 +134,105 @@ export function registerWingetJobs(remediations: RemediationOperations, options:
         ],
         warnings,
         estimatedDurationSeconds: 300,
+      };
+    }
+  );
+}
+
+// ---- Sammelaktion: dasselbe winget-Kommando auf mehreren Geraeten ----
+
+export interface WingetBulkPayload {
+  packageId: string;
+  mode: WingetInstallMode;
+  version: string | null;
+  displayName: string | null;
+  devices: BulkWingetDevice[];
+  reason: string | null;
+}
+
+export const BULK_MAX_DEVICES = 25;
+const BULK_CONCURRENCY = 3;
+
+async function runPool<T, R>(items: T[], concurrency: number, worker: (item: T) => Promise<R>): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let index = 0;
+  const lanes = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+    while (index < items.length) {
+      const current = index;
+      index += 1;
+      results[current] = await worker(items[current]);
+    }
+  });
+  await Promise.all(lanes);
+  return results;
+}
+
+export function registerWingetBulkJob(remediations: RemediationOperations, options: WingetJobOptions = {}): void {
+  registerJob(
+    {
+      type: 'device.winget-bulk',
+      displayName: 'Software per winget auf mehreren Geraeten',
+      maxRetries: 0,
+      timeoutSeconds: 7200,
+      concurrencyPerTenant: 1,
+      requiresPreview: true,
+    },
+    async (ctx: JobContext): Promise<JobResult> => {
+      const payload = ctx.payload as unknown as WingetBulkPayload;
+      let rendered;
+      try {
+        rendered = renderWingetInstall({ packageId: payload.packageId, mode: payload.mode, version: payload.version });
+      } catch (error) {
+        return failure('WINGET_INVALID', error instanceof Error ? error.message : String(error));
+      }
+      const devices = (payload.devices ?? []).slice(0, BULK_MAX_DEVICES);
+      if (devices.length === 0) return failure('WINGET_INVALID', 'Keine Geraete angegeben');
+      const providerCtx = { tenantId: ctx.tenantId, correlationId: ctx.correlationId };
+      const outcomes: BulkWingetOutcome[] = await runPool(devices, BULK_CONCURRENCY, async (device) => {
+        try {
+          const state = await remediations.runTransient(providerCtx, device.managedDeviceId, `winget-${ctx.jobId.slice(0, 8)}-${device.managedDeviceId.slice(0, 8)}`, rendered.content, {
+            timeoutMs: options.timeoutMs ?? 15 * 60 * 1000,
+            pollMs: options.pollMs,
+          });
+          if (!state) return { managedDeviceId: device.managedDeviceId, deviceName: device.deviceName, success: false, message: 'Geraet hat nicht gemeldet (offline oder Lauf dauert noch)', installedVersion: null };
+          const json = parseScriptOutput(state.postOutput || state.preOutput || null);
+          if (!json) return { managedDeviceId: device.managedDeviceId, deviceName: device.deviceName, success: false, message: state.detectionError ?? 'kein auswertbares Ergebnis', installedVersion: null };
+          const success = json.success === true && !json.error;
+          const message = json.error ? String(json.error) : typeof json.note === 'string' && json.note ? json.note : typeof json.message === 'string' ? json.message : null;
+          return { managedDeviceId: device.managedDeviceId, deviceName: device.deviceName, success, message, installedVersion: typeof json.installedVersion === 'string' ? json.installedVersion : null };
+        } catch (error) {
+          return { managedDeviceId: device.managedDeviceId, deviceName: device.deviceName, success: false, message: error instanceof Error ? error.message : String(error), installedVersion: null };
+        }
+      });
+      const failed = outcomes.filter((o) => !o.success).length;
+      const data = { packageId: rendered.packageId, mode: rendered.mode, requestedVersion: rendered.version, total: outcomes.length, succeeded: outcomes.length - failed, failed, outcomes } as unknown as Record<string, unknown>;
+      if (failed === outcomes.length) return { success: false, data, error: { code: 'WINGET_BULK_FAILED', message: `Auf allen ${outcomes.length} Geraeten fehlgeschlagen`, retryable: false } };
+      if (failed > 0) return { success: false, data, error: { code: 'WINGET_BULK_PARTIAL', message: `${failed} von ${outcomes.length} Geraeten fehlgeschlagen; Einzelheiten im Ergebnis`, retryable: false } };
+      return { success: true, data };
+    },
+    async (ctx: PreviewContext): Promise<PreviewResult> => {
+      const payload = ctx.payload as unknown as WingetBulkPayload;
+      const rendered = renderWingetInstall({ packageId: payload.packageId, mode: payload.mode, version: payload.version });
+      const devices = payload.devices ?? [];
+      if (devices.length === 0) throw new Error('Keine Geraete angegeben');
+      if (devices.length > BULK_MAX_DEVICES) throw new Error(`Hoechstens ${BULK_MAX_DEVICES} Geraete je Sammelaktion; die Oberflaeche teilt groessere Auswahlen auf`);
+      const label = payload.displayName ? `${payload.displayName} (${rendered.packageId})` : rendered.packageId;
+      const verb = payload.mode === 'uninstall' ? 'entfernt' : payload.mode === 'upgrade' ? 'aktualisiert' : 'installiert';
+      return {
+        changes: devices.map((d) => ({
+          objectType: 'device',
+          objectId: d.managedDeviceId,
+          objectDisplayName: d.deviceName,
+          action: payload.mode === 'uninstall' ? 'delete' : 'update',
+          before: { software: label },
+          after: { software: `${label} ${verb}`, mode: payload.mode },
+        })),
+        warnings: [
+          `winget laeuft als SYSTEM auf ${devices.length} Geraeten, bis zu ${BULK_CONCURRENCY} gleichzeitig. Jedes Geraet meldet einzeln; Ergebnis je Geraet steht im Job.`,
+          payload.mode === 'uninstall' ? 'Deinstallation ohne Rueckfrage an angemeldete Benutzer; ueber Intune zugewiesene Software kommt beim naechsten Abgleich zurueck.' : 'Installer kommt aus der Quelle winget; das Cockpit prueft keinen Hash, das macht winget gegen das Manifest.',
+          'Offline-Geraete zaehlen als fehlgeschlagen; die Sammelaktion laesst sich fuer die restlichen Geraete wiederholen.',
+        ],
+        estimatedDurationSeconds: Math.ceil(devices.length / BULK_CONCURRENCY) * 240,
       };
     }
   );

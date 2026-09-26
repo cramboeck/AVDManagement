@@ -89,6 +89,7 @@ const navItems = [
   { href: '/sharepoint', label: 'SharePoint', icon: FolderIcon },
   { href: '/devices', label: 'Geraete', icon: DeviceIcon },
   { href: '/apps', label: 'Apps', icon: AppsIcon },
+  { href: '/software', label: 'Software', icon: SoftwareIcon },
   { href: '/network', label: 'Netzwerk', icon: NetworkIcon },
   { href: '/security', label: 'Sicherheit', icon: ShieldIcon },
   { href: '/alerts', label: 'Alerts', icon: BellIcon },
@@ -238,6 +239,15 @@ function ServerIcon({ className }: { className?: string }) {
       <rect x="3" y="4" width="18" height="7" rx="1.5" />
       <rect x="3" y="13" width="18" height="7" rx="1.5" />
       <path d="M7 7.5h.01M7 16.5h.01M11 7.5h6M11 16.5h6" />
+    </svg>
+  );
+}
+
+function SoftwareIcon({ className }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={className}>
+      <path d="M4 7.5 12 3l8 4.5v9L12 21l-8-4.5z" />
+      <path d="M4 7.5 12 12l8-4.5M12 12v9" />
     </svg>
   );
 }
