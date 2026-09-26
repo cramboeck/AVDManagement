@@ -20,7 +20,7 @@ const files: Record<TemplateId, string> = {
 };
 
 const WINGET_VERSION_PATTERN = /^[0-9A-Za-z][0-9A-Za-z.+-]{0,39}$/;
-export type WingetInstallMode = 'install' | 'upgrade';
+export type WingetInstallMode = 'install' | 'upgrade' | 'uninstall';
 
 // Lokaler Kontoname, Entra-Konto (AzureAD\upn) oder SID; kein Zeichen, das PowerShell-Syntax bricht
 const ACCOUNT_PATTERN = /^(AzureAD\\[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}|[A-Za-z0-9._-]{1,64}|S-1-[0-9-]{5,60})$/;
@@ -98,7 +98,7 @@ export interface WingetInstallInput {
 export function renderWingetInstall(input: WingetInstallInput): RenderedTemplate & { packageId: string; mode: WingetInstallMode; version: string | null } {
   const packageId = input.packageId.trim();
   if (!isWingetId(packageId)) throw new Error(`winget-Id ungueltig: '${packageId}' (Form Herausgeber.Paket)`);
-  if (input.mode !== 'install' && input.mode !== 'upgrade') throw new Error('Modus muss install oder upgrade sein');
+  if (input.mode !== 'install' && input.mode !== 'upgrade' && input.mode !== 'uninstall') throw new Error('Modus muss install, upgrade oder uninstall sein');
   const version = input.version?.trim() || null;
   if (version && !WINGET_VERSION_PATTERN.test(version)) throw new Error(`Version ungueltig: '${version}'`);
   const content = readTemplate('winget-install').replace('__PACKAGE_ID__', packageId).replace('__MODE__', input.mode).replace('__VERSION__', version ?? '');

@@ -7,7 +7,7 @@ import type { Device, Job, ScriptRunResult } from '@zerostress/types';
 
 export interface WingetTarget {
   packageId: string;
-  mode: 'install' | 'upgrade';
+  mode: 'install' | 'upgrade' | 'uninstall';
   displayName: string | null;
   installedVersion: string | null;
   availableVersion: string | null;
@@ -23,9 +23,10 @@ export function WingetInstallDialog({ tenantId, device, target, onClose, onCompl
   const label = target.displayName ? `${target.displayName} (${target.packageId})` : target.packageId;
   return (
     <JobActionDialog
-      title={target.mode === 'upgrade' ? `Update installieren: ${label}` : `Installieren: ${label}`}
-      description={`Auf ${device.name} per winget im Maschinenkontext. Nur dieses Geraet; fuer viele Geraete das Paket im Katalog ausrollen.`}
-      confirmLabel={target.mode === 'upgrade' ? 'Update starten' : 'Installation starten'}
+      title={target.mode === 'upgrade' ? `Update installieren: ${label}` : target.mode === 'uninstall' ? `Deinstallieren: ${label}` : `Installieren: ${label}`}
+      description={target.mode === 'uninstall' ? `Auf ${device.name} per winget im Maschinenkontext entfernen. Ueber Intune zugewiesene Software kommt beim naechsten Abgleich zurueck.` : `Auf ${device.name} per winget im Maschinenkontext. Nur dieses Geraet; fuer viele Geraete das Paket im Katalog ausrollen.`}
+      confirmLabel={target.mode === 'upgrade' ? 'Update starten' : target.mode === 'uninstall' ? 'Deinstallieren' : 'Installation starten'}
+      tone={target.mode === 'uninstall' ? 'destructive' : 'default'}
       createJob={() =>
         api.post<Job>(`/tenants/${tenantId}/jobs/winget-install`, {
           managedDeviceId,

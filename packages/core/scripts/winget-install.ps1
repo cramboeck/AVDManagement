@@ -77,7 +77,7 @@ function Get-InstalledVersion {
 }
 
 try {
-    if ($mode -ne 'install' -and $mode -ne 'upgrade') { throw ('Unsupported mode: ' + $mode) }
+    if ($mode -ne 'install' -and $mode -ne 'upgrade' -and $mode -ne 'uninstall') { throw ('Unsupported mode: ' + $mode) }
     $winget = Find-Winget
     if (-not $winget) {
         throw 'winget.exe not found; App Installer (Microsoft.DesktopAppInstaller) is missing or not provisioned for SYSTEM'
@@ -90,7 +90,8 @@ try {
 
     $arguments = New-Object System.Collections.ArrayList
     [void]$arguments.Add($mode)
-    [void]$arguments.AddRange(@('--id', $packageId, '--exact', '--silent', '--accept-package-agreements', '--accept-source-agreements', '--disable-interactivity', '--source', 'winget', '--scope', 'machine'))
+    [void]$arguments.AddRange(@('--id', $packageId, '--exact', '--silent', '--accept-source-agreements', '--disable-interactivity', '--source', 'winget', '--scope', 'machine'))
+    if ($mode -ne 'uninstall') { [void]$arguments.Add('--accept-package-agreements') }
     if (-not [string]::IsNullOrEmpty($requestedVersion)) { [void]$arguments.AddRange(@('--version', $requestedVersion)) }
     if ($mode -eq 'upgrade') { [void]$arguments.Add('--include-unknown') }
 
@@ -108,7 +109,7 @@ try {
     switch ($exitCode) {
         0 { $result.success = $true }
         -1978335189 { $result.success = $true; $result.note = 'no applicable update; already current' }
-        -1978335212 { $result.note = 'no package found matching the id' }
+        -1978335212 { $result.note = 'no package found matching the id'; if ($mode -eq 'uninstall') { $result.success = $true; $result.note = 'not installed; nothing to remove' } }
         -1978335216 { $result.note = 'no applicable installer for this device (architecture or scope)' }
         -1978334967 { $result.note = 'installer failed; see message' }
         -1978335135 { $result.note = 'a reboot is required to finish the installation'; $result.success = $true }

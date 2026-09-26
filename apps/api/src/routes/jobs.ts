@@ -298,7 +298,7 @@ const wingetInstallSchema = z.object({
   managedDeviceId: z.string().min(1),
   deviceName: z.string().min(1),
   packageId: z.string().min(3).max(128),
-  mode: z.enum(['install', 'upgrade']),
+  mode: z.enum(['install', 'upgrade', 'uninstall']),
   version: z.string().max(40).nullable().default(null),
   displayName: z.string().max(200).nullable().default(null),
   installedVersion: z.string().max(60).nullable().default(null),

@@ -8,6 +8,11 @@ Alle nennenswerten Aenderungen an ZeroStress Cockpit. Format angelehnt an
 
 ### Hinzugefuegt
 
+- Geraete: Skript `winget-inventory` liefert die winget-Ids installierter
+  Software; der Tab Software ordnet sie den Zeilen zu und bietet je Zeile
+  **Deinstallieren** per winget (Job `device.winget-install`, Modus
+  uninstall) mit Vorschau und Audit; nicht zuordenbare Ids stehen in einem
+  eigenen Abschnitt mit Deinstallieren-Knopf.
 - Azure VMs: Seite mit Bestand aller Subscriptions (Zustand, Groesse,
   Image, AVD-Kennzeichen), Detailseite (Netzwerk, Datentraeger,
   Eigenschaften), Jobs Start, Stop (deallocate), Neustart, Groesse aendern

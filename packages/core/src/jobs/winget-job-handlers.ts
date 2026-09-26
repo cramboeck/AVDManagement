@@ -63,7 +63,7 @@ export function registerWingetJobs(remediations: RemediationOperations, options:
   registerJob(
     {
       type: 'device.winget-install',
-      displayName: 'Software per winget installieren',
+      displayName: 'Software per winget verwalten',
       maxRetries: 0,
       timeoutSeconds: 1500,
       concurrencyPerTenant: 2,
@@ -108,11 +108,18 @@ export function registerWingetJobs(remediations: RemediationOperations, options:
       const payload = ctx.payload as unknown as WingetInstallPayload;
       const rendered = renderWingetInstall({ packageId: payload.packageId, mode: payload.mode, version: payload.version });
       const label = payload.displayName ? `${payload.displayName} (${rendered.packageId})` : rendered.packageId;
-      const warnings = [
-        `winget laeuft als SYSTEM auf ${payload.deviceName} und laedt den Installer aus der Quelle winget (Community-Katalog). Das Cockpit prueft dabei keinen Hash; das macht winget selbst gegen das Manifest.`,
-        'Der Lauf gilt nur fuer dieses Geraet: keine Intune-App, keine Erkennung, kein Stand je Tenant. Fuer mehrere Geraete das Paket im Katalog anlegen und ausrollen.',
-        'Software, die nur im Benutzerprofil installiert ist, kann der Maschinenkontext nicht aktualisieren.',
-      ];
+      const warnings =
+        payload.mode === 'uninstall'
+          ? [
+              `winget deinstalliert ${label} als SYSTEM auf ${payload.deviceName} mit dem stillen Deinstallationsbefehl aus dem Katalogmanifest. Angemeldete Benutzer werden nicht gefragt.`,
+              'Benutzerdaten und Einstellungen der Software bleiben je nach Deinstallationsprogramm erhalten. Software, die nur im Benutzerprofil installiert ist, kann der Maschinenkontext nicht entfernen.',
+              'Ist die Software ueber Intune zugewiesen, installiert Intune sie beim naechsten Abgleich wieder; dann zuerst die Zuweisung entfernen.',
+            ]
+          : [
+              `winget laeuft als SYSTEM auf ${payload.deviceName} und laedt den Installer aus der Quelle winget (Community-Katalog). Das Cockpit prueft dabei keinen Hash; das macht winget selbst gegen das Manifest.`,
+              'Der Lauf gilt nur fuer dieses Geraet: keine Intune-App, keine Erkennung, kein Stand je Tenant. Fuer mehrere Geraete das Paket im Katalog anlegen und ausrollen.',
+              'Software, die nur im Benutzerprofil installiert ist, kann der Maschinenkontext nicht aktualisieren.',
+            ];
       if (payload.mode === 'install' && payload.installedVersion) warnings.push('Laut letzter Pruefung ist die Software bereits installiert; winget meldet dann "bereits aktuell".');
       return {
         changes: [
@@ -120,9 +127,9 @@ export function registerWingetJobs(remediations: RemediationOperations, options:
             objectType: 'device',
             objectId: payload.managedDeviceId,
             objectDisplayName: payload.deviceName,
-            action: 'update',
-            before: { software: payload.installedVersion ? `${label} ${payload.installedVersion}` : payload.mode === 'upgrade' ? `${label} (Version laut Pruefung unbekannt)` : `${label} nicht installiert (laut Inventar)` },
-            after: { software: `${label} ${rendered.version ?? payload.availableVersion ?? '(neueste im Katalog)'}`, mode: rendered.mode, scope: 'machine' },
+            action: payload.mode === 'uninstall' ? 'delete' : 'update',
+            before: { software: payload.installedVersion ? `${label} ${payload.installedVersion}` : payload.mode === 'install' ? `${label} nicht installiert (laut Inventar)` : `${label} (Version laut Inventar unbekannt)` },
+            after: payload.mode === 'uninstall' ? { software: `${label} entfernt`, mode: 'uninstall', scope: 'machine' } : { software: `${label} ${rendered.version ?? payload.availableVersion ?? '(neueste im Katalog)'}`, mode: rendered.mode, scope: 'machine' },
           },
         ],
         warnings,

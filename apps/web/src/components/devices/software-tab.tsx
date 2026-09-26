@@ -11,7 +11,7 @@ import { CapabilityNotice } from '@/components/identity/capability-notice';
 import { DataTable, type ColumnDef } from '@/components/ui/data-table';
 import { JobActionDialog } from '@/components/jobs/job-action-dialog';
 import { formatDateTime } from '@/components/identity/sign-in-table';
-import { ScriptResultView, wingetUpdatesFrom, type WingetUpdate } from '@/components/devices/scripts-tab';
+import { ScriptResultView, wingetUpdatesFrom, wingetInventoryFrom, type WingetUpdate } from '@/components/devices/scripts-tab';
 import { WingetInstallDialog, type WingetTarget } from '@/components/devices/winget-install-dialog';
 import type { AppPackage, DetectedApp, Device, DeviceSoftwareInventory, Job, ScriptRunResult, WingetCatalogEntry } from '@zerostress/types';
 
@@ -64,9 +64,24 @@ export function matchCatalog(app: DetectedApp, baseSet: WingetCatalogEntry[], pa
   return null;
 }
 
+/** Inventar-Id (aus winget list) ueber den Namensteil der Id dem Intune-Eintrag zuordnen. */
+export function matchInventoryId(app: DetectedApp, ids: string[]): string | null {
+  const appName = normalise(app.displayName);
+  if (appName.length < 3) return null;
+  for (const id of ids) {
+    const tail = normalise(id.split('.').slice(1).join(' '));
+    const head = normalise(id.split('.')[0] ?? '');
+    if (tail.length >= 4 && (appName.includes(tail) || tail.includes(appName))) return id;
+    if (head.length >= 4 && tail.length >= 3 && appName.includes(head) && appName.includes(tail)) return id;
+  }
+  return null;
+}
+
 interface SoftwareRow extends DetectedApp {
   update: WingetUpdate | null;
   catalog: CatalogHit | null;
+  // Id laut winget-Inventar auf dem Geraet (Grundlage fuer Deinstallation)
+  wingetId: string | null;
   wingetState: 'update' | 'catalog' | 'none';
 }
 
@@ -79,7 +94,7 @@ function formatSize(bytes: number | null): string {
 
 export function SoftwareTab({ base, tenantId, device }: { base: string; tenantId: string; device: Device }) {
   const queryClient = useQueryClient();
-  const [checking, setChecking] = useState(false);
+  const [checking, setChecking] = useState<'winget-updates' | 'winget-inventory' | null>(null);
   const [target, setTarget] = useState<WingetTarget | null>(null);
   const [pickedBase, setPickedBase] = useState('');
   const managedDeviceId = device.intune?.managedDeviceId ?? null;
@@ -108,15 +123,24 @@ export function SoftwareTab({ base, tenantId, device }: { base: string; tenantId
   );
   const latestResult = latestCheck?.status === 'completed' ? (latestCheck.result as unknown as ScriptRunResult | null) : null;
   const updates = useMemo(() => wingetUpdatesFrom(latestResult), [latestResult]);
+  const latestInventory = useMemo(
+    () =>
+      (jobsQuery.data?.items ?? []).find(
+        (j) => j.type === 'device.run-script' && j.payload.managedDeviceId === managedDeviceId && j.payload.scriptId === 'winget-inventory'
+      ) ?? null,
+    [jobsQuery.data, managedDeviceId]
+  );
+  const inventory_ = useMemo(() => wingetInventoryFrom(latestInventory?.status === 'completed' ? (latestInventory.result as unknown as ScriptRunResult | null) : null), [latestInventory]);
 
   const rows: SoftwareRow[] = useMemo(
     () =>
       (softwareQuery.data?.available ? softwareQuery.data.data.items : []).map((app) => {
         const update = matchWingetUpdate(app, updates);
         const catalog = matchCatalog(app, baseSet.data?.items ?? [], packages.data?.items ?? []);
-        return { ...app, update, catalog, wingetState: update ? 'update' : catalog ? 'catalog' : 'none' };
+        const wingetId = update?.id ?? matchInventoryId(app, inventory_.ids) ?? null;
+        return { ...app, update, catalog, wingetId, wingetState: update ? 'update' : catalog || wingetId ? 'catalog' : 'none' };
       }),
-    [softwareQuery.data, updates, baseSet.data, packages.data]
+    [softwareQuery.data, updates, baseSet.data, packages.data, inventory_.ids]
   );
 
   const installedNames = useMemo(() => new Set(rows.filter((r) => r.catalog).map((r) => r.catalog!.id)), [rows]);
@@ -145,6 +169,10 @@ export function SoftwareTab({ base, tenantId, device }: { base: string; tenantId
             <span className="inline-flex rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground" title={a.catalog.id}>
               {a.catalog.packageId ? `Paket ${a.catalog.packageVersion}` : a.catalog.id}
             </span>
+          ) : a.wingetId ? (
+            <span className="inline-flex rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground" title="laut winget-Inventar auf dem Geraet">
+              {a.wingetId}
+            </span>
           ) : (
             <span className="text-xs text-muted-foreground">—</span>
           ),
@@ -155,11 +183,16 @@ export function SoftwareTab({ base, tenantId, device }: { base: string; tenantId
         accessor: () => '',
         searchable: false,
         cell: (a) =>
-          managedDeviceId && (a.update || a.catalog) ? (
+          managedDeviceId && (a.update || a.catalog || a.wingetId) ? (
             <div className="flex flex-wrap gap-1">
               {a.update && (
                 <button onClick={() => setTarget({ packageId: a.update!.id, mode: 'upgrade', displayName: a.displayName, installedVersion: a.update!.installed || a.version, availableVersion: a.update!.available })} className="rounded-md border px-2 py-0.5 text-xs hover:bg-accent">
                   Update installieren
+                </button>
+              )}
+              {a.wingetId && (
+                <button onClick={() => setTarget({ packageId: a.wingetId!, mode: 'uninstall', displayName: a.displayName, installedVersion: a.version, availableVersion: null })} className="rounded-md border border-destructive/40 px-2 py-0.5 text-xs text-destructive hover:bg-destructive/10">
+                  Deinstallieren
                 </button>
               )}
               {(a.update || a.catalog) && !a.catalog?.packageId && (
@@ -215,6 +248,14 @@ export function SoftwareTab({ base, tenantId, device }: { base: string; tenantId
             <p className="mt-0.5 text-sm text-muted-foreground">
               Laeuft als Skript auf dem Geraet im Maschinenkontext und fragt die Quelle winget nach neueren Versionen. Gefundene Updates lassen sich je Zeile direkt installieren oder als Paket in den Katalog uebernehmen.
             </p>
+            {latestInventory && (
+              <p className="mt-1 text-xs text-muted-foreground">
+                Inventar {formatDateTime(latestInventory.completedAt ?? latestInventory.createdAt)}
+                {latestInventory.status === 'completed' && <> · {inventory_.ids.length} winget-Pakete erkannt{inventory_.truncated ? ' (Liste gekuerzt)' : ''}</>}
+                {latestInventory.status === 'failed' && <> · fehlgeschlagen: {latestInventory.error}</>}
+                {(latestInventory.status === 'queued' || latestInventory.status === 'running') && <> · laeuft</>}
+              </p>
+            )}
             {latestCheck && (
               <p className="mt-1 text-xs text-muted-foreground">
                 Letzte Pruefung {formatDateTime(latestCheck.completedAt ?? latestCheck.createdAt)}
@@ -225,9 +266,14 @@ export function SoftwareTab({ base, tenantId, device }: { base: string; tenantId
               </p>
             )}
           </div>
-          <button onClick={() => setChecking(true)} disabled={!managedDeviceId} className="rounded-md border px-3 py-1.5 text-sm hover:bg-accent disabled:opacity-50">
-            Jetzt pruefen
-          </button>
+          <div className="flex gap-2">
+            <button onClick={() => setChecking('winget-inventory')} disabled={!managedDeviceId} className="rounded-md border px-3 py-1.5 text-sm hover:bg-accent disabled:opacity-50" title="Welche installierte Software winget kennt; Grundlage fuer Deinstallieren je Zeile">
+              Inventar abgleichen
+            </button>
+            <button onClick={() => setChecking('winget-updates')} disabled={!managedDeviceId} className="rounded-md border px-3 py-1.5 text-sm hover:bg-accent disabled:opacity-50">
+              Updates pruefen
+            </button>
+          </div>
         </div>
         {latestResult && (
           <div className="mt-3 border-t pt-3">
@@ -267,6 +313,25 @@ export function SoftwareTab({ base, tenantId, device }: { base: string; tenantId
         </section>
       )}
 
+      {managedDeviceId && inventory_.ids.length > 0 && (
+        <section className="rounded-lg border p-4">
+          <h2 className="font-medium">Von winget erkannt, aber keiner Inventarzeile zugeordnet</h2>
+          <p className="mt-0.5 text-sm text-muted-foreground">Diese Pakete kennt winget auf dem Geraet; im Intune-Inventar fehlen sie noch oder heissen anders. Deinstallieren geht direkt.</p>
+          <ul className="mt-2 flex flex-wrap gap-2">
+            {inventory_.ids
+              .filter((id) => !rows.some((r) => r.wingetId === id))
+              .map((id) => (
+                <li key={id} className="flex items-center gap-1 rounded-md border px-2 py-1 text-xs">
+                  <span className="font-mono">{id}</span>
+                  <button onClick={() => setTarget({ packageId: id, mode: 'uninstall', displayName: null, installedVersion: null, availableVersion: null })} className="rounded px-1 text-destructive hover:bg-destructive/10" title="Deinstallieren">
+                    Deinstallieren
+                  </button>
+                </li>
+              ))}
+          </ul>
+        </section>
+      )}
+
       <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
         <span>Quellen:</span>
         <span>{inventory.data.intune.available ? `Intune ${inventory.data.intune.data.count} Eintraege` : `Intune nicht verfuegbar (${inventory.data.intune.reason})`}</span>
@@ -284,12 +349,12 @@ export function SoftwareTab({ base, tenantId, device }: { base: string; tenantId
 
       {checking && (
         <JobActionDialog
-          title="Software-Updates mit winget pruefen"
+          title={checking === 'winget-updates' ? 'Software-Updates mit winget pruefen' : 'winget-Inventar abgleichen'}
           description={`Auf ${device.name}.`}
-          confirmLabel="Pruefung starten"
-          createJob={() => api.post<Job>(`/tenants/${tenantId}/jobs/run-script`, { managedDeviceId, deviceName: device.name, scriptId: 'winget-updates' })}
+          confirmLabel={checking === 'winget-updates' ? 'Pruefung starten' : 'Abgleich starten'}
+          createJob={() => api.post<Job>(`/tenants/${tenantId}/jobs/run-script`, { managedDeviceId, deviceName: device.name, scriptId: checking })}
           renderResult={(job) => <ScriptResultView result={job.result as unknown as ScriptRunResult | null} error={job.error} />}
-          onClose={() => setChecking(false)}
+          onClose={() => setChecking(null)}
           onCompleted={refreshJobs}
         />
       )}

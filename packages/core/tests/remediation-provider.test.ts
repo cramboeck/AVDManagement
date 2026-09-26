@@ -52,6 +52,7 @@ describe('RemediationProvider', () => {
       ['update-scan', 'outdated'],
       ['system-info', 'missing'],
       ['winget-updates', 'missing'],
+      ['winget-inventory', 'missing'],
       ['network-info', 'missing'],
       ['storage-info', 'missing'],
       ['local-admins', 'missing'],

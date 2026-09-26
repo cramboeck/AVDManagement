@@ -233,7 +233,7 @@ function LatestRun({ job, tenantId }: { job: Job; tenantId: string }) {
   );
 }
 
-const KNOWN_SCHEMAS = new Set(['zsc.update-status/1', 'zsc.update-scan/1', 'zsc.system-info/1', 'zsc.winget-updates/1', 'zsc.winget-install/1', 'zsc.network-info/1', 'zsc.storage-info/1', 'zsc.local-admins/1', 'zsc.battery-info/1']);
+const KNOWN_SCHEMAS = new Set(['zsc.update-status/1', 'zsc.update-scan/1', 'zsc.system-info/1', 'zsc.winget-updates/1', 'zsc.winget-inventory/1', 'zsc.winget-install/1', 'zsc.network-info/1', 'zsc.storage-info/1', 'zsc.local-admins/1', 'zsc.battery-info/1']);
 
 export interface WingetUpdate {
   name: string;
@@ -250,6 +250,14 @@ export function wingetUpdatesFrom(result: ScriptRunResult | null): WingetUpdate[
     .map(asRecord)
     .filter((u): u is Record<string, unknown> => u !== null)
     .map((u) => ({ name: text(u.name), id: text(u.id), installed: text(u.installed), available: text(u.available) }));
+}
+
+// Paket-Ids aus einem winget-Inventarlauf (kompakte Liste, ; getrennt)
+export function wingetInventoryFrom(result: ScriptRunResult | null): { ids: string[]; truncated: boolean } {
+  const json = result?.outputJson;
+  if (!json || json.schema !== 'zsc.winget-inventory/1') return { ids: [], truncated: false };
+  const ids = typeof json.ids === 'string' ? json.ids.split(';').map((x) => x.trim()).filter(Boolean) : [];
+  return { ids, truncated: json.truncated === true };
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -298,11 +306,28 @@ export function ScriptResultView({ result, error }: { result: ScriptRunResult | 
       {json && schema === 'zsc.system-info/1' && <SystemInfoResult data={json} />}
       {json && schema === 'zsc.winget-updates/1' && <WingetResult data={json} />}
       {json && schema === 'zsc.winget-install/1' && <WingetInstallResult data={json} />}
+      {json && schema === 'zsc.winget-inventory/1' && <WingetInventoryResult data={json} />}
       {json && schema === 'zsc.network-info/1' && <NetworkInfoResult data={json} />}
       {json && schema === 'zsc.storage-info/1' && <StorageInfoResult data={json} />}
       {json && schema === 'zsc.local-admins/1' && <LocalAdminsResult data={json} />}
       {json && schema === 'zsc.battery-info/1' && <BatteryResult data={json} />}
       {json && !KNOWN_SCHEMAS.has(schema ?? '') && <pre className="overflow-x-auto rounded-md bg-muted p-3 text-xs">{JSON.stringify(json, null, 2)}</pre>}
+    </div>
+  );
+}
+
+function WingetInventoryResult({ data }: { data: Record<string, unknown> }) {
+  const ids = typeof data.ids === 'string' ? data.ids.split(';').filter(Boolean) : [];
+  return (
+    <div className="space-y-2">
+      <div className="grid gap-2 sm:grid-cols-3">
+        <Stat label="winget-Pakete" value={String(typeof data.count === 'number' ? data.count : ids.length)} tone="good" />
+        <Stat label="winget-Version" value={text(data.wingetVersion)} />
+        <Stat label="Geprueft" value={dateText(data.collectedAt)} />
+      </div>
+      {typeof data.error === 'string' && data.error && <p className="text-sm text-destructive">{data.error}</p>}
+      {data.truncated === true && <p className="text-xs text-warning">Liste gekuerzt: Intune begrenzt die Skriptausgabe auf 2048 Zeichen.</p>}
+      {ids.length > 0 && <p className="break-words font-mono text-xs text-muted-foreground">{ids.join(' · ')}</p>}
     </div>
   );
 }

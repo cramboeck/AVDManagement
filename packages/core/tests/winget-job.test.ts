@@ -33,6 +33,20 @@ describe('renderWingetInstall', () => {
   });
 });
 
+describe('winget uninstall', () => {
+  it('renders the uninstall mode and previews a removal', async () => {
+    const r = renderWingetInstall({ packageId: '7zip.7zip', mode: 'uninstall' });
+    expect(r.content).toContain("$mode = 'uninstall'");
+    registerWingetJobs(ops(state({ schema: 'zsc.winget-install/1', success: true, exitCode: 0, installedVersion: null })));
+    const job = getRegisteredJob('device.winget-install')!;
+    const preview = await job.previewGenerator!({ ...base, payload: { ...payload, mode: 'uninstall', availableVersion: null } });
+    expect(preview.changes[0]).toMatchObject({ action: 'delete', after: { software: '7-Zip (7zip.7zip) entfernt' } });
+    expect(preview.warnings.some((w) => w.includes('Intune zugewiesen'))).toBe(true);
+    const result = await job.handler({ ...base, payload: { ...payload, mode: 'uninstall' } });
+    expect(result.success).toBe(true);
+  });
+});
+
 describe('device.winget-install', () => {
   it('previews before/after and reports success from the script json', async () => {
     const o = ops(state({ schema: 'zsc.winget-install/1', success: true, exitCode: 0, installedVersion: '24.08' }));

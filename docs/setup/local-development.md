@@ -214,10 +214,15 @@ ohne Netz fehlt sie und die Vorschau sagt das. Plan und offene Stufen:
 
 Der Tab **Software** ordnet jede Inventarzeile dem winget-Katalog zu: erst
 den eigenen Paketen (Typ winget), dann dem Basis-Set, jeweils ueber den
-Anzeigenamen. Nach einer winget-Pruefung (Skript `winget-updates`) zeigt
-die Spalte winget gefundene Updates. Aktionen je Zeile: **Update
-installieren** (Job `device.winget-install`, Einmalskript mit eingebetteter
-Id im Maschinenkontext, Vorschau und Audit), **Als Paket anlegen** (Katalog
+Anzeigenamen. **Inventar abgleichen** (Skript `winget-inventory`) holt vom
+Geraet die Paket-Ids, die winget der Quelle winget zuordnen kann (nur Ids,
+weil Intune die Ausgabe auf 2048 Zeichen kuerzt), und ordnet sie den Zeilen
+zu; nicht zuordenbare Ids stehen in einem eigenen Abschnitt. **Updates
+pruefen** (Skript `winget-updates`) zeigt neuere Versionen. Aktionen je
+Zeile: **Update installieren**, **Deinstallieren** (beide Job
+`device.winget-install`, Einmalskript mit eingebetteter Id und Modus im
+Maschinenkontext, Vorschau und Audit; die Deinstallation warnt, dass ueber
+Intune zugewiesene Software zurueckkommt), **Als Paket anlegen** (Katalog
 mit vorbelegter Id) oder **Zum Paket**. Der Abschnitt "Aus dem Basis-Set
 installieren" installiert gaengige Software direkt auf dem Geraet. Diese
 Aktionen gelten nur fuer das eine Geraet und legen keine Intune-App an;

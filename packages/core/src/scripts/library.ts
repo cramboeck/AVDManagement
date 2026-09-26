@@ -78,6 +78,17 @@ const definitions: ScriptDefinition[] = [
     expectedDurationSeconds: 240,
   },
   {
+    id: 'winget-inventory',
+    displayName: 'winget-Inventar',
+    description:
+      'Listet installierte Software, die winget der Quelle winget zuordnen kann, als Paket-Ids (Maschinenkontext). Grundlage fuer Aktualisieren und Deinstallieren je Zeile. Installiert nichts. Braucht den App Installer auf dem Geraet.',
+    version: '1.0.0',
+    detectionFile: 'winget-inventory.detect.ps1',
+    remediationFile: null,
+    remediationSummary: null,
+    expectedDurationSeconds: 240,
+  },
+  {
     id: 'network-info',
     displayName: 'Netzwerkinfo',
     description:
