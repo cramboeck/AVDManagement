@@ -172,6 +172,10 @@ export function registerScriptJobs(remediations: RemediationOperations, options:
         warnings.push('Nur lesend: das Skript veraendert nichts auf dem Geraet.');
       }
       if (script.containsPersonalData) {
+        // Ohne Schluessel wuerde der Lauf sein Ergebnis verwerfen; das vorher sagen statt das Geraet umsonst zu bemuehen
+        if (!options.sealer) {
+          throw new Error('Dieses Skript liefert personenbezogene Daten, aber die Verschluesselung ist nicht eingerichtet (RESULT_ENCRYPTION_KEY, 32 Bytes Base64: openssl rand -base64 32). Schluessel in .env.local setzen, API neu starten, dann erneut ausfuehren.');
+        }
         warnings.push('Die Ausgabe enthaelt Kontonamen. Sie wird verschluesselt gespeichert, jede Anzeige braucht eine Begruendung und steht im Audit, nach 30 Tagen wird sie geloescht.');
       }
       return {
@@ -302,6 +306,9 @@ export function registerAvdScriptJobs(runner: VmCommandRunner, options: RunScrip
       const script = getLibraryScript(payload.scriptId);
       if (!script) {
         throw new Error(`Script '${payload.scriptId}' is not in the library`);
+      }
+      if (script.containsPersonalData && !options.sealer) {
+        throw new Error('Dieses Skript liefert personenbezogene Daten, aber die Verschluesselung ist nicht eingerichtet (RESULT_ENCRYPTION_KEY, 32 Bytes Base64: openssl rand -base64 32). Schluessel in .env.local setzen, API neu starten, dann erneut ausfuehren.');
       }
       return {
         changes: [

@@ -93,6 +93,10 @@ Alle nennenswerten Aenderungen an ZeroStress Cockpit. Format angelehnt an
 
 ### Geaendert
 
+- Skripte mit personenbezogener Ausgabe (Lokale Administratoren) werden
+  ohne `RESULT_ENCRYPTION_KEY` schon in der Vorschau abgelehnt statt erst
+  nach dem Lauf verworfen.
+
 - Apps: Community-winget-Ids werden nicht mehr als Store-App nach Intune
   geschickt (das scheiterte dort); sie brauchen jetzt den Typ winget mit
   Katalogaufloesung. Bestehende winget-Pakete bitte bearbeiten und "Aus

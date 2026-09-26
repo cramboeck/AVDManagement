@@ -183,3 +183,16 @@ describe('sealed results', () => {
     expect(plain.data).toMatchObject({ output: result.output });
   });
 });
+
+describe('personal-data scripts without an encryption key', () => {
+  it('refuse in the preview so the device is not asked for nothing', async () => {
+    const { registerScriptJobs } = await import('../src/jobs/script-job-handlers.js');
+    const { getRegisteredJob } = await import('../src/jobs/job-types.js');
+    const remediations = { ensureScript: vi.fn(), runOnDemand: vi.fn(), getRunState: vi.fn(), waitForRunState: vi.fn(), runTransient: vi.fn() };
+    registerScriptJobs(remediations as never, { sealer: null });
+    const job = getRegisteredJob('device.run-script')!;
+    const ctx = { tenantId: 't' as never, mspId: 'm' as never, userId: 'u' as never, payload: { managedDeviceId: 'md', deviceName: 'PC', scriptId: 'local-admins' } };
+    await expect(job.previewGenerator!(ctx)).rejects.toThrow(/RESULT_ENCRYPTION_KEY/);
+    await expect(job.previewGenerator!({ ...ctx, payload: { ...ctx.payload, scriptId: 'system-info' } })).resolves.toBeTruthy();
+  });
+});
