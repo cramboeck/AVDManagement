@@ -1,0 +1,6 @@
+{
+  "name": "@zerostress/worker-windows",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Windows build worker: installer plus manifest to .intunewin (PowerShell 5.1, no Node runtime)"
+}

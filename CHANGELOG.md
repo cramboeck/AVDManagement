@@ -8,6 +8,12 @@ Alle nennenswerten Aenderungen an ZeroStress Cockpit. Format angelehnt an
 
 ### Hinzugefuegt
 
+- Apps: Windows-Build-Worker (`apps/worker-windows`) mit Auftragsqueue
+  `build_jobs`, Worker-Endpunkten unter `/worker` (Bearer `WORKER_TOKEN`),
+  PSAppDeployToolkit-v4-Wrapper aus Manifest und Registry-Marker,
+  `IntuneWinAppUtil.exe`, Artefakt-Upload mit Hashpruefung, Build-Liste im
+  Paketdetail. PSADT-Pakete behalten den Wrapper als Intune-Kommandozeile,
+  auch wenn Installer-Parameter gesetzt sind.
 - Apps: Upload-Pipeline fuer Win32-Pakete nach Intune als Job
   `apps.publish` (App anlegen, Content-Version, Blob-Bloecke, Commit,
   Content-Version festschreiben) und Rollout eines Katalogpakets auf

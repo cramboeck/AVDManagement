@@ -15,7 +15,9 @@ import { formatDateTime } from '@/components/identity/sign-in-table';
 import { PackageForm, type ManifestDraft } from '@/components/apps/package-form';
 import { PackageStatusBadge, DeploymentStatusBadge, installerTypeLabels, formatBytes } from '@/components/apps/package-badges';
 import { RolloutDialog } from '@/components/apps/rollout-dialog';
-import type { AppPackage } from '@zerostress/types';
+import type { AppPackage, BuildJob } from '@zerostress/types';
+
+const buildStatusLabels: Record<BuildJob['status'], string> = { queued: 'wartet', claimed: 'angenommen', building: 'baut', succeeded: 'erfolgreich', failed: 'fehlgeschlagen' };
 
 export default function PackageDetailPage({ params }: { params: { packageId: string } }) {
   const packageId = params.packageId;
@@ -31,8 +33,16 @@ export default function PackageDetailPage({ params }: { params: { packageId: str
 
   const query = useQuery({ queryKey: ['package', packageId], queryFn: () => api.get<AppPackage>(`/packages/${packageId}`), refetchInterval: (q) => (q.state.data && ['queued', 'building', 'draft'].includes(q.state.data.status) ? 5000 : q.state.data?.deployments.some((d) => d.status === 'publishing' || d.status === 'pending') ? 5000 : false) });
 
+  const builds = useQuery({
+    queryKey: ['package-builds', packageId],
+    queryFn: () => api.get<{ items: BuildJob[]; workerConfigured: boolean }>(`/packages/${packageId}/builds`),
+    enabled: !!query.data && ['msi', 'exe', 'psadt'].includes(query.data.manifest.installerType),
+    refetchInterval: (q) => (q.state.data?.items.some((b) => ['queued', 'claimed', 'building'].includes(b.status)) ? 5000 : false),
+  });
+
   const refresh = () => {
     queryClient.invalidateQueries({ queryKey: ['package', packageId] });
+    queryClient.invalidateQueries({ queryKey: ['package-builds', packageId] });
     queryClient.invalidateQueries({ queryKey: ['packages'] });
   };
 
@@ -126,10 +136,10 @@ export default function PackageDetailPage({ params }: { params: { packageId: str
                 downloadHref={pkg.artifact ? `/packages/${packageId}/artifact` : null}
               />
               {m.installerType !== 'intunewin' && (
-                <FileRow label="Installer (msi/exe/zip)" file={pkg.installer} hint="Eingabe fuer den Build-Worker" pending={upload.isPending && upload.variables?.kind === 'installer'} onPick={() => installerInput.current?.click()} downloadHref={pkg.installer ? `/packages/${packageId}/installer` : null} />
+                <FileRow label="Installer (msi/exe)" file={pkg.installer} hint="Eingabe fuer den Build-Worker" pending={upload.isPending && upload.variables?.kind === 'installer'} onPick={() => installerInput.current?.click()} downloadHref={pkg.installer ? `/packages/${packageId}/installer` : null} />
               )}
               <input ref={artifactInput} type="file" accept=".intunewin" className="hidden" onChange={(e) => e.target.files?.[0] && upload.mutate({ kind: 'artifact', file: e.target.files[0] })} />
-              <input ref={installerInput} type="file" accept=".msi,.exe,.zip" className="hidden" onChange={(e) => e.target.files?.[0] && upload.mutate({ kind: 'installer', file: e.target.files[0] })} />
+              <input ref={installerInput} type="file" accept=".msi,.exe" className="hidden" onChange={(e) => e.target.files?.[0] && upload.mutate({ kind: 'installer', file: e.target.files[0] })} />
               {['msi', 'exe', 'psadt'].includes(m.installerType) && (
                 <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-dashed px-3 py-2">
                   <span className="text-xs text-muted-foreground">
@@ -140,6 +150,28 @@ export default function PackageDetailPage({ params }: { params: { packageId: str
                     Build starten
                   </button>
                 </div>
+              )}
+              {builds.data && !builds.data.workerConfigured && ['msi', 'exe', 'psadt'].includes(m.installerType) && (
+                <p className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs">
+                  Kein Build-Worker eingerichtet: in der API fehlt WORKER_TOKEN. Auftraege bleiben auf &quot;wartet&quot;, bis ein Worker laeuft (siehe apps/worker-windows/README.md). Alternativ das fertige .intunewin direkt hochladen.
+                </p>
+              )}
+              {builds.data && builds.data.items.length > 0 && (
+                <Collapsible summary="Build-Auftraege" aside={`${builds.data.items.length}`} defaultOpen={builds.data.items.some((b) => ['queued', 'claimed', 'building'].includes(b.status))}>
+                  <ul className="divide-y text-xs">
+                    {builds.data.items.map((b) => (
+                      <li key={b.id} className="flex flex-wrap items-center justify-between gap-2 py-1.5">
+                        <span className={clsx('font-medium', b.status === 'failed' && 'text-destructive', b.status === 'succeeded' && 'text-success')}>{buildStatusLabels[b.status]}</span>
+                        <span className="text-muted-foreground">
+                          {formatDateTime(b.createdAt)}
+                          {b.workerId ? ` · Worker ${b.workerId}` : ''}
+                          {b.finishedAt ? ` · fertig ${formatDateTime(b.finishedAt)}` : ''}
+                        </span>
+                        {b.error && <span className="basis-full text-destructive">{b.error}</span>}
+                      </li>
+                    ))}
+                  </ul>
+                </Collapsible>
               )}
               {pkg.buildLog && (
                 <Collapsible summary="Build-Protokoll" aside={pkg.status === 'failed' ? 'fehlgeschlagen' : 'letzter Lauf'} defaultOpen={pkg.status === 'failed'}>
@@ -153,8 +185,8 @@ export default function PackageDetailPage({ params }: { params: { packageId: str
         <section className="rounded-lg border p-4">
           <h2 className="mb-3 font-medium">Manifest</h2>
           <dl className="grid gap-x-4 gap-y-1 text-sm sm:grid-cols-2">
-            <Row k="Installation" v={m.installCommand ?? (m.installerType === 'psadt' ? 'PSADT Silent' : m.installerType === 'msi' ? 'msiexec /qn' : '—')} mono />
-            <Row k="Deinstallation" v={m.uninstallCommand ?? (m.installerType === 'msi' && m.msiProductCode ? `msiexec /x ${m.msiProductCode}` : '—')} mono />
+            <Row k="Installation" v={m.installerType === 'psadt' ? `PSADT Silent${m.installCommand ? ` (Installer-Parameter ${m.installCommand})` : ''}` : (m.installCommand ?? (m.installerType === 'msi' ? 'msiexec /qn' : '—'))} mono />
+            <Row k="Deinstallation" v={m.installerType === 'psadt' ? `PSADT Silent${m.uninstallCommand ? ` (${m.uninstallCommand})` : m.installerFileName?.toLowerCase().endsWith('.msi') ? ' (msiexec /x)' : ' (kein Befehl hinterlegt)'}` : (m.uninstallCommand ?? (m.installerType === 'msi' && m.msiProductCode ? `msiexec /x ${m.msiProductCode}` : '—'))} mono />
             <Row k="Kontext" v={m.installContext === 'system' ? 'System' : 'Benutzer'} />
             <Row k="Neustart" v={m.restartBehavior} />
             <Row k="Windows ab" v={m.requirements.minimumWindowsRelease ?? '—'} />

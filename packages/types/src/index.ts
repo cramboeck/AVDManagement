@@ -708,6 +708,10 @@ export interface AppManifest {
   installerType: PackageInstallerType;
   // Dateiname des Installers im Paket (msi/exe/psadt), null bei winget
   installerFileName: string | null;
+  // msi/exe/intunewin: vollstaendige Intune-Kommandozeilen.
+  // psadt: installCommand = stille Parameter des Installers, die der Wrapper
+  // anhaengt; uninstallCommand = optionale Deinstallationszeile, die der
+  // Wrapper ausfuehrt. Die Intune-Kommandozeile ist bei psadt immer der Wrapper.
   installCommand: string | null;
   uninstallCommand: string | null;
   msiProductCode: string | null;
@@ -788,6 +792,29 @@ export interface BuildJob {
   log: string | null;
   error: string | null;
   createdAt: string;
+}
+
+/**
+ * Bauplan, den der Windows-Worker beim Claim erhaelt. Alles, was der
+ * Worker braucht, steht hier; er liest weder DB noch Manifest-Rohdaten.
+ */
+export interface BuildPlan {
+  buildId: string;
+  packageId: string;
+  packageIdentifier: string;
+  displayName: string;
+  manifest: AppManifest;
+  installer: Pick<StoredFile, 'fileName' | 'sha256' | 'sizeBytes'>;
+  // psadt: Wrapper erzeugen; plain: Installer unveraendert verpacken
+  wrapper: 'psadt' | 'plain';
+  // Datei, die IntuneWinAppUtil als Setup-Datei bekommt
+  setupFile: string;
+  // Registry-Marker in PowerShell-Schreibweise (HKLM:\...), null ohne Wrapper
+  markerKeyPath: string | null;
+  installerArguments: string;
+  uninstallCommand: string | null;
+  processesToClose: string[];
+  artifactFileName: string;
 }
 
 // ============================================

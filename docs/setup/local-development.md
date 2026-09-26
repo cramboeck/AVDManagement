@@ -145,9 +145,18 @@ Zuweisung bleibt der bewusste zweite Schritt unter Apps. Fortschritt,
 Intune-App-Id und Fehler je Tenant stehen in `app_deployments` und im
 Paketdetail. Benoetigt `DeviceManagementApps.ReadWrite.All`.
 
-Der Windows-Build-Worker (Stufe D: Installer plus Manifest -> PSADT-Wrapper
--> `.intunewin`) ist im Plan `docs/implementation/apps-module-plan.md`
-beschrieben.
+**Build-Worker** (Stufe D): fuer `msi`, `exe` und `psadt` erzeugt ein
+Windows-Worker aus Installer und Manifest das `.intunewin`
+(`apps/worker-windows`, PowerShell 5.1). "Build starten" im Paketdetail
+legt einen Auftrag in `build_jobs` an (Audit `apps.package.build`); der
+Worker holt ihn per `POST /worker/builds/claim`, laedt den Installer, baut
+bei `psadt` den PSAppDeployToolkit-v4-Wrapper mit dem Registry-Marker aus
+`APP_DETECTION_PREFIX`, ruft `IntuneWinAppUtil.exe` auf, laedt das Artefakt
+hoch und meldet Protokoll und Ergebnis. Die Worker-Endpunkte unter
+`/worker` verlangen `WORKER_TOKEN` (mindestens 16 Zeichen) als Bearer und
+`X-Worker-Id`; ohne Token antworten sie mit 503 und das Paketdetail zeigt
+einen Hinweis. Ein Auftrag ohne Lebenszeichen faellt nach zwei Stunden auf
+"fehlgeschlagen". Einrichtung des Workers: `apps/worker-windows/README.md`.
 
 ## Remotehilfe (TeamViewer)
 

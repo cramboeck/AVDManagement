@@ -3,7 +3,11 @@
 Status: Stufen A, B und C umgesetzt (Bestand, Installationsstatus,
 Zuweisungen als Jobs, Bereitstellungsgruppen, Paketkatalog mit Manifest
 und Artefaktspeicher, Upload-Pipeline als Job `apps.publish`, Rollout auf
-N Tenants). Stufe D (Windows-Build-Worker) in Arbeit. Grundlage:
+N Tenants) sowie Stufe D (Windows-Build-Worker in `apps/worker-windows`,
+Auftraege in `build_jobs`, Endpunkte unter `/worker` mit `WORKER_TOKEN`,
+PSADT-v4-Wrapper aus `templates/`, Bauplan `BuildPlan` aus dem Manifest).
+Offen aus D: zip-Installer, Transforms, Signierung ist vorgesehen, aber
+ohne Zertifikat inaktiv. Grundlage:
 Modul-Standard (`docs/backlog.md`) und die Analyse von PackageFactory und
 CloudManagementPortal (beide MIT, eigener Code des Auftraggebers).
 

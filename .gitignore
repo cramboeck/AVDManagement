@@ -61,3 +61,7 @@ out/
 # Playwright
 test-results/
 playwright-report/
+
+# Build worker (DPAPI token, local work folders)
+apps/worker-windows/worker.token
+apps/worker-windows/worker.config.json

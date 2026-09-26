@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { normalizeManifest, ManifestError, buildWin32LobAppPayload, buildWinGetAppPayload, detectionKeyPath, effectiveDetectionRules, normalizeRegistryPath, packageIdentifier } from '../src/apps/manifest.js';
+import { normalizeManifest, ManifestError, buildWin32LobAppPayload, buildWinGetAppPayload, buildPlanFor, detectionKeyPath, effectiveDetectionRules, normalizeRegistryPath, packageIdentifier } from '../src/apps/manifest.js';
 
 const base = { vendor: 'Google', name: 'Chrome', version: '129.0.6668.59', installerType: 'msi', installerFileName: 'googlechromestandaloneenterprise64.msi', msiProductCode: '{12345678-1234-1234-1234-123456789012}' };
 
@@ -54,6 +54,30 @@ describe('normalizeManifest', () => {
     const p2 = buildWin32LobAppPayload(psadt, { fileName: 'tool.intunewin' }, 'ZSC');
     expect((p2.detectionRules as Record<string, unknown>[])[0]).toMatchObject({ keyPath: expect.stringMatching(/^HKEY_LOCAL_MACHINE\\SOFTWARE\\ZSC_IntuneAppInstall/), detectionType: 'string', detectionValue: 'Y' });
     expect(p2.setupFilePath).toBe('Invoke-AppDeployToolkit.ps1');
+  });
+
+  it('keeps the PSADT wrapper as Intune command line even when installer arguments are set', () => {
+    const psadt = normalizeManifest({ vendor: 'Contoso', name: 'Tool', version: '2.0', installerType: 'psadt', installerFileName: 'setup.exe', installCommand: '/S', uninstallCommand: '"C:\\Program Files\\Tool\\unins.exe" /S' });
+    const payload = buildWin32LobAppPayload(psadt, { fileName: 'tool.intunewin' }, 'ZSC');
+    expect(payload.installCommandLine).toMatch(/^powershell\.exe .*-DeploymentType Install/);
+    expect(payload.uninstallCommandLine).toMatch(/-DeploymentType Uninstall/);
+  });
+
+  it('derives a build plan for the worker', () => {
+    const psadt = normalizeManifest({ vendor: 'Contoso', name: 'Tool', version: '2.0', installerType: 'psadt', installerFileName: 'setup.exe', installCommand: '/S', processesToClose: ['tool'] });
+    const plan = buildPlanFor(psadt, { fileName: 'setup.exe', sha256: 'abc', sizeBytes: 10 }, 'ZSC', { buildId: 'b', packageId: 'p' });
+    expect(plan).toMatchObject({
+      wrapper: 'psadt',
+      setupFile: 'Invoke-AppDeployToolkit.ps1',
+      markerKeyPath: 'HKLM:\\SOFTWARE\\ZSC_IntuneAppInstall\\Apps\\Contoso-Tool-2.0-MUI-01-x64',
+      installerArguments: '/S',
+      processesToClose: ['tool'],
+      artifactFileName: 'Contoso-Tool-2.0-MUI-01-x64.intunewin',
+    });
+    const msi = normalizeManifest(base);
+    expect(buildPlanFor(msi, { fileName: base.installerFileName, sha256: 'x', sizeBytes: 1 }, 'ZSC', { buildId: 'b', packageId: 'p' })).toMatchObject({ wrapper: 'plain', setupFile: base.installerFileName, markerKeyPath: null });
+    const winget = normalizeManifest({ vendor: 'Google', name: 'Chrome', version: 'latest', installerType: 'winget', wingetPackageIdentifier: 'Google.Chrome' });
+    expect(() => buildPlanFor(winget, { fileName: 'x', sha256: 'x', sizeBytes: 1 }, 'ZSC', { buildId: 'b', packageId: 'p' })).toThrow(/nicht gebaut/);
   });
 
   it('maps a winget manifest to a winGetApp payload', () => {

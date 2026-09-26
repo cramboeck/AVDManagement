@@ -12,6 +12,7 @@ import { DrizzleAuditLogger } from '../services/audit-logger.js';
 import { createPackage, deletePackage, getPackage, listPackages, openFile, storeFile, updateManifest, detectionPrefix } from '../services/packages.js';
 import { getArtifactStore } from '../services/artifact-store.js';
 import { startRollout } from '../services/publishing.js';
+import { BuildError, enqueueBuild, listBuilds, workerTokenConfigured } from '../services/builds.js';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
 import type { CorrelationId } from '@zerostress/types';
@@ -22,7 +23,8 @@ const audit = new DrizzleAuditLogger();
 app.use('*', authMiddleware);
 
 function problem(status: number, title: string, detail?: string) {
-  return { type: `https://api.zerostress.io/problems/${status === 404 ? 'not-found' : 'validation'}`, title, status, detail };
+  const kind = status === 404 ? 'not-found' : status === 409 ? 'conflict' : 'validation';
+  return { type: `https://api.zerostress.io/problems/${kind}`, title, status, detail };
 }
 
 app.get('/', async (c) => {
@@ -122,6 +124,36 @@ app.post('/:packageId/rollout', requireRole('engineer'), zValidator('json', roll
     if (error instanceof Error && /Package not found/.test(error.message)) return c.json(problem(404, 'Package not found'), 404);
     throw error;
   }
+});
+
+// Build: Auftrag fuer den Windows-Worker anlegen (Installer + Manifest -> .intunewin)
+app.post('/:packageId/build', requireRole('engineer'), async (c) => {
+  const auth = c.get('auth');
+  const packageId = c.req.param('packageId');
+  try {
+    const { build, pkg } = await enqueueBuild(auth.mspId, packageId);
+    await audit.log({
+      mspId: auth.mspId,
+      tenantId: null,
+      userId: auth.user.id,
+      action: 'apps.package.build',
+      targetType: 'package',
+      targetId: packageId,
+      targetDisplayName: `${pkg.manifest.vendor} ${pkg.manifest.name} ${pkg.manifest.version}`,
+      afterState: { buildId: build.id, installer: pkg.installer?.fileName ?? null, installerType: pkg.manifest.installerType },
+      result: 'success',
+      correlationId: randomUUID() as CorrelationId,
+    });
+    return c.json({ ...build, workerConfigured: workerTokenConfigured() }, 202);
+  } catch (error) {
+    if (error instanceof BuildError) return c.json(problem(error.status, error.message), error.status);
+    throw error;
+  }
+});
+
+app.get('/:packageId/builds', async (c) => {
+  const auth = c.get('auth');
+  return c.json({ items: await listBuilds(auth.mspId, c.req.param('packageId')), workerConfigured: workerTokenConfigured() });
 });
 
 // Datei-Upload als roher Body (Content-Type application/octet-stream), Dateiname als Query

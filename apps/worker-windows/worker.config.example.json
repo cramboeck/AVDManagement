@@ -1,0 +1,10 @@
+{
+  "apiUrl": "https://cockpit.example.com/api",
+  "workerId": "BUILD01",
+  "workDir": "C:\\ZeroStress\\work",
+  "intuneWinAppUtilPath": "C:\\ZeroStress\\tools\\IntuneWinAppUtil.exe",
+  "psadtTemplatePath": "C:\\ZeroStress\\tools\\PSAppDeployToolkit_Template_v4",
+  "pollSeconds": 30,
+  "signingThumbprint": null,
+  "keepWorkFolders": false
+}

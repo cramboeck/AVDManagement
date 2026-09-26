@@ -7,7 +7,7 @@
  * Bauen in das Paket schreibt. Kein Parsen von Ordnernamen.
  */
 
-import type { AppDetectionRule, AppManifest, PackageArchitecture, ReturnCodeType, StoredFile } from '@zerostress/types';
+import type { AppDetectionRule, AppManifest, BuildPlan, PackageArchitecture, ReturnCodeType, StoredFile } from '@zerostress/types';
 
 export const DEFAULT_RETURN_CODES: { code: number; type: ReturnCodeType }[] = [
   { code: 0, type: 'success' },
@@ -223,25 +223,64 @@ function graphRule(rule: AppDetectionRule): Record<string, unknown> {
   }
 }
 
+export const PSADT_ENTRY_SCRIPT = 'Invoke-AppDeployToolkit.ps1';
+
+/**
+ * Intune-Kommandozeile. Bei psadt immer der Wrapper: installCommand traegt
+ * dort nur die stillen Parameter des Installers, die der Wrapper anhaengt.
+ */
 export function installCommandLine(m: AppManifest): string {
+  if (m.installerType === 'psadt') return `powershell.exe -ExecutionPolicy Bypass -NoProfile -File "${PSADT_ENTRY_SCRIPT}" -DeploymentType Install -DeployMode Silent`;
   if (m.installCommand) return m.installCommand;
-  if (m.installerType === 'psadt') return 'powershell.exe -ExecutionPolicy Bypass -NoProfile -File "Invoke-AppDeployToolkit.ps1" -DeploymentType Install -DeployMode Silent';
   if (m.installerType === 'msi') return `msiexec.exe /i "${m.installerFileName}" /qn /norestart`;
   return m.installerFileName ? `"${m.installerFileName}" /S` : '';
 }
 
 export function uninstallCommandLine(m: AppManifest): string {
+  if (m.installerType === 'psadt') return `powershell.exe -ExecutionPolicy Bypass -NoProfile -File "${PSADT_ENTRY_SCRIPT}" -DeploymentType Uninstall -DeployMode Silent`;
   if (m.uninstallCommand) return m.uninstallCommand;
-  if (m.installerType === 'psadt') return 'powershell.exe -ExecutionPolicy Bypass -NoProfile -File "Invoke-AppDeployToolkit.ps1" -DeploymentType Uninstall -DeployMode Silent';
   if (m.installerType === 'msi' && m.msiProductCode) return `msiexec.exe /x ${m.msiProductCode} /qn /norestart`;
   return installCommandLine(m);
+}
+
+/**
+ * Bauplan fuer den Windows-Worker aus Manifest und Installer. Der Worker
+ * bekommt keine Rohdaten, sondern fertige Entscheidungen: Wrapper ja/nein,
+ * Setup-Datei, Marker-Schluessel, Argumente.
+ */
+export function buildPlanFor(
+  m: AppManifest,
+  installer: Pick<StoredFile, 'fileName' | 'sha256' | 'sizeBytes'>,
+  prefix: string,
+  ids: { buildId: string; packageId: string }
+): BuildPlan {
+  if (m.installerType === 'winget' || m.installerType === 'intunewin') {
+    throw new Error(`Pakete vom Typ ${m.installerType} werden nicht gebaut`);
+  }
+  const wrapper = m.installerType === 'psadt' ? 'psadt' : 'plain';
+  const identifier = packageIdentifier(m);
+  return {
+    buildId: ids.buildId,
+    packageId: ids.packageId,
+    packageIdentifier: identifier,
+    displayName: packageDisplayName(m),
+    manifest: m,
+    installer: { fileName: installer.fileName, sha256: installer.sha256, sizeBytes: installer.sizeBytes },
+    wrapper,
+    setupFile: wrapper === 'psadt' ? PSADT_ENTRY_SCRIPT : installer.fileName,
+    markerKeyPath: wrapper === 'psadt' ? detectionKeyPath(prefix, m).replace(/^HKEY_LOCAL_MACHINE\\/, 'HKLM:\\') : null,
+    installerArguments: wrapper === 'psadt' ? (m.installCommand ?? '') : '',
+    uninstallCommand: wrapper === 'psadt' ? m.uninstallCommand : null,
+    processesToClose: m.processesToClose,
+    artifactFileName: `${identifier}.intunewin`,
+  };
 }
 
 /**
  * Graph-Objekt fuer eine Win32-App (ohne Inhalt; der kommt ueber die Content-Version).
  */
 export function buildWin32LobAppPayload(m: AppManifest, artifact: Pick<StoredFile, 'fileName'>, prefix: string): Record<string, unknown> {
-  const setupFilePath = m.installerType === 'psadt' ? 'Invoke-AppDeployToolkit.ps1' : (m.installerFileName ?? artifact.fileName);
+  const setupFilePath = m.installerType === 'psadt' ? PSADT_ENTRY_SCRIPT : (m.installerFileName ?? artifact.fileName);
   return {
     '@odata.type': '#microsoft.graph.win32LobApp',
     displayName: packageDisplayName(m),
