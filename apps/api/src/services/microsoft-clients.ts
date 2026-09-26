@@ -18,6 +18,7 @@ import {
   RemediationProvider,
   GroupProvider,
   MailProvider,
+  MailboxProvider,
   PolicyProvider,
   AppProvider,
   TeamViewerProvider,
@@ -121,6 +122,15 @@ export function getMailProvider(): MailProvider {
     mailProvider = new MailProvider(getGraphClient());
   }
   return mailProvider;
+}
+
+let mailboxProvider: MailboxProvider | null = null;
+
+export function getMailboxProvider(): MailboxProvider {
+  if (!mailboxProvider) {
+    mailboxProvider = new MailboxProvider(getGraphClient());
+  }
+  return mailboxProvider;
 }
 
 let policyProvider: PolicyProvider | null = null;

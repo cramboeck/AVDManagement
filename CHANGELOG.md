@@ -8,6 +8,13 @@ Alle nennenswerten Aenderungen an ZeroStress Cockpit. Format angelehnt an
 
 ### Hinzugefuegt
 
+- Exchange: Postfachdetail (Exchange > Postfach) mit Kennzahlen aus dem
+  Bericht, Abwesenheit, Zeitzone, Aliassen und Posteingangsregeln live aus
+  Graph; Jobs Abwesenheit setzen/ausschalten, Weiterleitungsregel anlegen,
+  Regel aktivieren/deaktivieren/loeschen mit Vorschau, Warnung bei
+  externen Zielen und Audit; Weiterleitungs-Scan ueber alle Postfaecher
+  per $batch. Plan fuer den Exchange-Worker (Kontingente, Berechtigungen,
+  Weiterleitung auf Postfachebene) in docs/implementation.
 - Apps: Windows-Build-Worker (`apps/worker-windows`) mit Auftragsqueue
   `build_jobs`, Worker-Endpunkten unter `/worker` (Bearer `WORKER_TOKEN`),
   PSAppDeployToolkit-v4-Wrapper aus Manifest und Registry-Marker,

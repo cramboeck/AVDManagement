@@ -237,8 +237,34 @@ haelt sie sechs Stunden im Snapshot. Die Berichte laufen etwa 48 Stunden
 nach. Verbirgt der Tenant Namen in Berichten (Microsoft 365 Admin Center >
 Einstellungen > Organisationseinstellungen > Berichte), erscheinen UPNs als
 Hash; die Seite weist darauf hin. Jeder Abruf der Postfachliste steht im
-Audit (`mail.usage.view`), weil sie personenbezogen ist. Weiterleitungen,
-Delegierungen und Regeln brauchen Exchange-PowerShell und sind noch offen.
+Audit (`mail.usage.view`), weil sie personenbezogen ist.
+
+**Postfachdetail** (Klick auf ein Postfach, `/mail/<upn>`): Kennzahlen aus
+dem Bericht plus live aus Graph Abwesenheit (Status, Zeitraum, Texte),
+Zeitzone, Sprache, Aliasse und die Posteingangsregeln mit Bedingungen und
+Aktionen. Regeln mit Weiterleitung oder Umleitung an Adressen ausserhalb
+der verifizierten Tenant-Domaenen sind rot markiert. Aufruf im Audit
+(`mail.mailbox.view`). Braucht `MailboxSettings.ReadWrite` (nach dem
+Hinzufuegen Consent erneuern).
+
+Aenderungen sind Jobs mit Vorschau, Freigabe (Engineer) und Audit:
+`mailbox.set-auto-reply` (sofort oder geplant, externe Antwort an
+niemanden/Kontakte/alle), `mailbox.create-forward-rule` (Posteingangsregel
+weiterleiten oder umleiten, warnt bei fremden Domaenen),
+`mailbox.enable-rule`, `mailbox.disable-rule`, `mailbox.delete-rule`.
+Schreibgeschuetzte Regeln (vom Client verwaltet) werden abgelehnt.
+
+**Weiterleitungs-Scan** (Panel "Weiterleitungen" auf der Exchange-Seite):
+liest per `$batch` die Regeln aller Benutzer- und freigegebenen Postfaecher
+aus dem Bericht (bis 1000 je Lauf) und listet alle mit Weiterleitung,
+externe zuerst. Audit `mail.forwarding.scan`. Hinweis: Exchange stellt
+externe Weiterleitungen nur zu, wenn die Outbound-Spam-Richtlinie das
+erlaubt; das Cockpit kann diese Richtlinie noch nicht lesen.
+
+Kontingente aendern, Weiterleitung auf Postfachebene, Vollzugriff/Senden
+als, Archiv und Umwandlung in freigegebene Postfaecher gehen nur ueber
+Exchange-PowerShell; dafuer ist ein Exchange-Worker geplant
+(`docs/implementation/exchange-module-plan.md`).
 
 ## SharePoint und OneDrive
 
@@ -376,6 +402,8 @@ Secret ab (`AADSTS700025`).
 | `DeviceManagementApps.ReadWrite.All` | Apps: Bestand, Installationsstatus, Zuweisungen als Jobs (Seite Apps) | Karte "Berechtigung fehlt" |
 | `Group.ReadWrite.All` | Mitglieder und Besitzer von Gruppen aendern (Gruppe > Mitglied hinzufuegen/entfernen, Benutzer > Gruppen > Entfernen), Bereitstellungsgruppen je App anlegen | Jobs schlagen mit 403 fehl |
 | `Policy.Read.All` | Best-Practice-Checks: Conditional Access, Sicherheitsstandards, Authentifizierungsmethoden, Autorisierungsrichtlinie (Sicherheit > Best Practices) | Betroffene Checks "nicht pruefbar" |
+| `MailboxSettings.ReadWrite` | Postfachdetail: Abwesenheit, Zeitzone, Posteingangsregeln lesen; Jobs Abwesenheit setzen, Weiterleitungsregel anlegen, Regel aktivieren/deaktivieren/loeschen; Weiterleitungs-Scan (Exchange > Postfach) | Karte "Berechtigung fehlt" im Postfachdetail, Jobs schlagen mit 403 fehl |
+| `Organization.Read.All` (optional) | Verifizierte Domaenen des Tenants fuer die Einstufung "externe Weiterleitung"; fehlt sie, gelten die Domaenen der Postfaecher als intern | Einstufung etwas grober |
 
 Schluessel und Passwoerter werden nie gelistet oder exportiert: Anzeige nur
 nach Begruendung (mindestens 10 Zeichen), Rolle Engineer, Audit-Eintrag mit

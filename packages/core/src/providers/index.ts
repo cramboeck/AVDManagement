@@ -15,6 +15,7 @@ export * from './security-provider.js';
 export * from './remediation-provider.js';
 export * from './group-provider.js';
 export * from './mail-provider.js';
+export * from './mailbox-provider.js';
 export * from './policy-provider.js';
 export * from './app-provider.js';
 export * from './remote-support-provider.js';

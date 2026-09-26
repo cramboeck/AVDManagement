@@ -681,6 +681,79 @@ export interface MailOverviewSet {
 
 export type MailOverview = CapabilityResult<MailOverviewSet> & { snapshot?: SnapshotMeta };
 
+// Postfachdetail: Einstellungen und Posteingangsregeln live aus Graph
+// (MailboxSettings.Read / MailboxSettings.ReadWrite)
+
+export type AutoReplyStatus = 'disabled' | 'alwaysEnabled' | 'scheduled';
+export type AutoReplyAudience = 'none' | 'contactsOnly' | 'all';
+
+export interface MailboxAutoReply {
+  status: AutoReplyStatus;
+  externalAudience: AutoReplyAudience;
+  scheduledStart: string | null;
+  scheduledEnd: string | null;
+  internalMessage: string;
+  externalMessage: string;
+}
+
+export interface MailboxSettingsInfo {
+  autoReply: MailboxAutoReply;
+  timeZone: string | null;
+  language: string | null;
+  // user, shared, room, equipment, others, unknown
+  userPurpose: string | null;
+}
+
+export type InboxRuleActionKind = 'forward' | 'forwardAsAttachment' | 'redirect' | 'delete' | 'move' | 'markAsRead' | 'permanentDelete' | 'other';
+
+export interface InboxRuleAction {
+  kind: InboxRuleActionKind;
+  recipients: string[];
+}
+
+export interface InboxRule {
+  id: string;
+  displayName: string;
+  sequence: number;
+  isEnabled: boolean;
+  hasError: boolean;
+  isReadOnly: boolean;
+  actions: InboxRuleAction[];
+  conditions: string[];
+  // Alle Adressen, an die die Regel weiterleitet oder umleitet
+  forwardsTo: string[];
+  // Mindestens ein Ziel liegt ausserhalb der Tenant-Domaenen
+  forwardsExternally: boolean;
+}
+
+export interface MailboxDetail {
+  userPrincipalName: string;
+  displayName: string;
+  userId: string | null;
+  mail: string | null;
+  aliases: string[];
+  accountEnabled: boolean | null;
+  // Aus dem Nutzungsbericht (Snapshot), null wenn dort nicht enthalten
+  usage: MailboxUsage | null;
+  settings: CapabilityResult<MailboxSettingsInfo>;
+  rules: CapabilityResult<InboxRule[]>;
+}
+
+export interface ForwardingFinding {
+  userPrincipalName: string;
+  displayName: string;
+  rule: InboxRule;
+}
+
+export interface ForwardingScan {
+  scannedMailboxes: number;
+  failedMailboxes: number;
+  tenantDomains: string[];
+  findings: ForwardingFinding[];
+  externalCount: number;
+  scannedAt: string;
+}
+
 // ============================================
 // Apps: Paketkatalog (Stufe C) und Build-Worker (Stufe D)
 // ============================================

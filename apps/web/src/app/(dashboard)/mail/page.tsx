@@ -1,7 +1,9 @@
 'use client';
 
+import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import clsx from 'clsx';
+import { ForwardingScanPanel } from '@/components/mail/forwarding-scan';
 import { useTenant } from '@/hooks/use-tenant';
 import { api } from '@/lib/api';
 import { LoadingTable } from '@/components/ui/loading';
@@ -54,7 +56,9 @@ const columns: ColumnDef<MailboxUsage>[] = [
     accessor: (m) => m.displayName,
     cell: (m) => (
       <>
-        <span className="block font-medium">{m.displayName}</span>
+        <Link href={`/mail/${encodeURIComponent(m.userPrincipalName)}`} className="block font-medium hover:underline">
+          {m.displayName}
+        </Link>
         <span className="block truncate text-xs text-muted-foreground">{m.userPrincipalName}</span>
       </>
     ),
@@ -151,7 +155,7 @@ export default function MailPage() {
         <div>
           <h1 className="text-2xl font-semibold">Exchange Online</h1>
           <p className="text-sm text-muted-foreground">
-            Postfaecher mit Groesse und Kontingent, Aktivitaet und Mailvolumen aus den Microsoft-Nutzungsberichten. Die Berichte laufen etwa zwei Tage nach.
+            Postfaecher mit Groesse und Kontingent, Aktivitaet und Mailvolumen aus den Microsoft-Nutzungsberichten (etwa zwei Tage Verzug). Ein Klick auf ein Postfach zeigt Abwesenheit, Aliasse und Posteingangsregeln live.
           </p>
         </div>
         <SnapshotStatus tenantId={activeTenant.id} kinds={['mail']} invalidate={[['mail', activeTenant.id]]} />
@@ -214,6 +218,8 @@ export default function MailPage() {
               )}
             </ChartCard>
           </div>
+
+          <ForwardingScanPanel tenantId={activeTenant.id} />
 
           {overview.data.mailboxes.length === 0 ? (
             <EmptyState title="Keine Postfaecher" description="Der Bericht enthaelt keine Postfaecher. Ohne Exchange Online im Tenant bleibt diese Seite leer." />
