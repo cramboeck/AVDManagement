@@ -216,6 +216,19 @@ Audit (`device.connections.view`, `network.connections.view`). Braucht die
 Defender-Berechtigung `AdvancedQuery.Read.All`; Defender for Business
 liefert diese Daten nicht.
 
+**Regelvorschlag Firewall** (Netzwerk > Regelvorschlag): die externen
+Ziele werden gegen die oeffentliche Microsoft-365-Endpunktliste
+(`endpoints.office.com`, einmal am Tag geladen, Version wird angezeigt)
+und eine kurze Liste bekannter Ziele (Windows Update, Defender, Intune,
+Google, Adobe, TeamViewer, CDNs) abgeglichen und zu Gruppen zusammengefasst:
+Microsoft 365 je Dienst mit Kategorie Optimize/Allow/Default und
+"erforderlich", Microsoft-Dienste, bekannte Hersteller, sonstige Domaenen
+und nackte IPs. Je Gruppe stehen Ziele, Ports, Geraetezahl und Prozesse als
+Beleg; Export als CSV. Es wird nichts konfiguriert. Audit
+`network.firewall-proposal.view`. Die API braucht dafuer ausgehenden
+Zugriff auf `endpoints.office.com`; ohne ihn fehlt die M365-Zuordnung und
+die Seite sagt das.
+
 ## Remotehilfe (TeamViewer)
 
 Mit `TEAMVIEWER_API_TOKEN` (Skript-Token aus der TeamViewer Management

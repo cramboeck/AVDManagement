@@ -439,6 +439,40 @@ export interface ConnectionReport {
 
 export type ConnectionResult = CapabilityResult<ConnectionReport>;
 
+// Regelvorschlag fuer ausgehende Firewall-Regeln aus den Verbindungsdaten
+
+export type FirewallRuleKind = 'microsoft365' | 'microsoft' | 'known-vendor' | 'other';
+
+export interface FirewallRule {
+  id: string;
+  kind: FirewallRuleKind;
+  // Anzeigename der Gruppe, z. B. "Microsoft 365: Exchange Online" oder "update.code.visualstudio.com"
+  name: string;
+  // Microsoft-Kategorie Optimize/Allow/Default, sonst null
+  m365Category: string | null;
+  required: boolean | null;
+  destinations: string[];
+  ports: number[];
+  devices: number;
+  connections: number;
+  processes: string[];
+  lastSeen: string | null;
+  note: string | null;
+}
+
+export interface FirewallProposal {
+  days: number;
+  generatedAt: string;
+  endpointsVersion: string | null;
+  rules: FirewallRule[];
+  // Ziele ohne Hostname, die keiner Regel zugeordnet werden konnten
+  unmatchedIps: number;
+  totalDestinations: number;
+}
+
+export type FirewallProposalResult = CapabilityResult<FirewallProposal>;
+
+
 export interface DeviceNetworkInfo {
   lastIpAddress: string | null;
   lastExternalIpAddress: string | null;

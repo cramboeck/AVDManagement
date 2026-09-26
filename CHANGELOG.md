@@ -16,6 +16,10 @@ Alle nennenswerten Aenderungen an ZeroStress Cockpit. Format angelehnt an
 - Geraete und Netzwerk: Verbindungsanalyse aus Defender Advanced Hunting
   (Tab Verbindungen je Geraet, Kommunikation der Clients extern/intern
   tenantweit) mit Host, Ports, Prozessen, Richtung und Geraetezahl.
+- Netzwerk: Regelvorschlag fuer ausgehende Firewall-Regeln aus den externen
+  Zielen, abgeglichen gegen die Microsoft-365-Endpunktliste (Kategorie,
+  erforderlich) und bekannte Hersteller, mit Geraetezahl, Ports, Prozessen
+  und CSV-Export.
 - Roadmap: Azure-VMs verwalten und aus Vorlagen bereitstellen.
 - Apps: winget als Installerquelle. Pakete vom Typ winget loesen ihr
   Manifest aus microsoft/winget-pkgs auf (Basis-Set, Blaettern nach
