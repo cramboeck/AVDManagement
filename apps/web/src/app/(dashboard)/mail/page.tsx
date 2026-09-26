@@ -57,9 +57,16 @@ const columns: ColumnDef<MailboxUsage>[] = [
     accessor: (m) => m.displayName,
     cell: (m) => (
       <>
-        <Link href={`/mail/${encodeURIComponent(m.userPrincipalName)}`} className="block font-medium hover:underline">
-          {m.displayName}
-        </Link>
+        {m.userPrincipalName.includes('@') ? (
+          <Link href={`/mail/${encodeURIComponent(m.userPrincipalName)}`} className="block font-medium hover:underline">
+            {m.displayName}
+          </Link>
+        ) : (
+          // Verborgene Namen (Hash ohne @) lassen sich keinem Postfach zuordnen; dann kein Link
+          <span className="block font-medium" title="Der Bericht verbirgt Namen; Postfachdetail erst nach Umstellung im Admin Center">
+            {m.displayName}
+          </span>
+        )}
         <span className="block truncate text-xs text-muted-foreground">{m.userPrincipalName}</span>
       </>
     ),
@@ -172,8 +179,9 @@ export default function MailPage() {
         <>
           {overview.data.anonymised && (
             <p className="rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-sm">
-              Dieser Tenant verbirgt Namen in Berichten. Zum Anzeigen im Microsoft 365 Admin Center unter Einstellungen &gt; Organisationseinstellungen &gt;
-              Berichte die Option &quot;Anzeigenamen verbergen&quot; deaktivieren.
+              Dieser Tenant verbirgt Namen in Berichten; Postfaecher lassen sich deshalb nicht oeffnen. Zum Anzeigen im Microsoft 365 Admin Center unter
+              Einstellungen &gt; Organisationseinstellungen &gt; Berichte die Option &quot;Anzeigenamen verbergen&quot; deaktivieren, danach hier
+              &quot;Jetzt aktualisieren&quot;.
             </p>
           )}
 

@@ -25,6 +25,19 @@ app.use('*', tenantContextMiddleware);
 
 const UPN = /^[^\s@\/\\]{1,64}@[A-Za-z0-9.-]{1,255}$/;
 
+/** Ein Wert ohne @ ist meist ein verborgener Name aus dem Bericht, kein Tippfehler. */
+function invalidUpn(value: string) {
+  const hidden = !value.includes('@');
+  return {
+    type: 'https://api.zerostress.io/problems/validation',
+    title: hidden ? 'Postfach nicht zuordenbar: der Bericht verbirgt Namen' : 'UPN ungueltig',
+    status: 400,
+    detail: hidden
+      ? 'Der Tenant verbirgt Benutzernamen in Berichten (Microsoft 365 Admin Center > Einstellungen > Organisationseinstellungen > Berichte > "Anzeigenamen verbergen"). Option deaktivieren, dann unter Exchange "Jetzt aktualisieren".'
+      : `'${value}' ist kein User Principal Name`,
+  };
+}
+
 // Postfachliste ist personenbezogen (wer wie viel Mail), daher jeder Abruf im Audit
 app.get('/', requireConnectedTenant, async (c) => {
   const tenant = c.get('tenant');
@@ -74,7 +87,7 @@ app.get('/mailboxes/:upn', requireConnectedTenant, async (c) => {
   const tenant = c.get('tenant');
   const auth = c.get('auth');
   const upn = c.req.param('upn');
-  if (!UPN.test(upn)) return c.json({ type: 'https://api.zerostress.io/problems/validation', title: 'UPN ungueltig', status: 400 }, 400);
+  if (!UPN.test(upn)) return c.json(invalidUpn(upn), 400);
   const correlationId = (c.req.header('X-Correlation-ID') ?? randomUUID()) as CorrelationId;
   const detail = await getMailboxDetail(tenant, upn, correlationId);
   await audit.log({
@@ -130,14 +143,14 @@ async function createMailboxJob(c: Context, type: string, upn: string, payload: 
 
 app.post('/mailboxes/:upn/auto-reply', requireRole('engineer'), requireConnectedTenant, zValidator('json', autoReplySchema), async (c) => {
   const upn = c.req.param('upn');
-  if (!UPN.test(upn)) return c.json({ type: 'https://api.zerostress.io/problems/validation', title: 'UPN ungueltig', status: 400 }, 400);
+  if (!UPN.test(upn)) return c.json(invalidUpn(upn), 400);
   const body = c.req.valid('json');
   return createMailboxJob(c, 'mailbox.set-auto-reply', upn, body, `${body.displayName}: Abwesenheit ${body.status === 'disabled' ? 'aus' : 'an'}`);
 });
 
 app.post('/mailboxes/:upn/rules', requireRole('engineer'), requireConnectedTenant, zValidator('json', forwardRuleSchema), async (c) => {
   const upn = c.req.param('upn');
-  if (!UPN.test(upn)) return c.json({ type: 'https://api.zerostress.io/problems/validation', title: 'UPN ungueltig', status: 400 }, 400);
+  if (!UPN.test(upn)) return c.json(invalidUpn(upn), 400);
   const body = c.req.valid('json');
   return createMailboxJob(c, 'mailbox.create-forward-rule', upn, body, `${body.displayName}: Weiterleitung an ${body.addresses.join(', ')}`);
 });
@@ -146,7 +159,7 @@ const ruleActions: Record<string, string> = { enable: 'mailbox.enable-rule', dis
 
 app.post('/mailboxes/:upn/rules/:ruleId/:action{enable|disable|delete}', requireRole('engineer'), requireConnectedTenant, zValidator('json', ruleSchema), async (c) => {
   const upn = c.req.param('upn');
-  if (!UPN.test(upn)) return c.json({ type: 'https://api.zerostress.io/problems/validation', title: 'UPN ungueltig', status: 400 }, 400);
+  if (!UPN.test(upn)) return c.json(invalidUpn(upn), 400);
   const body = c.req.valid('json');
   const ruleId = c.req.param('ruleId');
   return createMailboxJob(c, ruleActions[c.req.param('action')], upn, { ...body, ruleId }, `${body.displayName}: Regel ${body.ruleName}`);
@@ -196,7 +209,7 @@ const exchangeSchemas: Record<string, { type: string; schema: z.ZodTypeAny; labe
 
 app.post('/mailboxes/:upn/exchange/:action{quota|forwarding|full-access|send-as|archive|convert|hold}', requireRole('engineer'), requireConnectedTenant, async (c) => {
   const upn = c.req.param('upn');
-  if (!UPN.test(upn)) return c.json({ type: 'https://api.zerostress.io/problems/validation', title: 'UPN ungueltig', status: 400 }, 400);
+  if (!UPN.test(upn)) return c.json(invalidUpn(upn), 400);
   const def = exchangeSchemas[c.req.param('action')];
   const parsed = def.schema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return c.json({ type: 'https://api.zerostress.io/problems/validation', title: 'Eingabe ungueltig', status: 400, detail: parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ') }, 400);

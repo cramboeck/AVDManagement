@@ -93,6 +93,10 @@ Alle nennenswerten Aenderungen an ZeroStress Cockpit. Format angelehnt an
 
 ### Geaendert
 
+- Exchange: verbirgt der Tenant Namen in Berichten (UPN als Hash ohne @),
+  bleibt die Postfachzeile ohne Link und die API erklaert statt "UPN
+  ungueltig", wo die Einstellung "Anzeigenamen verbergen" sitzt.
+
 - Geraete: das Softwareinventar aus Intune wird ueber Graph beta gelesen
   (v1.0 kennt `detectedApps` nicht; Fehler "Resource not found for the
   segment 'detectedApps'"). Faellt eine Quelle aus, bleibt die andere im
