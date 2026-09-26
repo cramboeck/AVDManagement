@@ -8,6 +8,7 @@ import type { MailboxOperations } from '@zerostress/core';
 import type { CapabilityResult, ForwardingScan, MailboxDetail, MailboxUsage, ManagedTenant, TenantId } from '@zerostress/types';
 import { getMailboxProvider } from './microsoft-clients.js';
 import { getMailOverview } from './inventory.js';
+import { mailboxExchangeInfo } from './exchange.js';
 
 function ctxFor(tenantId: TenantId, correlationId?: string) {
   return { tenantId, correlationId: correlationId ?? randomUUID() };
@@ -24,8 +25,8 @@ export async function getMailboxDetail(tenant: ManagedTenant, upn: string, corre
   const provider = getMailboxProvider();
   const ctx = ctxFor(tenant.id, correlationId);
   const { usage, all } = await usageFor(tenant, upn);
-  const domains = await provider.getTenantDomains(ctx, all.map((m) => m.userPrincipalName));
-  return provider.getMailboxDetail(ctx, upn, usage, domains);
+  const [domains, exchange] = await Promise.all([provider.getTenantDomains(ctx, all.map((m) => m.userPrincipalName)), mailboxExchangeInfo(tenant.id, upn)]);
+  return provider.getMailboxDetail(ctx, upn, usage, domains, exchange);
 }
 
 /**

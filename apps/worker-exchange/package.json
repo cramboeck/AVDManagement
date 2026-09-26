@@ -1,0 +1,6 @@
+{
+  "name": "@zerostress/worker-exchange",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Exchange worker: mailbox operations through Exchange Online PowerShell (no Node runtime)"
+}

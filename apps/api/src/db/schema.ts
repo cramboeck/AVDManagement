@@ -241,6 +241,36 @@ export const buildJobs = pgTable('build_jobs', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
+// Auftraege fuer den Exchange-Worker (Exchange Online PowerShell)
+export const exchangeJobs = pgTable('exchange_jobs', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  mspId: uuid('msp_id').notNull().references(() => mspOrganizations.id),
+  tenantId: uuid('tenant_id').notNull().references(() => managedTenants.id),
+  operation: varchar('operation', { length: 40 }).notNull(),
+  parameters: jsonb('parameters').notNull(),
+  status: varchar('status', { length: 20 }).notNull().default('queued'),
+  workerId: varchar('worker_id', { length: 100 }),
+  claimedAt: timestamp('claimed_at', { withTimezone: true }),
+  finishedAt: timestamp('finished_at', { withTimezone: true }),
+  log: text('log'),
+  error: text('error'),
+  result: jsonb('result'),
+  // Cockpit-Job, der auf diesen Auftrag wartet
+  jobId: uuid('job_id'),
+  createdBy: uuid('created_by').references(() => mspUsers.id),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+// Zuletzt vom Exchange-Worker gesammelte Postfachdaten je Tenant
+export const exchangeFacts = pgTable('exchange_facts', {
+  tenantId: uuid('tenant_id')
+    .primaryKey()
+    .references(() => managedTenants.id, { onDelete: 'cascade' }),
+  payload: jsonb('payload').notNull(),
+  collectedAt: timestamp('collected_at', { withTimezone: true }).notNull(),
+  workerId: varchar('worker_id', { length: 100 }).notNull(),
+});
+
 // ============================================
 // AVD-Tabellen (Azure Virtual Desktop)
 // ============================================

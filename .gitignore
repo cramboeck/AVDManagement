@@ -65,3 +65,7 @@ playwright-report/
 # Build worker (DPAPI token, local work folders)
 apps/worker-windows/worker.token
 apps/worker-windows/worker.config.json
+
+# Exchange worker (DPAPI token, local config)
+apps/worker-exchange/worker.token
+apps/worker-exchange/worker.config.json

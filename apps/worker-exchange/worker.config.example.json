@@ -1,0 +1,8 @@
+{
+  "apiUrl": "https://cockpit.example.com/api",
+  "workerId": "EXO01",
+  "appId": "00000000-0000-0000-0000-000000000000",
+  "certificateThumbprint": "ABCDEF0123456789ABCDEF0123456789ABCDEF01",
+  "certificateFilePath": null,
+  "pollSeconds": 30
+}

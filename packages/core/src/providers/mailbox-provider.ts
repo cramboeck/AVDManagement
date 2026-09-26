@@ -18,6 +18,7 @@ import type {
   InboxRuleAction,
   MailboxAutoReply,
   MailboxDetail,
+  MailboxExchangeInfo,
   MailboxSettingsInfo,
   MailboxUsage,
 } from '@zerostress/types';
@@ -312,7 +313,7 @@ export class MailboxProvider extends BaseResourceProvider {
   /**
    * Postfachdetail: Verzeichnisdaten, Einstellungen und Regeln; Nutzung aus dem Snapshot.
    */
-  async getMailboxDetail(ctx: ProviderContext, upn: string, usage: MailboxUsage | null, tenantDomains: string[]): Promise<MailboxDetail | null> {
+  async getMailboxDetail(ctx: ProviderContext, upn: string, usage: MailboxUsage | null, tenantDomains: string[], exchange: MailboxExchangeInfo = { collectedAt: null, autoForwardingMode: null, facts: null }): Promise<MailboxDetail | null> {
     const user = await this.findUser(ctx, upn);
     if (!user && !usage) return null;
     const userId = user?.id ?? null;
@@ -336,7 +337,26 @@ export class MailboxProvider extends BaseResourceProvider {
       usage,
       settings,
       rules,
+      exchange,
     };
+  }
+
+  /** Initiale .onmicrosoft.com-Domaene (fuer Connect-ExchangeOnline -Organization). */
+  async getInitialDomain(ctx: ProviderContext): Promise<string | null> {
+    this.validateContext(ctx);
+    try {
+      const org = await this.graphClient.get<GraphResponse<Array<{ verifiedDomains?: Array<{ name?: string; isInitial?: boolean }> }>>>(ctx.tenantId as string, '/organization?$select=verifiedDomains', ['Organization.Read.All', 'Directory.Read.All']);
+      for (const o of org.value ?? []) {
+        const initial = (o.verifiedDomains ?? []).find((d) => d.isInitial && d.name);
+        if (initial?.name) return initial.name.toLowerCase();
+        const onmicrosoft = (o.verifiedDomains ?? []).find((d) => d.name?.toLowerCase().endsWith('.onmicrosoft.com'));
+        if (onmicrosoft?.name) return onmicrosoft.name.toLowerCase();
+      }
+      return null;
+    } catch (error) {
+      if (error instanceof GraphApiError) return null;
+      throw error;
+    }
   }
 
   async setAutoReply(ctx: ProviderContext, userId: string, input: AutoReplyInput): Promise<void> {

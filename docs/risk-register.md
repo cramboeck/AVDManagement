@@ -209,7 +209,7 @@
 | **Auswirkung** | Hoch |
 | **Risiko-Level** | Mittel |
 | **Fruehwarnindikator** | Claims von unbekannten `X-Worker-Id`; Builds, die ohne Log-Zeilen abgeschlossen werden |
-| **Gegenmassnahme** | Token nur in Umgebungsvariable oder DPAPI-Datei, nie in Konfig oder Repo; Worker sieht nur den Auftrag, den er haelt; Artefakt-Hash wird beim Upload gebildet und in der Vorschau gezeigt. Vor dem Mehr-MSP-Betrieb: Token je MSP mit Bindung der Auftraege an den MSP, Rotation, Worker-Registrierung |
+| **Gegenmassnahme** | Token nur in Umgebungsvariable oder DPAPI-Datei, nie in Konfig oder Repo; Worker sieht nur den Auftrag, den er haelt; Artefakt-Hash wird beim Upload gebildet und in der Vorschau gezeigt. Gilt ebenso fuer den Exchange-Worker, der mit demselben Token Auftraege aller Tenants der Installation holt und mit Exchange-Administrator-Rechten arbeitet. Vor dem Mehr-MSP-Betrieb: Token je MSP mit Bindung der Auftraege an den MSP, Rotation, Worker-Registrierung |
 
 ### SEC-006: Installer-Download vom Hersteller durch den Worker
 

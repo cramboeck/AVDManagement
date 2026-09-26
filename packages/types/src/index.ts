@@ -800,6 +800,84 @@ export interface MailboxDetail {
   usage: MailboxUsage | null;
   settings: CapabilityResult<MailboxSettingsInfo>;
   rules: CapabilityResult<InboxRule[]>;
+  // Aus dem Exchange-Worker (Kontingente, Weiterleitung auf Postfachebene, Berechtigungen)
+  exchange: MailboxExchangeInfo;
+}
+
+// Exchange-Worker: Daten und Operationen, die nur Exchange-PowerShell liefert
+
+export type ExchangeOperation =
+  | 'collect-facts'
+  | 'set-quota'
+  | 'set-forwarding'
+  | 'set-full-access'
+  | 'set-send-as'
+  | 'enable-archive'
+  | 'convert-mailbox'
+  | 'set-litigation-hold';
+
+export type ExchangeJobStatus = 'queued' | 'claimed' | 'running' | 'succeeded' | 'failed';
+
+export interface ExchangeMailboxFacts {
+  userPrincipalName: string;
+  displayName: string;
+  primarySmtpAddress: string;
+  recipientTypeDetails: string;
+  forwardingSmtpAddress: string | null;
+  forwardingAddress: string | null;
+  deliverToMailboxAndForward: boolean;
+  issueWarningQuota: string | null;
+  prohibitSendQuota: string | null;
+  prohibitSendReceiveQuota: string | null;
+  archiveStatus: string | null;
+  litigationHoldEnabled: boolean;
+  litigationHoldDuration: string | null;
+  retentionPolicy: string | null;
+  hiddenFromAddressLists: boolean;
+  auditEnabled: boolean | null;
+  fullAccess: string[];
+  sendAs: string[];
+  sendOnBehalf: string[];
+}
+
+export interface ExchangeFacts {
+  collectedAt: string;
+  workerId: string;
+  // AutomaticForwardingMode der Standard-Outbound-Spam-Richtlinie: Off, On, Automatic
+  autoForwardingMode: string | null;
+  mailboxes: ExchangeMailboxFacts[];
+}
+
+export interface ExchangeJobRecord {
+  id: string;
+  tenantId: string;
+  operation: ExchangeOperation;
+  parameters: Record<string, unknown>;
+  status: ExchangeJobStatus;
+  workerId: string | null;
+  log: string | null;
+  error: string | null;
+  result: Record<string, unknown> | null;
+  createdAt: string;
+  finishedAt: string | null;
+}
+
+/** Auftrag, wie ihn der Exchange-Worker beim Claim bekommt. */
+export interface ExchangeWorkerClaim {
+  jobId: string;
+  tenantId: string;
+  microsoftTenantId: string;
+  // .onmicrosoft.com-Domaene fuer Connect-ExchangeOnline -Organization
+  organization: string;
+  operation: ExchangeOperation;
+  parameters: Record<string, unknown>;
+}
+
+export interface MailboxExchangeInfo {
+  // null: noch keine Daten vom Worker fuer diesen Tenant
+  collectedAt: string | null;
+  autoForwardingMode: string | null;
+  facts: ExchangeMailboxFacts | null;
 }
 
 export interface ForwardingFinding {

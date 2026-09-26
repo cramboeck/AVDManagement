@@ -1,8 +1,10 @@
 # Modul "Exchange Online" — Plan
 
-Status: Stufe E0 (Nutzungsberichte) und E1 (Postfachdetail, Abwesenheit,
-Posteingangsregeln, Weiterleitungs-Scan) umgesetzt. Stufe E2 (Exchange-
-Worker fuer alles, was nur PowerShell kann) geplant, siehe unten.
+Status: Stufe E0 (Nutzungsberichte), E1 (Postfachdetail, Abwesenheit,
+Posteingangsregeln, Weiterleitungs-Scan) und E2 (Exchange-Worker mit
+Postfachdaten und Aenderungen auf Postfachebene) umgesetzt. Offen aus E2:
+Transportregeln, Outbound-Spam-Richtlinie aendern, Aufbewahrungsrichtlinien
+zuweisen, Verteilergruppen, Token je MSP.
 
 ## Was Graph kann und was nicht
 
@@ -50,7 +52,28 @@ Moduls werden nicht direkt angesprochen.
 - Web: `/mail/[upn]` mit Kennzahlen, Abwesenheit, Adressen, Regeln und
   Aktionen; Panel "Weiterleitungen" auf der Exchange-Seite.
 
-## E2: Exchange-Worker (geplant)
+## E2: Exchange-Worker (umgesetzt)
+
+- Tabellen `exchange_jobs` (Auftrag mit Operation, Parametern, Status,
+  Worker, Protokoll, Ergebnis, Cockpit-Job) und `exchange_facts` (zuletzt
+  gesammelte Postfachdaten je Tenant).
+- Worker `apps/worker-exchange` (PowerShell 5.1/7, ExchangeOnlineManagement
+  3.x, app-only mit Zertifikat): Endpunkte `/worker/exchange/claim`,
+  `/log`, `/complete` mit `WORKER_TOKEN`; Positivliste `collect-facts`,
+  `set-quota`, `set-forwarding`, `set-full-access`, `set-send-as`,
+  `enable-archive`, `convert-mailbox`, `set-litigation-hold`; Parameter
+  werden in Core und im Worker geprueft; Organisation = initiale
+  .onmicrosoft.com-Domaene aus Graph.
+- Cockpit-Jobs `mailbox.set-quota`, `mailbox.set-forwarding`,
+  `mailbox.set-full-access`, `mailbox.set-send-as`, `mailbox.enable-archive`,
+  `mailbox.convert`, `mailbox.set-litigation-hold` (Vorschau aus
+  `exchange_facts`, Warnungen zu Lizenz, externer Weiterleitung, Datenschutz)
+  und `exchange.collect-facts`; der Job wartet bis 20 Minuten auf den Worker.
+- Web: Abschnitt "Exchange-Einstellungen (Worker)" im Postfachdetail mit
+  Aktionen, Panel "Exchange-Worker" auf der Exchange-Seite mit Sammeln,
+  Stand, Weiterleitungen auf Postfachebene und letzten Auftraegen.
+
+## E2: Exchange-Worker (urspruenglicher Plan)
 
 Gleiches Muster wie der Build-Worker: ein Dienst des MSP, der Auftraege bei
 der API abholt, mit eigener Identitaet gegen Exchange arbeitet und

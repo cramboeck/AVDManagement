@@ -332,10 +332,22 @@ externe zuerst. Audit `mail.forwarding.scan`. Hinweis: Exchange stellt
 externe Weiterleitungen nur zu, wenn die Outbound-Spam-Richtlinie das
 erlaubt; das Cockpit kann diese Richtlinie noch nicht lesen.
 
-Kontingente aendern, Weiterleitung auf Postfachebene, Vollzugriff/Senden
-als, Archiv und Umwandlung in freigegebene Postfaecher gehen nur ueber
-Exchange-PowerShell; dafuer ist ein Exchange-Worker geplant
-(`docs/implementation/exchange-module-plan.md`).
+**Exchange-Worker** (`apps/worker-exchange`): Kontingente, Weiterleitung
+auf Postfachebene, Vollzugriff und Senden als, Archiv, Postfachtyp und
+Beweissicherung gehen nur ueber Exchange-PowerShell. Der Worker laeuft auf
+einer Maschine des MSP mit dem Modul ExchangeOnlineManagement und meldet
+sich app-only mit Zertifikat an (`Exchange.ManageAsApp`, Rolle Exchange
+Administrator fuer den Service Principal im Kundentenant); das Zertifikat
+bleibt beim Worker. Auf der Exchange-Seite startet "Postfachdaten sammeln"
+den Job `exchange.collect-facts`; danach zeigt das Postfachdetail den
+Abschnitt "Exchange-Einstellungen" mit Ist-Zustand und Aktionen, jede als
+Job mit Vorschau, Freigabe und Audit (`mailbox.set-quota`,
+`mailbox.set-forwarding`, `mailbox.set-full-access`, `mailbox.set-send-as`,
+`mailbox.enable-archive`, `mailbox.convert`, `mailbox.set-litigation-hold`).
+Der Job wartet bis 20 Minuten auf die Rueckmeldung des Workers; ohne Worker
+bleibt der Auftrag in `exchange_jobs` stehen und der Job meldet das. Die
+Worker-Endpunkte unter `/worker/exchange` nutzen dasselbe `WORKER_TOKEN`
+wie der Build-Worker. Einrichtung: `apps/worker-exchange/README.md`.
 
 ## SharePoint und OneDrive
 

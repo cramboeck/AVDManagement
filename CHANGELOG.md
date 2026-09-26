@@ -8,6 +8,14 @@ Alle nennenswerten Aenderungen an ZeroStress Cockpit. Format angelehnt an
 
 ### Hinzugefuegt
 
+- Exchange: Worker `apps/worker-exchange` (Exchange Online PowerShell,
+  app-only mit Zertifikat) sammelt Postfachdaten je Tenant (Kontingente,
+  Weiterleitung auf Postfachebene, Vollzugriff, Senden als, Archiv,
+  Beweissicherung, Outbound-Spam-Einstellung) und fuehrt Aenderungen als
+  Jobs mit Vorschau aus: Kontingent, Weiterleitung, Vollzugriff, Senden
+  als, Archiv aktivieren, Postfachtyp, Beweissicherung. Auftraege in
+  `exchange_jobs`, Endpunkte `/worker/exchange`, Panel auf der Exchange-
+  Seite und Abschnitt im Postfachdetail.
 - Geraete: Tab Software ordnet Inventarzeilen dem winget-Katalog zu
   (eigene Pakete, Basis-Set); Job `device.winget-install` installiert oder
   aktualisiert ein Paket per winget auf dem Geraet (Einmalskript mit

@@ -11,6 +11,8 @@ import { authMiddleware, requireRole } from '../middleware/auth.js';
 import { tenantContextMiddleware, requireConnectedTenant } from '../middleware/tenant-context.js';
 import { getMailOverview } from '../services/inventory.js';
 import { getMailboxDetail, scanForwarding } from '../services/mailboxes.js';
+import { getExchangeFacts, listExchangeJobs } from '../services/exchange.js';
+import { workerTokenConfigured } from '../services/builds.js';
 import { getJobQueue } from '../services/job-queue.js';
 import { DrizzleAuditLogger } from '../services/audit-logger.js';
 import type { CorrelationId } from '@zerostress/types';
@@ -148,6 +150,58 @@ app.post('/mailboxes/:upn/rules/:ruleId/:action{enable|disable|delete}', require
   const body = c.req.valid('json');
   const ruleId = c.req.param('ruleId');
   return createMailboxJob(c, ruleActions[c.req.param('action')], upn, { ...body, ruleId }, `${body.displayName}: Regel ${body.ruleName}`);
+});
+
+// ---- Exchange-Worker: Datenstand, Sammeln, Aenderungen auf Postfachebene ----
+
+app.get('/exchange', requireConnectedTenant, async (c) => {
+  const tenant = c.get('tenant');
+  const facts = await getExchangeFacts(tenant.id);
+  const jobs = await listExchangeJobs(tenant.id, 10);
+  return c.json({
+    workerConfigured: workerTokenConfigured(),
+    collectedAt: facts?.collectedAt ?? null,
+    workerId: facts?.workerId ?? null,
+    mailboxes: facts?.mailboxes.length ?? 0,
+    autoForwardingMode: facts?.autoForwardingMode ?? null,
+    mailboxForwarders: facts ? facts.mailboxes.filter((m) => m.forwardingSmtpAddress || m.forwardingAddress).map((m) => ({ userPrincipalName: m.userPrincipalName, displayName: m.displayName, target: m.forwardingSmtpAddress ?? m.forwardingAddress, keepCopy: m.deliverToMailboxAndForward })) : [],
+    recentJobs: jobs,
+  });
+});
+
+app.post('/exchange/collect', requireRole('engineer'), requireConnectedTenant, async (c) => {
+  const auth = c.get('auth');
+  const tenant = c.get('tenant');
+  const job = await getJobQueue().createJob({
+    type: 'exchange.collect-facts',
+    tenantId: tenant.id,
+    mspId: auth.mspId,
+    userId: auth.user.id,
+    userEmail: auth.user.email,
+    payload: { targetType: 'tenant', targetId: tenant.microsoftTenantId, targetDisplayName: `${tenant.displayName}: Exchange-Postfachdaten sammeln` },
+  });
+  return c.json(job, 202);
+});
+
+const exchangeBase = { displayName: z.string().min(1).max(200), reason: z.string().trim().max(500).nullable().default(null) };
+const exchangeSchemas: Record<string, { type: string; schema: z.ZodTypeAny; label: (b: Record<string, unknown>) => string }> = {
+  quota: { type: 'mailbox.set-quota', schema: z.object({ ...exchangeBase, issueWarningGb: z.number(), prohibitSendGb: z.number(), prohibitSendReceiveGb: z.number() }), label: (b) => `Kontingent ${String(b.prohibitSendGb)} GB` },
+  forwarding: { type: 'mailbox.set-forwarding', schema: z.object({ ...exchangeBase, forwardingSmtpAddress: z.string().email().nullable(), deliverToMailboxAndForward: z.boolean().default(true) }), label: (b) => (b.forwardingSmtpAddress ? `Weiterleitung an ${String(b.forwardingSmtpAddress)}` : 'Weiterleitung entfernen') },
+  'full-access': { type: 'mailbox.set-full-access', schema: z.object({ ...exchangeBase, trustee: z.string().email(), grant: z.boolean(), autoMapping: z.boolean().default(true) }), label: (b) => `Vollzugriff ${b.grant ? 'fuer' : 'entziehen'} ${String(b.trustee)}` },
+  'send-as': { type: 'mailbox.set-send-as', schema: z.object({ ...exchangeBase, trustee: z.string().email(), grant: z.boolean() }), label: (b) => `Senden als ${b.grant ? 'fuer' : 'entziehen'} ${String(b.trustee)}` },
+  archive: { type: 'mailbox.enable-archive', schema: z.object({ ...exchangeBase }), label: () => 'Archiv aktivieren' },
+  convert: { type: 'mailbox.convert', schema: z.object({ ...exchangeBase, toShared: z.boolean() }), label: (b) => (b.toShared ? 'In freigegebenes Postfach umwandeln' : 'In Benutzerpostfach umwandeln') },
+  hold: { type: 'mailbox.set-litigation-hold', schema: z.object({ ...exchangeBase, enabled: z.boolean(), durationDays: z.number().int().nullable().default(null) }), label: (b) => (b.enabled ? 'Beweissicherung aktivieren' : 'Beweissicherung aufheben') },
+};
+
+app.post('/mailboxes/:upn/exchange/:action{quota|forwarding|full-access|send-as|archive|convert|hold}', requireRole('engineer'), requireConnectedTenant, async (c) => {
+  const upn = c.req.param('upn');
+  if (!UPN.test(upn)) return c.json({ type: 'https://api.zerostress.io/problems/validation', title: 'UPN ungueltig', status: 400 }, 400);
+  const def = exchangeSchemas[c.req.param('action')];
+  const parsed = def.schema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) return c.json({ type: 'https://api.zerostress.io/problems/validation', title: 'Eingabe ungueltig', status: 400, detail: parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ') }, 400);
+  const body = parsed.data as Record<string, unknown> & { displayName: string };
+  return createMailboxJob(c, def.type, upn, body, `${body.displayName}: ${def.label(body)}`);
 });
 
 export { app as mailRouter };

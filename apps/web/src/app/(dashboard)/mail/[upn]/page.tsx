@@ -13,6 +13,7 @@ import { CapabilityNotice } from '@/components/identity/capability-notice';
 import { Collapsible } from '@/components/ui/collapsible';
 import { formatDateTime } from '@/components/identity/sign-in-table';
 import { AutoReplyDialog, DisableAutoReplyDialog, ForwardRuleDialog, RuleJobDialog, type RuleAction } from '@/components/mail/mailbox-dialogs';
+import { ExchangeSection } from '@/components/mail/exchange-section';
 import type { InboxRule, InboxRuleActionKind, MailboxDetail } from '@zerostress/types';
 
 const actionLabels: Record<InboxRuleActionKind, string> = {
@@ -160,9 +161,11 @@ export default function MailboxDetailPage({ params }: { params: { upn: string } 
             <dt className="text-muted-foreground">Angelegt</dt>
             <dd>{box.usage?.createdAt ? new Date(box.usage.createdAt).toLocaleDateString('de-DE') : '—'}</dd>
           </dl>
-          <p className="mt-3 text-xs text-muted-foreground">Kontingente aendern, Weiterleitung auf Postfachebene, Vollzugriff/Senden als, Archiv und Freigabe-Umwandlung kommen mit dem Exchange-Worker (siehe Plan Exchange).</p>
+          <p className="mt-3 text-xs text-muted-foreground">Kontingente aendern, Weiterleitung auf Postfachebene, Vollzugriff und Senden als, Archiv und Postfachtyp: siehe Abschnitt Exchange-Einstellungen unten (Exchange-Worker).</p>
         </section>
       </div>
+
+      <ExchangeSection tenantId={activeTenant.id} box={box} onCompleted={refresh} />
 
       <section className="space-y-2">
         <h2 className="text-sm font-medium text-muted-foreground">Posteingangsregeln</h2>
@@ -202,7 +205,7 @@ export default function MailboxDetailPage({ params }: { params: { upn: string } 
         )}
         <Collapsible summary="Was hier moeglich ist" aside="Graph">
           <p className="text-xs text-muted-foreground">
-            Abwesenheit und Posteingangsregeln laufen ueber Microsoft Graph (MailboxSettings.ReadWrite) und wirken sofort. Alles, was Exchange nur per PowerShell kann (Kontingent, Weiterleitung auf Postfachebene, Berechtigungen, Archiv, Aufbewahrung, Umwandlung in ein freigegebenes Postfach), ist fuer den Exchange-Worker vorgesehen.
+            Abwesenheit und Posteingangsregeln laufen ueber Microsoft Graph (MailboxSettings.ReadWrite) und wirken sofort. Alles, was Exchange nur per PowerShell kann (Kontingent, Weiterleitung auf Postfachebene, Berechtigungen, Archiv, Beweissicherung, Postfachtyp), laeuft ueber den Exchange-Worker mit eigener Identitaet; der Job wartet auf dessen Rueckmeldung.
           </p>
         </Collapsible>
       </section>

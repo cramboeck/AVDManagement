@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import clsx from 'clsx';
 import { ForwardingScanPanel } from '@/components/mail/forwarding-scan';
+import { ExchangeStatusPanel } from '@/components/mail/exchange-status';
 import { useTenant } from '@/hooks/use-tenant';
 import { api } from '@/lib/api';
 import { LoadingTable } from '@/components/ui/loading';
@@ -220,6 +221,8 @@ export default function MailPage() {
           </div>
 
           <ForwardingScanPanel tenantId={activeTenant.id} />
+
+          <ExchangeStatusPanel tenantId={activeTenant.id} />
 
           {overview.data.mailboxes.length === 0 ? (
             <EmptyState title="Keine Postfaecher" description="Der Bericht enthaelt keine Postfaecher. Ohne Exchange Online im Tenant bleibt diese Seite leer." />
