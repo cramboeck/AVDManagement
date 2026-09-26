@@ -410,6 +410,108 @@ export interface DeviceNetworkInterface {
   status: string | null;
 }
 
+// Azure-VMs (ARM): Bestand, Aktionen, Bereitstellung aus Vorlagen
+
+export type VmPowerState = 'running' | 'stopped' | 'deallocated' | 'starting' | 'stopping' | 'deallocating' | 'unknown';
+
+export interface AzureVm {
+  id: string;
+  name: string;
+  subscriptionId: string;
+  resourceGroup: string;
+  location: string;
+  vmSize: string;
+  osType: 'Windows' | 'Linux' | 'unknown';
+  powerState: VmPowerState;
+  provisioningState: string | null;
+  computerName: string | null;
+  imageReference: string | null;
+  timeCreated: string | null;
+  tags: Record<string, string>;
+  // Kennzeichen, ob die VM als AVD-Sitzungshost registriert ist (Tag oder Erweiterung)
+  isSessionHost: boolean;
+}
+
+export interface AzureVmNic {
+  id: string;
+  name: string;
+  privateIp: string | null;
+  publicIp: string | null;
+  subnetId: string | null;
+  macAddress: string | null;
+}
+
+export interface AzureVmDisk {
+  name: string;
+  role: 'os' | 'data';
+  sizeGb: number | null;
+  storageType: string | null;
+}
+
+export interface AzureVmDetail extends AzureVm {
+  nics: AzureVmNic[];
+  disks: AzureVmDisk[];
+  statuses: string[];
+  licenseType: string | null;
+  securityType: string | null;
+  extensions: string[];
+  identity: string | null;
+}
+
+export interface VmSizeOption {
+  name: string;
+  cores: number;
+  memoryMb: number;
+  maxDataDisks: number;
+}
+
+export interface AzureResourceGroup {
+  name: string;
+  location: string;
+}
+
+export interface AzureSubnet {
+  id: string;
+  name: string;
+  virtualNetwork: string;
+  resourceGroup: string;
+  location: string;
+  addressPrefix: string | null;
+}
+
+export interface VmTemplateParameter {
+  name: string;
+  type: 'string' | 'int' | 'bool' | 'securestring' | 'object';
+  description: string;
+  defaultValue: unknown;
+  allowedValues: unknown[] | null;
+  // Wird vom Cockpit gesetzt (z. B. generiertes Passwort), nicht vom Nutzer
+  managed: boolean;
+}
+
+export interface VmTemplateSummary {
+  id: string;
+  displayName: string;
+  description: string;
+  version: string;
+  osType: 'Windows' | 'Linux';
+  parameters: VmTemplateParameter[];
+  // Ressourcentypen, die die Vorlage anlegt
+  resources: string[];
+  hash: string;
+}
+
+export interface VmCostEstimate {
+  vmSize: string;
+  location: string;
+  currency: string;
+  hourly: number;
+  monthly: number;
+  productName: string;
+  // Stand der Preisliste
+  retrievedAt: string;
+}
+
 // Netzwerkverbindungen aus Defender Advanced Hunting (DeviceNetworkEvents)
 
 export type RemoteScope = 'private' | 'public' | 'loopback' | 'link-local' | 'multicast' | 'unknown';

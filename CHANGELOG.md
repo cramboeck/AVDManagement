@@ -8,6 +8,13 @@ Alle nennenswerten Aenderungen an ZeroStress Cockpit. Format angelehnt an
 
 ### Hinzugefuegt
 
+- Azure VMs: Seite mit Bestand aller Subscriptions (Zustand, Groesse,
+  Image, AVD-Kennzeichen), Detailseite (Netzwerk, Datentraeger,
+  Eigenschaften), Jobs Start, Stop (deallocate), Neustart, Groesse aendern
+  mit Kostenvergleich; Bereitstellung aus versionierten ARM-Vorlagen
+  (erste Vorlage windows-vm mit Trusted Launch und Entra-Join) mit
+  ARM-Validierung und Kostenschaetzung in der Vorschau und versiegeltem
+  Administratorpasswort im Ergebnis.
 - Exchange: Worker `apps/worker-exchange` (Exchange Online PowerShell,
   app-only mit Zertifikat) sammelt Postfachdaten je Tenant (Kontingente,
   Weiterleitung auf Postfachebene, Vollzugriff, Senden als, Archiv,

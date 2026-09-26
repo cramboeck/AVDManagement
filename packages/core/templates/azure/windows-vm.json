@@ -1,0 +1,127 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "zsc": {
+      "id": "windows-vm",
+      "displayName": "Windows-VM (Entra-Join, Trusted Launch)",
+      "description": "Eine Windows-VM in einem bestehenden Subnetz: Netzwerkkarte, VM mit Trusted Launch und verwalteter Identitaet, optional Entra-ID-Join ueber die Erweiterung AADLoginForWindows. Kein oeffentlicher Zugang, kein Boot-Diagnose-Speicherkonto.",
+      "version": "1.0.0",
+      "osType": "Windows"
+    }
+  },
+  "parameters": {
+    "vmName": { "type": "string", "minLength": 1, "maxLength": 15, "metadata": { "description": "Name der VM und des Computers (1-15 Zeichen, Buchstaben, Ziffern, Bindestrich)" } },
+    "vmSize": { "type": "string", "defaultValue": "Standard_D2s_v5", "metadata": { "description": "VM-Groesse, z. B. Standard_D2s_v5" } },
+    "adminUsername": { "type": "string", "defaultValue": "zscadmin", "metadata": { "description": "Lokaler Administrator" } },
+    "adminPassword": { "type": "securestring", "metadata": { "description": "Wird vom Cockpit erzeugt und versiegelt im Job abgelegt" } },
+    "subnetId": { "type": "string", "metadata": { "description": "Ressourcen-Id des Subnetzes" } },
+    "osImage": {
+      "type": "string",
+      "defaultValue": "windows-11-multisession-24h2",
+      "allowedValues": ["windows-11-multisession-24h2", "windows-11-enterprise-24h2", "windows-server-2022", "windows-server-2025"],
+      "metadata": { "description": "Betriebssystem aus dem Marketplace" }
+    },
+    "osDiskType": { "type": "string", "defaultValue": "StandardSSD_LRS", "allowedValues": ["StandardSSD_LRS", "Premium_LRS", "Standard_LRS"], "metadata": { "description": "Typ der Betriebssystem-Festplatte" } },
+    "osDiskSizeGb": { "type": "int", "defaultValue": 128, "minValue": 64, "maxValue": 2048, "metadata": { "description": "Groesse der Betriebssystem-Festplatte in GB" } },
+    "timeZone": { "type": "string", "defaultValue": "W. Europe Standard Time", "metadata": { "description": "Zeitzone des Gastsystems" } },
+    "joinEntraId": { "type": "bool", "defaultValue": true, "metadata": { "description": "Entra-ID-Join ueber die Erweiterung AADLoginForWindows" } },
+    "licenseType": { "type": "string", "defaultValue": "Windows_Client", "allowedValues": ["None", "Windows_Client", "Windows_Server"], "metadata": { "description": "Azure Hybrid Benefit: Windows_Client fuer Windows 11 (Lizenz ueber M365), Windows_Server mit eigener Serverlizenz, sonst None" } },
+    "tags": { "type": "object", "defaultValue": {}, "metadata": { "description": "Tags fuer alle Ressourcen" } }
+  },
+  "variables": {
+    "nicName": "[concat(parameters('vmName'), '-nic')]",
+    "osDiskName": "[concat(parameters('vmName'), '-osdisk')]",
+    "images": {
+      "windows-11-multisession-24h2": { "publisher": "MicrosoftWindowsDesktop", "offer": "windows-11", "sku": "win11-24h2-avd", "version": "latest" },
+      "windows-11-enterprise-24h2": { "publisher": "MicrosoftWindowsDesktop", "offer": "windows-11", "sku": "win11-24h2-ent", "version": "latest" },
+      "windows-server-2022": { "publisher": "MicrosoftWindowsServer", "offer": "WindowsServer", "sku": "2022-datacenter-azure-edition", "version": "latest" },
+      "windows-server-2025": { "publisher": "MicrosoftWindowsServer", "offer": "WindowsServer", "sku": "2025-datacenter-azure-edition", "version": "latest" }
+    },
+    "image": "[variables('images')[parameters('osImage')]]",
+    "license": "[if(equals(parameters('licenseType'), 'None'), json('null'), parameters('licenseType'))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Network/networkInterfaces",
+      "apiVersion": "2023-09-01",
+      "name": "[variables('nicName')]",
+      "location": "[resourceGroup().location]",
+      "tags": "[parameters('tags')]",
+      "properties": {
+        "ipConfigurations": [
+          {
+            "name": "ipconfig1",
+            "properties": {
+              "privateIPAllocationMethod": "Dynamic",
+              "subnet": { "id": "[parameters('subnetId')]" }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.Compute/virtualMachines",
+      "apiVersion": "2024-03-01",
+      "name": "[parameters('vmName')]",
+      "location": "[resourceGroup().location]",
+      "tags": "[parameters('tags')]",
+      "dependsOn": ["[resourceId('Microsoft.Network/networkInterfaces', variables('nicName'))]"],
+      "identity": { "type": "SystemAssigned" },
+      "properties": {
+        "hardwareProfile": { "vmSize": "[parameters('vmSize')]" },
+        "licenseType": "[variables('license')]",
+        "storageProfile": {
+          "imageReference": "[variables('image')]",
+          "osDisk": {
+            "name": "[variables('osDiskName')]",
+            "createOption": "FromImage",
+            "diskSizeGB": "[parameters('osDiskSizeGb')]",
+            "managedDisk": { "storageAccountType": "[parameters('osDiskType')]" },
+            "deleteOption": "Delete"
+          }
+        },
+        "osProfile": {
+          "computerName": "[parameters('vmName')]",
+          "adminUsername": "[parameters('adminUsername')]",
+          "adminPassword": "[parameters('adminPassword')]",
+          "windowsConfiguration": {
+            "enableAutomaticUpdates": true,
+            "provisionVMAgent": true,
+            "timeZone": "[parameters('timeZone')]",
+            "patchSettings": { "patchMode": "AutomaticByOS" }
+          }
+        },
+        "securityProfile": {
+          "securityType": "TrustedLaunch",
+          "uefiSettings": { "secureBootEnabled": true, "vTpmEnabled": true }
+        },
+        "networkProfile": {
+          "networkInterfaces": [
+            { "id": "[resourceId('Microsoft.Network/networkInterfaces', variables('nicName'))]", "properties": { "deleteOption": "Delete" } }
+          ]
+        },
+        "diagnosticsProfile": { "bootDiagnostics": { "enabled": true } }
+      }
+    },
+    {
+      "condition": "[parameters('joinEntraId')]",
+      "type": "Microsoft.Compute/virtualMachines/extensions",
+      "apiVersion": "2024-03-01",
+      "name": "[concat(parameters('vmName'), '/AADLoginForWindows')]",
+      "location": "[resourceGroup().location]",
+      "dependsOn": ["[resourceId('Microsoft.Compute/virtualMachines', parameters('vmName'))]"],
+      "properties": {
+        "publisher": "Microsoft.Azure.ActiveDirectory",
+        "type": "AADLoginForWindows",
+        "typeHandlerVersion": "2.0",
+        "autoUpgradeMinorVersion": true
+      }
+    }
+  ],
+  "outputs": {
+    "vmResourceId": { "type": "string", "value": "[resourceId('Microsoft.Compute/virtualMachines', parameters('vmName'))]" },
+    "privateIp": { "type": "string", "value": "[reference(resourceId('Microsoft.Network/networkInterfaces', variables('nicName'))).ipConfigurations[0].properties.privateIPAddress]" },
+    "computerName": { "type": "string", "value": "[parameters('vmName')]" }
+  }
+}

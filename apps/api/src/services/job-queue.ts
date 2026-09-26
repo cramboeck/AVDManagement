@@ -6,12 +6,13 @@
  */
 
 import { Redis } from 'ioredis';
-import { JobQueue, registerIdentityJobs, registerAvdJobs, registerDeviceJobs, registerScriptJobs, registerAvdScriptJobs, registerAppJobs, registerTempAdminJobs, registerGroupJobs, registerAppPublishJobs, registerMailboxJobs, registerWingetJobs, registerExchangeJobs } from '@zerostress/core';
+import { JobQueue, registerIdentityJobs, registerAvdJobs, registerDeviceJobs, registerScriptJobs, registerAvdScriptJobs, registerAppJobs, registerTempAdminJobs, registerGroupJobs, registerAppPublishJobs, registerMailboxJobs, registerWingetJobs, registerExchangeJobs, registerVmJobs } from '@zerostress/core';
 import { mailboxOperations } from './mailboxes.js';
 import { exchangeOperations } from './exchange.js';
 import { DrizzleJobStore } from './job-store.js';
 import { DrizzleAuditLogger } from './audit-logger.js';
-import { getIdentityProvider, getAvdProvider, getDeviceProvider, getRemediationProvider, getAppProvider, getGroupProvider } from './microsoft-clients.js';
+import { getIdentityProvider, getAvdProvider, getDeviceProvider, getRemediationProvider, getAppProvider, getGroupProvider, getVmProvider } from './microsoft-clients.js';
+import { estimateVmCost } from './azure-prices.js';
 import { getResultSealer } from './result-crypto.js';
 import { publishOperations } from './publishing.js';
 
@@ -48,6 +49,22 @@ export function getJobQueue(): JobQueue {
     registerAppPublishJobs(publishOperations);
     registerMailboxJobs(mailboxOperations);
     registerExchangeJobs(exchangeOperations);
+    const vmProvider = getVmProvider();
+    registerVmJobs({
+      getVm: (ctx, id) => vmProvider.getVm(ctx, id),
+      startVm: (ctx, id) => vmProvider.startVm(ctx, id),
+      stopVm: (ctx, id) => vmProvider.stopVm(ctx, id),
+      restartVm: (ctx, id) => vmProvider.restartVm(ctx, id),
+      resizeVm: (ctx, id, size) => vmProvider.resizeVm(ctx, id, size),
+      ensureResourceGroup: (ctx, sub, name, location, tags) => vmProvider.ensureResourceGroup(ctx, sub, name, location, tags),
+      validateDeployment: (ctx, sub, rg, name, template, parameters) => vmProvider.validateDeployment(ctx, sub, rg, name, template, parameters),
+      deploy: (ctx, sub, rg, name, template, parameters) => vmProvider.deploy(ctx, sub, rg, name, template, parameters),
+      estimateCost: (size, location, os) => estimateVmCost(size, location, os),
+      seal: async (payload) => {
+        if (!sealer) throw new Error('RESULT_ENCRYPTION_KEY ist nicht gesetzt; ohne Schluessel kann das Passwort nicht versiegelt abgelegt werden');
+        return sealer.seal(payload);
+      },
+    });
 
     jobStore = new DrizzleJobStore();
     jobQueue = new JobQueue({ redis }, jobStore, new DrizzleAuditLogger());

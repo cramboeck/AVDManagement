@@ -20,6 +20,7 @@ import {
   MailProvider,
   MailboxProvider,
   HuntingProvider,
+  VmProvider,
   PolicyProvider,
   AppProvider,
   TeamViewerProvider,
@@ -141,6 +142,15 @@ export function getHuntingProvider(): HuntingProvider {
     huntingProvider = new HuntingProvider(getDefenderClient());
   }
   return huntingProvider;
+}
+
+let vmProvider: VmProvider | null = null;
+
+export function getVmProvider(): VmProvider {
+  if (!vmProvider) {
+    vmProvider = new VmProvider(getArmClient());
+  }
+  return vmProvider;
 }
 
 let policyProvider: PolicyProvider | null = null;

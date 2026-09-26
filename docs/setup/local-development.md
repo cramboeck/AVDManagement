@@ -186,6 +186,30 @@ hoch und meldet Protokoll und Ergebnis. Die Worker-Endpunkte unter
 einen Hinweis. Ein Auftrag ohne Lebenszeichen faellt nach zwei Stunden auf
 "fehlgeschlagen". Einrichtung des Workers: `apps/worker-windows/README.md`.
 
+## Azure VMs
+
+Die Seite **Azure VMs** listet alle virtuellen Maschinen der Subscriptions,
+auf die die App-Registrierung des Tenants Zugriff hat (ARM, Rolle Reader),
+mit Betriebszustand, Groesse, Image und AVD-Kennzeichen. Aktionen sind
+Jobs mit Vorschau, Freigabe und Audit: `vm.start`, `vm.stop` (deallocate,
+keine Rechenkosten), `vm.restart`, `vm.resize` (Vorschau mit
+Kostenvergleich aus der oeffentlichen Azure-Preisliste). Sie brauchen die
+Azure-Rolle Virtual Machine Contributor.
+
+**Neue VM aus Vorlage**: Vorlagen liegen versioniert als ARM JSON unter
+`packages/core/templates/azure` und sind die einzige Quelle. Das Formular
+fragt Subscription, Ressourcengruppe (bestehend oder neu), Subnetz, Name,
+Groesse (Liste der Region), Image, Festplatte, Lizenz, Tags und Entra-Join
+ab. Die Vorschau des Jobs `vm.deploy` enthaelt die ARM-Validierung und die
+Kostenschaetzung; die Ausfuehrung erzeugt das Administratorpasswort,
+stellt bereit und legt Benutzer und Passwort versiegelt im Ergebnis ab
+(Anzeige nur mit Begruendung, Rolle Engineer, Audit; Loeschung nach 30
+Tagen; braucht `RESULT_ENCRYPTION_KEY`). Bereitstellungen brauchen die
+Rolle Contributor auf der Ressourcengruppe bzw. Subscription (fuer neue
+Gruppen). Die Kostenschaetzung ruft `prices.azure.com` ohne Anmeldung ab;
+ohne Netz fehlt sie und die Vorschau sagt das. Plan und offene Stufen:
+`docs/implementation/azure-vm-plan.md`.
+
 ## Software je Geraet: winget-Aktionen
 
 Der Tab **Software** ordnet jede Inventarzeile dem winget-Katalog zu: erst

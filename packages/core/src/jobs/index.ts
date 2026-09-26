@@ -17,4 +17,5 @@ export * from './group-job-handlers.js';
 export * from './mailbox-job-handlers.js';
 export * from './winget-job-handlers.js';
 export * from './exchange-job-handlers.js';
+export * from './vm-job-handlers.js';
 export * from './app-publish-job-handlers.js';
