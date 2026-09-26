@@ -43,6 +43,8 @@ const typeHints: Record<PackageInstallerType, string> = {
 
 interface PackageFormProps {
   initial?: AppManifest;
+  // Vorbelegung fuer ein neues Paket (z. B. winget-Id aus dem Geraete-Inventar)
+  initialDraft?: Partial<ManifestDraft>;
   submitLabel: string;
   pending: boolean;
   error: Error | null;
@@ -64,8 +66,8 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
 
 const inputClass = 'w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-60';
 
-export function PackageForm({ initial, submitLabel, pending, error, problems, lockIdentity = false, onSubmit, onCancel }: PackageFormProps) {
-  const [draft, setDraft] = useState<ManifestDraft>(initial ? { ...initial } : emptyDraft);
+export function PackageForm({ initial, initialDraft, submitLabel, pending, error, problems, lockIdentity = false, onSubmit, onCancel }: PackageFormProps) {
+  const [draft, setDraft] = useState<ManifestDraft>(initial ? { ...initial } : { ...emptyDraft, ...(initialDraft ?? {}) });
   const [regKey, setRegKey] = useState(initial?.detection.find((d) => d.type === 'registry')?.type === 'registry' ? ((initial.detection.find((d) => d.type === 'registry') as { keyPath: string }).keyPath ?? '') : '');
   const [filePath, setFilePath] = useState('');
 

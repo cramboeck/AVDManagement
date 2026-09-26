@@ -233,7 +233,7 @@ function LatestRun({ job, tenantId }: { job: Job; tenantId: string }) {
   );
 }
 
-const KNOWN_SCHEMAS = new Set(['zsc.update-status/1', 'zsc.update-scan/1', 'zsc.system-info/1', 'zsc.winget-updates/1', 'zsc.network-info/1', 'zsc.storage-info/1', 'zsc.local-admins/1', 'zsc.battery-info/1']);
+const KNOWN_SCHEMAS = new Set(['zsc.update-status/1', 'zsc.update-scan/1', 'zsc.system-info/1', 'zsc.winget-updates/1', 'zsc.winget-install/1', 'zsc.network-info/1', 'zsc.storage-info/1', 'zsc.local-admins/1', 'zsc.battery-info/1']);
 
 export interface WingetUpdate {
   name: string;
@@ -297,11 +297,30 @@ export function ScriptResultView({ result, error }: { result: ScriptRunResult | 
       {json && (schema === 'zsc.update-status/1' || schema === 'zsc.update-scan/1') && <UpdateResult data={json} />}
       {json && schema === 'zsc.system-info/1' && <SystemInfoResult data={json} />}
       {json && schema === 'zsc.winget-updates/1' && <WingetResult data={json} />}
+      {json && schema === 'zsc.winget-install/1' && <WingetInstallResult data={json} />}
       {json && schema === 'zsc.network-info/1' && <NetworkInfoResult data={json} />}
       {json && schema === 'zsc.storage-info/1' && <StorageInfoResult data={json} />}
       {json && schema === 'zsc.local-admins/1' && <LocalAdminsResult data={json} />}
       {json && schema === 'zsc.battery-info/1' && <BatteryResult data={json} />}
       {json && !KNOWN_SCHEMAS.has(schema ?? '') && <pre className="overflow-x-auto rounded-md bg-muted p-3 text-xs">{JSON.stringify(json, null, 2)}</pre>}
+    </div>
+  );
+}
+
+function WingetInstallResult({ data }: { data: Record<string, unknown> }) {
+  const ok = data.success === true;
+  return (
+    <div className="space-y-2 text-sm">
+      <p className={ok ? 'text-success' : 'text-destructive'}>
+        {ok ? 'Erfolgreich' : 'Fehlgeschlagen'}: winget {text(data.mode)} {text(data.id)}
+        {data.installedVersion ? ` · installiert ${text(data.installedVersion)}` : ''}
+        {data.note ? ` · ${text(data.note)}` : ''}
+      </p>
+      {data.message ? <p className="text-xs text-muted-foreground">{text(data.message)}</p> : null}
+      {data.error ? <p className="text-xs text-destructive">{text(data.error)}</p> : null}
+      <p className="text-xs text-muted-foreground">
+        winget {text(data.wingetVersion) || '?'} · Exit-Code {String(data.exitCode ?? '—')}
+      </p>
     </div>
   );
 }

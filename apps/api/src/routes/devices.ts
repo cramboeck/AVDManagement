@@ -8,7 +8,7 @@ import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
 import { authMiddleware, requireRole } from '../middleware/auth.js';
 import { tenantContextMiddleware, requireConnectedTenant } from '../middleware/tenant-context.js';
-import { getDeviceProvider, getTeamViewerProvider } from '../services/microsoft-clients.js';
+import { getDeviceProvider, getTeamViewerProvider, getHuntingProvider } from '../services/microsoft-clients.js';
 import { mergeSoftware } from '@zerostress/core';
 import { getDeviceInventory, findDevice } from '../services/inventory.js';
 import { DrizzleAuditLogger } from '../services/audit-logger.js';
@@ -100,6 +100,39 @@ app.get('/:deviceId/network', requireConnectedTenant, async (c) => {
   }
 
   return c.json(await getDeviceProvider().getDeviceNetwork(ctx, device.defender.machineId));
+});
+
+// Netzwerkverbindungen des Geraets aus Advanced Hunting (Defender for Endpoint Plan 2)
+app.get('/:deviceId/connections', requireConnectedTenant, async (c) => {
+  const tenant = c.get('tenant');
+  const auth = c.get('auth');
+  const deviceId = c.req.param('deviceId');
+  const days = Number(c.req.query('days') ?? '7');
+  const ctx = ctxFor(tenant.id, c.req.header('X-Correlation-ID'));
+
+  const device = await findDevice(tenant, deviceId);
+  if (!device) {
+    return c.json(notFound(deviceId), 404);
+  }
+  if (!device.defender) {
+    return c.json({ available: false, reason: 'not-onboarded', missingPermission: null, detail: null });
+  }
+  const report = await getHuntingProvider().getDeviceConnections(ctx, device.defender.machineId, days);
+  // Zieladressen und Prozesse koennen Rueckschluesse auf Nutzung zulassen: Abruf im Audit
+  await audit.log({
+    mspId: auth.mspId,
+    tenantId: tenant.id,
+    userId: auth.user.id,
+    action: 'device.connections.view',
+    targetType: 'device',
+    targetId: device.id,
+    targetDisplayName: device.name,
+    afterState: report.available ? { days: report.data.days, destinations: report.data.items.length } : undefined,
+    result: report.available ? 'success' : 'failure',
+    errorMessage: report.available ? undefined : report.reason,
+    correlationId: ctx.correlationId as CorrelationId,
+  });
+  return c.json(report);
 });
 
 // Softwareinventar: Intune (erkannte Apps, mit Version) plus Defender (Vulnerability Management)

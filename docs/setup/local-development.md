@@ -186,6 +186,36 @@ hoch und meldet Protokoll und Ergebnis. Die Worker-Endpunkte unter
 einen Hinweis. Ein Auftrag ohne Lebenszeichen faellt nach zwei Stunden auf
 "fehlgeschlagen". Einrichtung des Workers: `apps/worker-windows/README.md`.
 
+## Software je Geraet: winget-Aktionen
+
+Der Tab **Software** ordnet jede Inventarzeile dem winget-Katalog zu: erst
+den eigenen Paketen (Typ winget), dann dem Basis-Set, jeweils ueber den
+Anzeigenamen. Nach einer winget-Pruefung (Skript `winget-updates`) zeigt
+die Spalte winget gefundene Updates. Aktionen je Zeile: **Update
+installieren** (Job `device.winget-install`, Einmalskript mit eingebetteter
+Id im Maschinenkontext, Vorschau und Audit), **Als Paket anlegen** (Katalog
+mit vorbelegter Id) oder **Zum Paket**. Der Abschnitt "Aus dem Basis-Set
+installieren" installiert gaengige Software direkt auf dem Geraet. Diese
+Aktionen gelten nur fuer das eine Geraet und legen keine Intune-App an;
+fuer viele Geraete bleibt der Katalog mit Rollout der richtige Weg. Ein
+vollstaendiges winget-Inventar je Geraet scheitert an der Ausgabegrenze
+der Intune-Remediations (2048 Zeichen); deshalb Namensabgleich plus
+Update-Liste.
+
+## Netzwerkverbindungen (Advanced Hunting)
+
+Mit Defender for Endpoint Plan 2 zeigt **Geraet > Verbindungen**, wohin
+das Geraet in den letzten 1 bis 30 Tagen gesprochen hat: je Zieladresse
+Host, Bereich (privat/oeffentlich), Ports, ausloesende Prozesse, Richtung
+und Haeufigkeit (KQL-Vorlage ueber `DeviceNetworkEvents`, nur geprueft
+eingesetzte Werte). **Netzwerk > Kommunikation der Clients** fasst das
+tenantweit zusammen, extern (oeffentliche Ziele, Grundlage fuer ausgehende
+Firewall-Regeln) oder intern (private Ziele: Server, Drucker, Clients
+untereinander), mit der Anzahl Geraete je Ziel. Beide Abrufe stehen im
+Audit (`device.connections.view`, `network.connections.view`). Braucht die
+Defender-Berechtigung `AdvancedQuery.Read.All`; Defender for Business
+liefert diese Daten nicht.
+
 ## Remotehilfe (TeamViewer)
 
 Mit `TEAMVIEWER_API_TOKEN` (Skript-Token aus der TeamViewer Management
@@ -430,6 +460,7 @@ Secret ab (`AADSTS700025`).
 | `DeviceManagementApps.ReadWrite.All` | Apps: Bestand, Installationsstatus, Zuweisungen als Jobs (Seite Apps) | Karte "Berechtigung fehlt" |
 | `Group.ReadWrite.All` | Mitglieder und Besitzer von Gruppen aendern (Gruppe > Mitglied hinzufuegen/entfernen, Benutzer > Gruppen > Entfernen), Bereitstellungsgruppen je App anlegen | Jobs schlagen mit 403 fehl |
 | `Policy.Read.All` | Best-Practice-Checks: Conditional Access, Sicherheitsstandards, Authentifizierungsmethoden, Autorisierungsrichtlinie (Sicherheit > Best Practices) | Betroffene Checks "nicht pruefbar" |
+| Defender `AdvancedQuery.Read.All` | Netzwerkverbindungen aus Advanced Hunting (Geraet > Verbindungen, Netzwerk > Kommunikation der Clients); braucht Defender for Endpoint Plan 2, Defender for Business hat kein Advanced Hunting | Karte "Berechtigung fehlt" bzw. "nicht lizenziert" |
 | `MailboxSettings.ReadWrite` | Postfachdetail: Abwesenheit, Zeitzone, Posteingangsregeln lesen; Jobs Abwesenheit setzen, Weiterleitungsregel anlegen, Regel aktivieren/deaktivieren/loeschen; Weiterleitungs-Scan (Exchange > Postfach) | Karte "Berechtigung fehlt" im Postfachdetail, Jobs schlagen mit 403 fehl |
 | `Organization.Read.All` (optional) | Verifizierte Domaenen des Tenants fuer die Einstufung "externe Weiterleitung"; fehlt sie, gelten die Domaenen der Postfaecher als intern | Einstufung etwas grober |
 

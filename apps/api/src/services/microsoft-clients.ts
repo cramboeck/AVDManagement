@@ -19,6 +19,7 @@ import {
   GroupProvider,
   MailProvider,
   MailboxProvider,
+  HuntingProvider,
   PolicyProvider,
   AppProvider,
   TeamViewerProvider,
@@ -131,6 +132,15 @@ export function getMailboxProvider(): MailboxProvider {
     mailboxProvider = new MailboxProvider(getGraphClient());
   }
   return mailboxProvider;
+}
+
+let huntingProvider: HuntingProvider | null = null;
+
+export function getHuntingProvider(): HuntingProvider {
+  if (!huntingProvider) {
+    huntingProvider = new HuntingProvider(getDefenderClient());
+  }
+  return huntingProvider;
 }
 
 let policyProvider: PolicyProvider | null = null;

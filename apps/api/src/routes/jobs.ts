@@ -293,6 +293,34 @@ app.post('/temp-admin-revoke', requireRole('engineer'), requireConnectedTenant, 
   return c.json(job, 202);
 });
 
+// winget auf dem Geraet: ein Paket installieren oder aktualisieren (Einmalskript)
+const wingetInstallSchema = z.object({
+  managedDeviceId: z.string().min(1),
+  deviceName: z.string().min(1),
+  packageId: z.string().min(3).max(128),
+  mode: z.enum(['install', 'upgrade']),
+  version: z.string().max(40).nullable().default(null),
+  displayName: z.string().max(200).nullable().default(null),
+  installedVersion: z.string().max(60).nullable().default(null),
+  availableVersion: z.string().max(60).nullable().default(null),
+  reason: z.string().trim().max(500).nullable().default(null),
+});
+
+app.post('/winget-install', requireRole('engineer'), requireConnectedTenant, zValidator('json', wingetInstallSchema), async (c) => {
+  const auth = c.get('auth');
+  const tenant = c.get('tenant');
+  const body = c.req.valid('json');
+  const job = await getJobQueue().createJob({
+    type: 'device.winget-install',
+    tenantId: tenant.id,
+    mspId: auth.mspId,
+    userId: auth.user.id,
+    userEmail: auth.user.email,
+    payload: { ...body, targetType: 'device', targetId: body.managedDeviceId, targetDisplayName: `${body.deviceName}: winget ${body.mode} ${body.packageId}` },
+  });
+  return c.json(job, 202);
+});
+
 // Versiegeltes Ergebnis anzeigen: Begruendung, Rolle Engineer, Audit; der Klartext verlaesst nie die Antwort
 const revealSchema = z.object({ reason: z.string().trim().min(10).max(500) });
 

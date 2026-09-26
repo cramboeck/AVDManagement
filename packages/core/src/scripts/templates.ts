@@ -9,13 +9,18 @@
 
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
+import { isWingetId } from '../apps/winget.js';
 
-export type TemplateId = 'temp-admin-grant' | 'temp-admin-revoke';
+export type TemplateId = 'temp-admin-grant' | 'temp-admin-revoke' | 'winget-install';
 
 const files: Record<TemplateId, string> = {
   'temp-admin-grant': 'temp-admin.grant.ps1',
   'temp-admin-revoke': 'temp-admin.revoke.ps1',
+  'winget-install': 'winget-install.ps1',
 };
+
+const WINGET_VERSION_PATTERN = /^[0-9A-Za-z][0-9A-Za-z.+-]{0,39}$/;
+export type WingetInstallMode = 'install' | 'upgrade';
 
 // Lokaler Kontoname, Entra-Konto (AzureAD\upn) oder SID; kein Zeichen, das PowerShell-Syntax bricht
 const ACCOUNT_PATTERN = /^(AzureAD\\[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}|[A-Za-z0-9._-]{1,64}|S-1-[0-9-]{5,60})$/;
@@ -78,4 +83,24 @@ export function renderTempAdminRevoke(input: { account: string }): RenderedTempl
   const taskName = tempAdminTaskName(account);
   const content = readTemplate('temp-admin-revoke').replace('__ACCOUNT__', account.replace(/'/g, "''")).replace('__TASKNAME__', taskName);
   return { id: 'temp-admin-revoke', content, hash: createHash('sha256').update(content).digest('hex') };
+}
+
+export interface WingetInstallInput {
+  packageId: string;
+  mode: WingetInstallMode;
+  version?: string | null;
+}
+
+/**
+ * winget install/upgrade auf einem Geraet: Id, Modus und Version werden
+ * streng geprueft und in das Einmalskript eingebettet.
+ */
+export function renderWingetInstall(input: WingetInstallInput): RenderedTemplate & { packageId: string; mode: WingetInstallMode; version: string | null } {
+  const packageId = input.packageId.trim();
+  if (!isWingetId(packageId)) throw new Error(`winget-Id ungueltig: '${packageId}' (Form Herausgeber.Paket)`);
+  if (input.mode !== 'install' && input.mode !== 'upgrade') throw new Error('Modus muss install oder upgrade sein');
+  const version = input.version?.trim() || null;
+  if (version && !WINGET_VERSION_PATTERN.test(version)) throw new Error(`Version ungueltig: '${version}'`);
+  const content = readTemplate('winget-install').replace('__PACKAGE_ID__', packageId).replace('__MODE__', input.mode).replace('__VERSION__', version ?? '');
+  return { id: 'winget-install', content, hash: createHash('sha256').update(content).digest('hex'), packageId, mode: input.mode, version };
 }

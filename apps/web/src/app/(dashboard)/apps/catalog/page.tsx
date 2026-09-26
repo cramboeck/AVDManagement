@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '@/lib/api';
 import { LoadingTable } from '@/components/ui/loading';
@@ -69,7 +69,9 @@ const columns: ColumnDef<AppPackage>[] = [
 export default function CatalogPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const [creating, setCreating] = useState(false);
+  const searchParams = useSearchParams();
+  const wingetId = searchParams.get('wingetId');
+  const [creating, setCreating] = useState(!!wingetId);
   const [problems, setProblems] = useState<string[]>([]);
 
   const query = useQuery({ queryKey: ['packages'], queryFn: () => api.get<CatalogResponse>('/packages'), staleTime: 30 * 1000 });
@@ -125,6 +127,7 @@ export default function CatalogPage() {
 
       {creating && (
         <PackageForm
+          initialDraft={wingetId ? { installerType: 'winget', wingetPackageIdentifier: wingetId, wingetVersion: 'latest' } : undefined}
           submitLabel="Paket anlegen"
           pending={create.isPending}
           error={create.error as Error | null}

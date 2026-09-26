@@ -410,6 +410,35 @@ export interface DeviceNetworkInterface {
   status: string | null;
 }
 
+// Netzwerkverbindungen aus Defender Advanced Hunting (DeviceNetworkEvents)
+
+export type RemoteScope = 'private' | 'public' | 'loopback' | 'link-local' | 'multicast' | 'unknown';
+
+export interface ConnectionSummary {
+  remoteIp: string;
+  remoteUrl: string | null;
+  scope: RemoteScope;
+  ports: number[];
+  processes: string[];
+  direction: 'outbound' | 'inbound' | 'mixed';
+  count: number;
+  // Nur tenantweit: Anzahl Geraete mit Verbindungen zu diesem Ziel
+  deviceCount: number | null;
+  firstSeen: string | null;
+  lastSeen: string | null;
+}
+
+export interface ConnectionReport {
+  days: number;
+  scope: 'all' | 'external' | 'internal';
+  generatedAt: string;
+  totalConnections: number;
+  items: ConnectionSummary[];
+  truncated: boolean;
+}
+
+export type ConnectionResult = CapabilityResult<ConnectionReport>;
+
 export interface DeviceNetworkInfo {
   lastIpAddress: string | null;
   lastExternalIpAddress: string | null;

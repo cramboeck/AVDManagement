@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
+import { TenantConnections } from '@/components/network/tenant-connections';
 import clsx from 'clsx';
 import { useTenant } from '@/hooks/use-tenant';
 import { api } from '@/lib/api';
@@ -41,6 +42,8 @@ export default function NetworkPage() {
         </div>
         <SnapshotStatus tenantId={activeTenant.id} kinds={['devices']} invalidate={[['network-topology', activeTenant.id], ['devices', activeTenant.id]]} />
       </div>
+
+      <TenantConnections tenantId={activeTenant.id} />
 
       {query.isLoading ? (
         <LoadingTable rows={6} />

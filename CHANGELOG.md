@@ -8,6 +8,15 @@ Alle nennenswerten Aenderungen an ZeroStress Cockpit. Format angelehnt an
 
 ### Hinzugefuegt
 
+- Geraete: Tab Software ordnet Inventarzeilen dem winget-Katalog zu
+  (eigene Pakete, Basis-Set); Job `device.winget-install` installiert oder
+  aktualisiert ein Paket per winget auf dem Geraet (Einmalskript mit
+  eingebetteter Id, Vorschau, Audit); "Als Paket anlegen" oeffnet den
+  Katalog mit vorbelegter Id; Installation aus dem Basis-Set je Geraet.
+- Geraete und Netzwerk: Verbindungsanalyse aus Defender Advanced Hunting
+  (Tab Verbindungen je Geraet, Kommunikation der Clients extern/intern
+  tenantweit) mit Host, Ports, Prozessen, Richtung und Geraetezahl.
+- Roadmap: Azure-VMs verwalten und aus Vorlagen bereitstellen.
 - Apps: winget als Installerquelle. Pakete vom Typ winget loesen ihr
   Manifest aus microsoft/winget-pkgs auf (Basis-Set, Blaettern nach
   Herausgeber, Id von Hand), der Worker laedt den Installer vom Hersteller,
