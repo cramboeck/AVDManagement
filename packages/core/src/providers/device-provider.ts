@@ -42,6 +42,7 @@ import { BaseResourceProvider, type ProviderContext } from './resource-provider.
 import { GraphClient, type GraphResponse } from './graph-client.js';
 import { GraphApiError } from '../errors.js';
 
+const GRAPH_BETA_BASE = 'https://graph.microsoft.com/beta';
 export const DEFENDER_API_BASE_URL = 'https://api.securitycenter.microsoft.com';
 export const DEFENDER_SCOPES = [`${DEFENDER_API_BASE_URL}/.default`];
 
@@ -683,7 +684,8 @@ export class DeviceProvider extends BaseResourceProvider {
     this.validateContext(ctx);
     const tenantId = ctx.tenantId as string;
     const apps: GraphDetectedApp[] = [];
-    let next: string | null = `/deviceManagement/managedDevices/${encodeURIComponent(managedDeviceId)}/detectedApps`;
+    // detectedApps gibt es nur unter Graph beta (v1.0 kennt das Segment nicht)
+    let next: string | null = `${GRAPH_BETA_BASE}/deviceManagement/managedDevices/${encodeURIComponent(managedDeviceId)}/detectedApps?$top=500`;
 
     try {
       while (next) {

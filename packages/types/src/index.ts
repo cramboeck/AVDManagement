@@ -212,7 +212,9 @@ export type CapabilityUnavailableReason =
   | 'premium-required'
   | 'permission-missing'
   | 'not-licensed'
-  | 'not-onboarded';
+  | 'not-onboarded'
+  // Quelle antwortete mit einem Fehler; Detail traegt die Meldung
+  | 'error';
 
 export type CapabilityResult<T> =
   | { available: true; data: T }

@@ -147,9 +147,11 @@ app.get('/:deviceId/software', requireConnectedTenant, async (c) => {
   }
   const notOnboarded = { available: false as const, reason: 'not-onboarded' as const, missingPermission: null, detail: null };
   const provider = getDeviceProvider();
+  // Faellt eine Quelle mit einem unerwarteten Fehler aus, bleibt die andere sichtbar
+  const asError = (error: unknown) => ({ available: false as const, reason: 'error' as const, missingPermission: null, detail: error instanceof Error ? error.message : String(error) });
   const [intune, defender] = await Promise.all([
-    device.intune ? provider.listDetectedApps(ctx, device.intune.managedDeviceId) : Promise.resolve(notOnboarded),
-    device.defender ? provider.listDefenderSoftware(ctx, device.defender.machineId) : Promise.resolve(notOnboarded),
+    device.intune ? provider.listDetectedApps(ctx, device.intune.managedDeviceId).catch(asError) : Promise.resolve(notOnboarded),
+    device.defender ? provider.listDefenderSoftware(ctx, device.defender.machineId).catch(asError) : Promise.resolve(notOnboarded),
   ]);
   if (!intune.available && !defender.available) {
     const inventory: DeviceSoftwareInventory = intune.reason === 'not-onboarded' ? defender : intune;

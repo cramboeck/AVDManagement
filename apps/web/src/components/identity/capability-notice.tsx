@@ -57,6 +57,11 @@ function describe(what: string, reason: CapabilityUnavailableReason, missingPerm
         title: 'Nicht in Defender onboarded',
         body: <>{what} gibt es nur fuer Geraete, die in Defender for Endpoint onboarded sind.</>,
       };
+    case 'error':
+      return {
+        title: 'Quelle antwortet mit Fehler',
+        body: <>{what} konnte nicht geladen werden. Die Fehlermeldung steht unten; nach einer Korrektur erneut laden.</>,
+      };
     case 'permission-missing':
     default:
       return {

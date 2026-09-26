@@ -93,6 +93,11 @@ Alle nennenswerten Aenderungen an ZeroStress Cockpit. Format angelehnt an
 
 ### Geaendert
 
+- Geraete: das Softwareinventar aus Intune wird ueber Graph beta gelesen
+  (v1.0 kennt `detectedApps` nicht; Fehler "Resource not found for the
+  segment 'detectedApps'"). Faellt eine Quelle aus, bleibt die andere im
+  Tab Software sichtbar, die Karte nennt den Fehler.
+
 - Skripte mit personenbezogener Ausgabe (Lokale Administratoren) werden
   ohne `RESULT_ENCRYPTION_KEY` schon in der Vorschau abgelehnt statt erst
   nach dem Lauf verworfen.
