@@ -93,6 +93,10 @@ Alle nennenswerten Aenderungen an ZeroStress Cockpit. Format angelehnt an
 
 ### Geaendert
 
+- Graph-Client: leere 200-Antworten (z. B. LAPS ohne Eintrag) fuehren nicht
+  mehr zu "Unexpected end of JSON input"; der Tab Wiederherstellung zeigt
+  dann eine Karte mit Erklaerung statt eines Fehlers.
+
 - Apps: winget-Pakete aus der Zeit vor dem Umbau tragen nicht mehr "Bereit"
   ohne .intunewin; der Rollout lehnt ungebaute Pakete mit klarer Meldung
   ab. Fehlt im winget-Manifest der Apps-und-Features-Eintrag, nutzt der

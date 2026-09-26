@@ -557,7 +557,7 @@ export class DeviceProvider extends BaseResourceProvider {
       );
       return {
         available: true,
-        data: response.value
+        data: (response?.value ?? [])
           .map((k) => ({
             id: k.id,
             createdAt: k.createdDateTime,
@@ -579,6 +579,9 @@ export class DeviceProvider extends BaseResourceProvider {
         `/directory/deviceLocalCredentials/${encodeURIComponent(azureAdDeviceId)}`,
         this.lapsScopes
       );
+      if (!info) {
+        return { available: false, reason: 'error', missingPermission: null, detail: 'Graph lieferte fuer dieses Geraet keinen LAPS-Eintrag (leere Antwort); LAPS mit Entra-Sicherung in der Intune-Richtlinie pruefen' };
+      }
       return {
         available: true,
         data: {

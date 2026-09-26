@@ -89,7 +89,16 @@ export class GraphClient {
           if (responseType === 'text') {
             return (await response.text()) as T;
           }
-          return (await response.json()) as T;
+          // Manche Endpunkte antworten 200 mit leerem Body; das ist kein JSON-Fehler, sondern "nichts da"
+          const text = await response.text();
+          if (!text.trim()) {
+            return undefined as T;
+          }
+          try {
+            return JSON.parse(text) as T;
+          } catch {
+            throw new GraphApiError(response.status, 'InvalidResponse', `Graph antwortete mit ${response.status}, aber ohne gueltiges JSON (${text.slice(0, 80)})`, undefined, undefined);
+          }
         }
 
         const errorBody = await this.parseErrorBody(response);
