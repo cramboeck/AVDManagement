@@ -50,6 +50,9 @@ export const publishOperations: PublishOperations = {
 export async function startRollout(input: { mspId: string; userId: string; userEmail: string; packageId: string; tenantIds: string[]; autoApprove: boolean }): Promise<Job[]> {
   const pkg = await getPackage(input.mspId, input.packageId);
   if (!pkg) throw new Error('Package not found');
+  if (pkg.status !== 'ready') {
+    throw new Error(pkg.manifest.installerType === 'winget' && !pkg.artifact ? 'Paket ist noch nicht gebaut: erst "Build starten" (Worker), dann ausrollen' : `Paket ist nicht bereit (Status ${pkg.status})`);
+  }
   const tenants = await db
     .select({ id: managedTenants.id, displayName: managedTenants.displayName, microsoftTenantId: managedTenants.microsoftTenantId, connectionStatus: managedTenants.connectionStatus })
     .from(managedTenants)

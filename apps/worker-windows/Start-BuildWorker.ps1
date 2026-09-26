@@ -214,6 +214,8 @@ function New-UninstallBlock {
     $productCode = Get-PlanValue -Plan $Plan -Name 'uninstallProductCode'
     $displayName = Get-PlanValue -Plan $Plan -Name 'uninstallDisplayName'
     $uninstallArgs = Get-PlanValue -Plan $Plan -Name 'uninstallArguments'
+    $nameMatch = Get-PlanValue -Plan $Plan -Name 'uninstallNameMatch'
+    if ($nameMatch -ne 'Contains') { $nameMatch = 'Exact' }
     $lines = New-Object -TypeName System.Collections.Generic.List[string]
     if (-not [string]::IsNullOrWhiteSpace($cmd)) {
         # cmd /c with an extra pair of quotes keeps inner quotes intact
@@ -228,7 +230,7 @@ function New-UninstallBlock {
     }
     elseif (-not [string]::IsNullOrWhiteSpace($displayName)) {
         # Eintrag unter Apps und Features (aus dem winget-Manifest) mit dem stillen Schalter des Installers
-        $line = '    Uninstall-ADTApplication -Name ' + (ConvertTo-PsLiteral -Value $displayName) + ' -NameMatch ''Exact'' -ApplicationType ''EXE'''
+        $line = '    Uninstall-ADTApplication -Name ' + (ConvertTo-PsLiteral -Value $displayName) + ' -NameMatch ' + (ConvertTo-PsLiteral -Value $nameMatch) + ' -ApplicationType ''EXE'''
         if (-not [string]::IsNullOrWhiteSpace($uninstallArgs)) { $line += ' -ArgumentList ' + (ConvertTo-PsLiteral -Value $uninstallArgs) }
         $lines.Add($line)
     }

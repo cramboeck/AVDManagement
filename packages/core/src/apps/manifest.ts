@@ -143,6 +143,7 @@ function normalizeSourceInstaller(value: unknown): SourceInstaller | null {
     silentSwitch: typeof v.silentSwitch === 'string' && v.silentSwitch.trim() ? v.silentSwitch.trim() : null,
     productCode: typeof v.productCode === 'string' && PRODUCT_CODE_PATTERN.test(v.productCode) ? v.productCode.toUpperCase() : null,
     displayName: typeof v.displayName === 'string' && v.displayName.trim() ? v.displayName.trim().slice(0, 200) : null,
+    displayNameExact: v.displayNameExact !== false,
     fileName: safeInstallerFileName(v.fileName),
     resolvedAt: typeof v.resolvedAt === 'string' ? v.resolvedAt : new Date(0).toISOString(),
   };
@@ -332,6 +333,7 @@ export function buildPlanFor(
     uninstallCommand: wrapper === 'psadt' ? m.uninstallCommand : null,
     uninstallProductCode: source?.productCode ?? m.msiProductCode ?? null,
     uninstallDisplayName: source?.displayName ?? null,
+    uninstallNameMatch: source && source.displayNameExact === false ? 'Contains' : 'Exact',
     uninstallArguments: source && !sourceIsMsi ? source.silentSwitch : null,
     downloadUrl: source?.url ?? null,
     processesToClose: m.processesToClose,

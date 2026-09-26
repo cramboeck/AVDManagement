@@ -213,6 +213,7 @@ export function selectInstaller(manifest: InstallerManifest, wantedArch: Package
       silentSwitch: defaultSilentSwitch(best.type, best.raw.InstallerSwitches?.Silent?.trim() || best.raw.InstallerSwitches?.SilentWithProgress?.trim() || null),
       productCode: productCode && /^\{[0-9A-Fa-f-]{36}\}$/.test(productCode) ? productCode.toUpperCase() : null,
       displayName: entry?.DisplayName ?? null,
+      displayNameExact: !!entry?.DisplayName,
       fileName: fileNameFromUrl(best.raw.InstallerUrl as string, id, best.type),
       resolvedAt: now.toISOString(),
     },
@@ -304,6 +305,11 @@ export class WingetClient {
     const { installer, skipped } = selectInstaller({ ...installerManifest, PackageIdentifier: id, PackageVersion: wanted }, wantedArch, this.now());
     if (!installer) {
       throw new WingetError(`Kein verwendbarer Installer fuer ${id} ${wanted} (${wantedArch}): ${skipped.join('; ') || 'keine Installer im Manifest'}`, 'unsupported');
+    }
+    // Ohne Apps-und-Features-Eintrag im Manifest: Paketname als Namensteil fuer die Deinstallation
+    if (!installer.displayName && locale.PackageName?.trim()) {
+      installer.displayName = locale.PackageName.trim();
+      installer.displayNameExact = false;
     }
     return {
       packageIdentifier: id,

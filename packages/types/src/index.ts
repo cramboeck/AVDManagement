@@ -1022,6 +1022,8 @@ export interface SourceInstaller {
   productCode: string | null;
   // Anzeigename unter Apps und Features, fuer die Deinstallation von EXE-Installern
   displayName: string | null;
+  // true: Name aus AppsAndFeaturesEntries (exakt); false: Paketname aus dem Manifest (Namensteil)
+  displayNameExact: boolean;
   fileName: string;
   resolvedAt: string;
 }
@@ -1162,6 +1164,8 @@ export interface BuildPlan {
   // Deinstallation ohne Befehl: Produktcode oder Anzeigename unter Apps und Features
   uninstallProductCode: string | null;
   uninstallDisplayName: string | null;
+  // Exact oder Contains fuer Uninstall-ADTApplication -NameMatch
+  uninstallNameMatch: 'Exact' | 'Contains';
   uninstallArguments: string | null;
   // winget: der Worker laedt den Installer von hier statt von der API
   downloadUrl: string | null;

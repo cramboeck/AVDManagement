@@ -187,6 +187,7 @@ app.post('/:packageId/rollout', requireRole('engineer'), zValidator('json', roll
     return c.json({ jobs }, 202);
   } catch (error) {
     if (error instanceof Error && /Package not found/.test(error.message)) return c.json(problem(404, 'Package not found'), 404);
+    if (error instanceof Error && /nicht bereit|nicht gebaut/.test(error.message)) return c.json(problem(400, 'Paket nicht bereit', error.message), 400);
     throw error;
   }
 });

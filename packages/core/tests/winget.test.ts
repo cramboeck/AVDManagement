@@ -93,6 +93,9 @@ describe('WingetClient', () => {
     expect(headers.Authorization).toBe('Bearer tok');
     const arm = await client.resolve('7zip.7zip', '24.08', 'arm64');
     expect(arm.installer.installerType).toBe('exe');
+    // Kein Apps-und-Features-Eintrag im Manifest: Paketname als Namensteil
+    expect(arm.installer).toMatchObject({ displayName: '7-Zip', displayNameExact: false });
+    expect(r.installer.displayNameExact).toBe(true);
   });
 
   it('reports missing packages, missing versions and rate limits', async () => {

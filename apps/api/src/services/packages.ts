@@ -33,11 +33,24 @@ function toDeployment(row: DeploymentRow, tenantName: string): AppDeployment {
   };
 }
 
+/**
+ * Status gegen den heutigen Stand pruefen: winget-Pakete aus der Zeit, als
+ * winget noch "Store-App ohne Artefakt" hiess, tragen "ready" ohne .intunewin.
+ */
+function effectiveStatus(row: PackageRow): PackageStatus {
+  const manifest = row.manifest as AppManifest;
+  const status = row.status as PackageStatus;
+  if (manifest.installerType === 'winget' && !row.artifact && status === 'ready') {
+    return manifest.sourceInstaller ? 'installer-uploaded' : 'draft';
+  }
+  return status;
+}
+
 async function toPackage(row: PackageRow, createdByEmail: string, deployments: AppDeployment[]): Promise<AppPackage> {
   return {
     id: row.id,
     manifest: row.manifest as AppManifest,
-    status: row.status as PackageStatus,
+    status: effectiveStatus(row),
     artifact: (row.artifact as StoredFile | null) ?? null,
     installer: (row.installer as StoredFile | null) ?? null,
     buildLog: row.buildLog,

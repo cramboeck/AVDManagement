@@ -93,6 +93,11 @@ Alle nennenswerten Aenderungen an ZeroStress Cockpit. Format angelehnt an
 
 ### Geaendert
 
+- Apps: winget-Pakete aus der Zeit vor dem Umbau tragen nicht mehr "Bereit"
+  ohne .intunewin; der Rollout lehnt ungebaute Pakete mit klarer Meldung
+  ab. Fehlt im winget-Manifest der Apps-und-Features-Eintrag, nutzt der
+  Wrapper den Paketnamen als Namensteil fuer die Deinstallation.
+
 - Exchange: verbirgt der Tenant Namen in Berichten (UPN als Hash ohne @),
   bleibt die Postfachzeile ohne Link und die API erklaert statt "UPN
   ungueltig", wo die Einstellung "Anzeigenamen verbergen" sitzt.

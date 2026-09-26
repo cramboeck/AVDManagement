@@ -44,7 +44,7 @@ function describeManifest(m: AppManifest, prefix: string): Record<string, unknow
           ...(m.installerType === 'psadt' || m.installerType === 'winget'
             ? {
                 installerArguments: m.installerType === 'winget' ? (m.sourceInstaller?.silentSwitch ?? '') : (m.installCommand ?? ''),
-                innerUninstall: m.uninstallCommand ?? (m.sourceInstaller?.productCode ? `MSI ${m.sourceInstaller.productCode}` : m.sourceInstaller?.displayName ? `Apps und Features: ${m.sourceInstaller.displayName}` : m.installerFileName?.toLowerCase().endsWith('.msi') ? 'MSI aus dem Paket' : '(keiner)'),
+                innerUninstall: m.uninstallCommand ?? (m.sourceInstaller?.productCode ? `MSI ${m.sourceInstaller.productCode}` : m.sourceInstaller?.displayName ? `Apps und Features: ${m.sourceInstaller.displayName}${m.sourceInstaller.displayNameExact ? '' : ' (Namensteil)'}` : m.installerFileName?.toLowerCase().endsWith('.msi') ? 'MSI aus dem Paket' : '(keiner)'),
               }
             : {}),
           ...(m.sourceInstaller ? { source: `${m.sourceInstaller.url} (SHA-256 ${m.sourceInstaller.sha256.slice(0, 12)})` } : {}),
