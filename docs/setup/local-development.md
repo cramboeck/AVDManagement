@@ -115,7 +115,7 @@ Wunsch sofort zu.
 Unter **Apps > Katalog** pflegt der MSP Pakete einmal fuer alle Tenants.
 Ein Paket besteht aus einem typisierten Manifest (Hersteller, Name,
 Version, Architektur, Sprache, Revision, Installertyp `msi`/`exe`/`psadt`/
-`winget`, Install- und Uninstall-Befehl, Erkennung, Anforderungen,
+`winget`/`store`, Install- und Uninstall-Befehl, Erkennung, Anforderungen,
 Return-Codes, Neustartverhalten) und optional zwei Dateien: dem fertigen
 `.intunewin` (Artefakt) und dem rohen Installer (fuer den spaeteren
 Build-Worker). Dateien gehen per `PUT /packages/:id/artifact|installer
@@ -139,13 +139,41 @@ Artefakt). Der Job laeuft dann den Intune-Upload als Zustandsautomat:
 App anlegen, Content-Version, Datei anlegen, auf `azureStorageUriRequestSuccess`
 warten, Blob in 6-MB-Bloecken hochladen, Blockliste, Commit mit
 `fileEncryptionInfo` aus der `Detection.xml` der `.intunewin`, auf
-`commitFileSuccess` warten, `committedContentVersion` setzen. winget-Pakete
+`commitFileSuccess` warten, `committedContentVersion` setzen. Store-Pakete
 legen nur das Graph-Objekt `winGetApp` an. Der Job weist niemandem zu;
 Zuweisung bleibt der bewusste zweite Schritt unter Apps. Fortschritt,
 Intune-App-Id und Fehler je Tenant stehen in `app_deployments` und im
 Paketdetail. Benoetigt `DeviceManagementApps.ReadWrite.All`.
 
-**Build-Worker** (Stufe D): fuer `msi`, `exe` und `psadt` erzeugt ein
+**winget als Installerquelle** (Typ `winget`): der Installer kommt aus dem
+winget-Community-Katalog, das Paket wird trotzdem ein normales Win32-Paket
+mit PSADT-Wrapper und eigener Erkennung. Im Formular Id aus dem Basis-Set
+(rund 50 gaengige Programme), per Blaettern nach Herausgeber oder von Hand
+waehlen, Version leer (neueste) oder fest, dann "Aus Katalog laden". Die
+API liest die Manifeste direkt aus dem oeffentlichen GitHub-Repository
+`microsoft/winget-pkgs` (Versionsliste ueber die Contents-API, Manifeste
+als Rohdatei), waehlt den passenden Installer (Architektur, Scope machine,
+MSI vor EXE; msix/appx/zip/portable fallen raus) und fuellt Hersteller,
+Name, Version, Produktcode, stillen Schalter und Installer-URL samt
+SHA-256 ins Manifest. Der Worker laedt den Installer beim Bauen direkt vom
+Hersteller und prueft den Hash; ein Upload ist nicht noetig. Deinstallation:
+Manifest-Befehl, sonst MSI ueber Produktcode, sonst der Eintrag unter Apps
+und Features aus dem Katalog. Ohne `GITHUB_TOKEN` (optional, ohne Scopes)
+erlaubt GitHub 60 Katalogabfragen je Stunde, mit Token 5000.
+
+Versionen: die API prueft einmal am Tag je winget-Paket die Katalogversion
+(`latest_version`, `latest_checked_at`) und zeigt im Paketdetail "Neue
+Version im Katalog". "Neue Version anlegen" erzeugt ein neues Paket mit der
+neuen Version, loest den Installer neu auf und stellt den Build ein; das
+alte Paket bleibt. Ausrollen bleibt eine bewusste Freigabe, nichts laeuft
+automatisch auf Tenants. Audit `apps.package.new-version`.
+
+**Microsoft Store** (Typ `store`) ist der Sonderfall: nur fuer Store-
+Produkt-Ids (12 Zeichen aus der Store-URL). Intune installiert selbst,
+die Version folgt dem Store, es gibt kein Artefakt. Community-Ids wie
+`7zip.7zip` funktionieren dort nicht; dafuer den Typ `winget` nehmen.
+
+**Build-Worker** (Stufe D): fuer `msi`, `exe`, `psadt` und `winget` erzeugt ein
 Windows-Worker aus Installer und Manifest das `.intunewin`
 (`apps/worker-windows`, PowerShell 5.1). "Build starten" im Paketdetail
 legt einen Auftrag in `build_jobs` an (Audit `apps.package.build`); der

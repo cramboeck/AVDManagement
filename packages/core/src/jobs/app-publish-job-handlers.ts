@@ -34,8 +34,8 @@ function failure(code: string, message: string): JobResult {
 function describeManifest(m: AppManifest, prefix: string): Record<string, unknown> {
   return {
     displayName: packageDisplayName(m),
-    type: m.installerType === 'winget' ? 'winGetApp' : 'win32LobApp',
-    ...(m.installerType === 'winget'
+    type: m.installerType === 'store' ? 'winGetApp' : 'win32LobApp',
+    ...(m.installerType === 'store'
       ? { packageIdentifier: m.wingetPackageIdentifier }
       : {
           install: installCommandLine(m),
@@ -72,7 +72,7 @@ export function registerAppPublishJobs(ops: PublishOperations): void {
 
       await ops.recordDeployment(ctx.mspId, payload.packageId, ctx.tenantId, { status: 'publishing', jobId: ctx.jobId, error: null });
       try {
-        if (m.installerType === 'winget') {
+        if (m.installerType === 'store') {
           const result = await ops.publishWinGet(providerCtx, buildWinGetAppPayload(m));
           await ops.recordDeployment(ctx.mspId, payload.packageId, ctx.tenantId, { status: 'published', intuneAppId: result.appId, contentVersion: null, publishedAt: new Date(), error: null });
           return { success: true, data: { packageId: payload.packageId, intuneAppId: result.appId, changed: true, type: 'winGetApp' } };
@@ -101,8 +101,9 @@ export function registerAppPublishJobs(ops: PublishOperations): void {
       const existing = await ops.existingDeployment(payload.packageId, ctx.tenantId);
       const warnings: string[] = [];
       if (existing?.status === 'published') warnings.push('In diesem Tenant bereits veroeffentlicht; der Job aendert nichts.');
-      if (m.installerType !== 'winget' && (pkg.status !== 'ready' || !pkg.artifact)) warnings.push('Kein fertiges .intunewin vorhanden; der Job wird fehlschlagen. Erst bauen oder hochladen.');
-      if (m.installerType === 'winget') warnings.push('Intune laedt die Software aus dem Microsoft-Store-Katalog; die Version folgt dem Katalog.');
+      if (m.installerType !== 'store' && (pkg.status !== 'ready' || !pkg.artifact)) warnings.push('Kein fertiges .intunewin vorhanden; der Job wird fehlschlagen. Erst bauen oder hochladen.');
+      if (m.installerType === 'store') warnings.push('Intune laedt die Software aus dem Microsoft Store; die Version folgt dem Store. Nur fuer Store-Produkt-Ids, nicht fuer Community-Pakete.');
+      if (m.installerType === 'winget' && m.sourceInstaller) warnings.push(`Installer stammt aus dem winget-Katalog (${m.sourceInstaller.packageIdentifier} ${m.sourceInstaller.version}); das Paket wird als normale Win32-App mit eigener Erkennung angelegt.`);
       warnings.push('Die App wird angelegt, aber niemandem zugewiesen. Zuweisung als eigener Schritt unter Apps.');
       return {
         changes: [
@@ -116,7 +117,7 @@ export function registerAppPublishJobs(ops: PublishOperations): void {
           },
         ],
         warnings,
-        estimatedDurationSeconds: m.installerType === 'winget' ? 10 : Math.max(60, Math.round((pkg.artifact?.sizeBytes ?? 0) / (2 * 1024 * 1024))),
+        estimatedDurationSeconds: m.installerType === 'store' ? 10 : Math.max(60, Math.round((pkg.artifact?.sizeBytes ?? 0) / (2 * 1024 * 1024))),
       };
     }
   );

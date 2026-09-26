@@ -23,6 +23,8 @@ describe('normalizeManifest', () => {
       expect((e as ManifestError).problems).toEqual(expect.arrayContaining(['installerFileName fehlt', 'installCommand fehlt fuer exe']));
     }
     expect(() => normalizeManifest({ ...base, installerType: 'winget' })).toThrow(/wingetPackageIdentifier/);
+    expect(() => normalizeManifest({ ...base, installerType: 'store', wingetPackageIdentifier: 'Google.Chrome' })).toThrow(/Store-Produkt-Id/);
+    expect(() => normalizeManifest({ ...base, installerType: 'winget', wingetPackageIdentifier: '7zip.7zip' })).toThrow(/sourceInstaller fehlt/);
     expect(() => normalizeManifest({ ...base, name: 'bad;name' })).toThrow(/name ungueltig/);
   });
 
@@ -76,12 +78,25 @@ describe('normalizeManifest', () => {
     });
     const msi = normalizeManifest(base);
     expect(buildPlanFor(msi, { fileName: base.installerFileName, sha256: 'x', sizeBytes: 1 }, 'ZSC', { buildId: 'b', packageId: 'p' })).toMatchObject({ wrapper: 'plain', setupFile: base.installerFileName, markerKeyPath: null });
-    const winget = normalizeManifest({ vendor: 'Google', name: 'Chrome', version: 'latest', installerType: 'winget', wingetPackageIdentifier: 'Google.Chrome' });
-    expect(() => buildPlanFor(winget, { fileName: 'x', sha256: 'x', sizeBytes: 1 }, 'ZSC', { buildId: 'b', packageId: 'p' })).toThrow(/nicht gebaut/);
+    const store = normalizeManifest({ vendor: 'Google', name: 'Chrome', version: 'latest', installerType: 'store', wingetPackageIdentifier: '9NBLGGH4NNS1' });
+    expect(() => buildPlanFor(store, { fileName: 'x', sha256: 'x', sizeBytes: 1 }, 'ZSC', { buildId: 'b', packageId: 'p' })).toThrow(/nicht gebaut/);
   });
 
-  it('maps a winget manifest to a winGetApp payload', () => {
-    const m = normalizeManifest({ vendor: 'Google', name: 'Chrome', version: 'latest', installerType: 'winget', wingetPackageIdentifier: 'Google.Chrome' });
-    expect(buildWinGetAppPayload(m)).toMatchObject({ '@odata.type': '#microsoft.graph.winGetApp', packageIdentifier: 'Google.Chrome', installExperience: { runAsAccount: 'system' } });
+  it('maps a store manifest to a winGetApp payload', () => {
+    const m = normalizeManifest({ vendor: 'Google', name: 'Chrome', version: 'latest', installerType: 'store', wingetPackageIdentifier: '9NBLGGH4NNS1' });
+    expect(buildWinGetAppPayload(m)).toMatchObject({ '@odata.type': '#microsoft.graph.winGetApp', packageIdentifier: '9NBLGGH4NNS1', installExperience: { runAsAccount: 'system' } });
+  });
+
+  it('builds a wrapper plan for a winget source package with download URL and uninstall hints', () => {
+    const source = { packageIdentifier: '7zip.7zip', version: '24.08', url: 'https://www.7-zip.org/a/7z2408-x64.msi', sha256: 'a'.repeat(64), installerType: 'wix', architecture: 'x64', scope: 'machine', silentSwitch: null, productCode: '{23170F69-40C1-2702-2408-000001000000}', displayName: '7-Zip 24.08 (x64 edition)', fileName: '7z2408-x64.msi', resolvedAt: '2026-09-26T00:00:00Z' };
+    const m = normalizeManifest({ vendor: 'Igor Pavlov', name: '7-Zip', version: '24.08', installerType: 'winget', wingetPackageIdentifier: '7zip.7zip', wingetVersion: 'latest', sourceInstaller: source });
+    expect(m.installerFileName).toBe('7z2408-x64.msi');
+    const payload = buildWin32LobAppPayload(m, { fileName: 'x.intunewin' }, 'ZSC');
+    expect(payload.setupFilePath).toBe('Invoke-AppDeployToolkit.ps1');
+    expect((payload.detectionRules as Record<string, unknown>[])[0]).toMatchObject({ valueName: 'Installed' });
+    const plan = buildPlanFor(m, null, 'ZSC', { buildId: 'b', packageId: 'p' });
+    expect(plan).toMatchObject({ wrapper: 'psadt', downloadUrl: source.url, installer: { fileName: '7z2408-x64.msi', sha256: source.sha256 }, installerArguments: '', uninstallProductCode: source.productCode, uninstallDisplayName: '7-Zip 24.08 (x64 edition)' });
+    const exe = normalizeManifest({ vendor: 'N', name: 'Notepad++', version: '8.7', installerType: 'winget', wingetPackageIdentifier: 'Notepad++.Notepad++', sourceInstaller: { ...source, packageIdentifier: 'Notepad++.Notepad++', installerType: 'nullsoft', silentSwitch: '/S', productCode: null, fileName: 'npp.exe' } });
+    expect(buildPlanFor(exe, null, 'ZSC', { buildId: 'b', packageId: 'p' })).toMatchObject({ installerArguments: '/S', uninstallArguments: '/S', uninstallProductCode: null });
   });
 });

@@ -164,7 +164,16 @@ function ConvertTo-PsLiteral {
 function Get-Installer {
     param([object]$Plan, [string]$Folder)
     $target = Join-Path -Path $Folder -ChildPath $Plan.installer.fileName
-    Invoke-Api -Method 'GET' -Path ('/worker/builds/' + $Plan.buildId + '/installer') -OutFile $target | Out-Null
+    $downloadUrl = $null
+    if ($Plan.PSObject.Properties.Name -contains 'downloadUrl') { $downloadUrl = [string]$Plan.downloadUrl }
+    if (-not [string]::IsNullOrWhiteSpace($downloadUrl)) {
+        # winget-Quelle: direkt vom Hersteller laden, ohne Cockpit-Token im Header
+        if ($downloadUrl -notmatch '^https://') { throw ('Download URL must use https: ' + $downloadUrl) }
+        Invoke-WebRequest -Uri $downloadUrl -OutFile $target -UseBasicParsing -TimeoutSec 3600 -MaximumRedirection 5 | Out-Null
+    }
+    else {
+        Invoke-Api -Method 'GET' -Path ('/worker/builds/' + $Plan.buildId + '/installer') -OutFile $target | Out-Null
+    }
     $hash = (Get-FileHash -LiteralPath $target -Algorithm SHA256).Hash.ToLowerInvariant()
     if ($hash -ne ([string]$Plan.installer.sha256).ToLowerInvariant()) {
         throw ('Installer hash mismatch: expected ' + $Plan.installer.sha256 + ', got ' + $hash)
@@ -192,10 +201,19 @@ function New-InstallBlock {
     return ($lines -join "`r`n")
 }
 
+function Get-PlanValue {
+    param([object]$Plan, [string]$Name)
+    if ($Plan.PSObject.Properties.Name -contains $Name) { return [string]$Plan.$Name }
+    return ''
+}
+
 function New-UninstallBlock {
     param([object]$Plan)
     $installerKind = if ($Plan.installer.fileName -match '\.msi$') { 'msi' } else { 'exe' }
-    $cmd = [string]$Plan.uninstallCommand
+    $cmd = Get-PlanValue -Plan $Plan -Name 'uninstallCommand'
+    $productCode = Get-PlanValue -Plan $Plan -Name 'uninstallProductCode'
+    $displayName = Get-PlanValue -Plan $Plan -Name 'uninstallDisplayName'
+    $uninstallArgs = Get-PlanValue -Plan $Plan -Name 'uninstallArguments'
     $lines = New-Object -TypeName System.Collections.Generic.List[string]
     if (-not [string]::IsNullOrWhiteSpace($cmd)) {
         # cmd /c with an extra pair of quotes keeps inner quotes intact
@@ -204,6 +222,15 @@ function New-UninstallBlock {
     }
     elseif ($installerKind -eq 'msi') {
         $lines.Add('    Start-ADTMsiProcess -Action ''Uninstall'' -FilePath $installerPath')
+    }
+    elseif (-not [string]::IsNullOrWhiteSpace($productCode)) {
+        $lines.Add('    Start-ADTMsiProcess -Action ''Uninstall'' -FilePath ' + (ConvertTo-PsLiteral -Value $productCode))
+    }
+    elseif (-not [string]::IsNullOrWhiteSpace($displayName)) {
+        # Eintrag unter Apps und Features (aus dem winget-Manifest) mit dem stillen Schalter des Installers
+        $line = '    Uninstall-ADTApplication -Name ' + (ConvertTo-PsLiteral -Value $displayName) + ' -NameMatch ''Exact'' -ApplicationType ''EXE'''
+        if (-not [string]::IsNullOrWhiteSpace($uninstallArgs)) { $line += ' -ArgumentList ' + (ConvertTo-PsLiteral -Value $uninstallArgs) }
+        $lines.Add($line)
     }
     else {
         $lines.Add('    throw ''No uninstall command in the package manifest; add one and rebuild''')

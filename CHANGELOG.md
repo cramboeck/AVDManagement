@@ -8,6 +8,12 @@ Alle nennenswerten Aenderungen an ZeroStress Cockpit. Format angelehnt an
 
 ### Hinzugefuegt
 
+- Apps: winget als Installerquelle. Pakete vom Typ winget loesen ihr
+  Manifest aus microsoft/winget-pkgs auf (Basis-Set, Blaettern nach
+  Herausgeber, Id von Hand), der Worker laedt den Installer vom Hersteller,
+  prueft den Hash und baut ein Win32-Paket mit PSADT-Wrapper. Taegliche
+  Versionspruefung mit Hinweis im Paketdetail und "Neue Version anlegen".
+  Neuer Typ store fuer Microsoft-Store-Produkt-Ids (bisheriges Verhalten).
 - Exchange: Postfachdetail (Exchange > Postfach) mit Kennzahlen aus dem
   Bericht, Abwesenheit, Zeitzone, Aliassen und Posteingangsregeln live aus
   Graph; Jobs Abwesenheit setzen/ausschalten, Weiterleitungsregel anlegen,
@@ -58,6 +64,11 @@ Alle nennenswerten Aenderungen an ZeroStress Cockpit. Format angelehnt an
   KI-Erklaerung, Geraetemodul aus Intune und Defender.
 
 ### Geaendert
+
+- Apps: Community-winget-Ids werden nicht mehr als Store-App nach Intune
+  geschickt (das scheiterte dort); sie brauchen jetzt den Typ winget mit
+  Katalogaufloesung. Bestehende winget-Pakete bitte bearbeiten und "Aus
+  Katalog laden".
 
 - Geraeteuebersicht: Netzwerkkarte zeigt nur aktive Adapter, Rest
   ausklappbar; Skriptergebnisse in Ausklappbereichen.

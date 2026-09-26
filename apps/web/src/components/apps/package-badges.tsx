@@ -8,12 +8,13 @@ export const installerTypeLabels: Record<PackageInstallerType, string> = {
   exe: 'EXE',
   psadt: 'PSADT',
   intunewin: 'Fertiges .intunewin',
-  winget: 'winget',
+  winget: 'winget-Katalog',
+  store: 'Microsoft Store',
 };
 
 export const packageStatusMeta: Record<PackageStatus, { label: string; className: string }> = {
   draft: { label: 'Entwurf', className: 'bg-muted text-muted-foreground' },
-  'installer-uploaded': { label: 'Installer hochgeladen', className: 'bg-primary/10 text-primary' },
+  'installer-uploaded': { label: 'Installer vorhanden', className: 'bg-primary/10 text-primary' },
   queued: { label: 'Build wartet', className: 'bg-warning/10 text-warning' },
   building: { label: 'Wird gebaut', className: 'bg-warning/10 text-warning' },
   ready: { label: 'Bereit', className: 'bg-success/10 text-success' },

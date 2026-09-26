@@ -36,6 +36,7 @@ import { getJobQueue, getJobHealth } from './services/job-queue.js';
 import { startInventorySync, getInventoryHealth } from './services/inventory.js';
 import { startAlerting, getAlertingHealth } from './services/alerting.js';
 import { reportSchemaAtStartup, getSchemaHealth } from './services/schema-check.js';
+import { startVersionSweep } from './services/winget-catalog.js';
 
 const app = new Hono();
 
@@ -161,3 +162,6 @@ startInventorySync().catch((error: Error) => {
 startAlerting().catch((error: Error) => {
   console.error('Alerting could not start:', error.message);
 });
+
+// winget-Katalog: Versionen der Quellpakete einmal am Tag pruefen
+startVersionSweep();

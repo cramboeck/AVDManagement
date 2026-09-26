@@ -64,8 +64,9 @@ export async function listBuilds(mspId: string, packageId: string): Promise<Buil
 export async function enqueueBuild(mspId: string, packageId: string): Promise<{ build: BuildJob; pkg: AppPackage }> {
   const pkg = await getPackage(mspId, packageId);
   if (!pkg) throw new BuildError(404, 'Package not found');
-  if (!['msi', 'exe', 'psadt'].includes(pkg.manifest.installerType)) throw new BuildError(400, `Pakete vom Typ ${pkg.manifest.installerType} werden nicht gebaut`);
-  if (!pkg.installer) throw new BuildError(400, 'Erst den Installer hochladen');
+  if (!['msi', 'exe', 'psadt', 'winget'].includes(pkg.manifest.installerType)) throw new BuildError(400, `Pakete vom Typ ${pkg.manifest.installerType} werden nicht gebaut`);
+  if (pkg.manifest.installerType === 'winget' && !pkg.manifest.sourceInstaller) throw new BuildError(400, 'winget-Paket ohne aufgeloesten Installer; Paket bearbeiten und aus dem Katalog laden');
+  if (pkg.manifest.installerType !== 'winget' && !pkg.installer) throw new BuildError(400, 'Erst den Installer hochladen');
   const open = await db.query.buildJobs.findFirst({ where: and(eq(buildJobs.packageId, packageId), inArray(buildJobs.status, ['queued', 'claimed', 'building'])) });
   if (open) throw new BuildError(409, 'Fuer dieses Paket laeuft bereits ein Build');
 
@@ -120,7 +121,7 @@ export async function claimBuild(workerId: string): Promise<BuildPlan | null> {
   if (!row) return null;
 
   const pkg = await getPackage(row.msp_id, row.package_id);
-  if (!pkg || !pkg.installer) {
+  if (!pkg || (!pkg.installer && !(pkg.manifest.installerType === 'winget' && pkg.manifest.sourceInstaller))) {
     await finishBuild(row.id, workerId, { success: false, log: '', error: 'Paket oder Installer beim Claim nicht mehr vorhanden' });
     return null;
   }

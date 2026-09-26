@@ -192,6 +192,9 @@ export const appPackages = pgTable('app_packages', {
   buildLog: text('build_log'),
   buildError: text('build_error'),
   detectionKeyPath: text('detection_key_path'),
+  // winget: zuletzt im Katalog gesehene Version
+  latestVersion: varchar('latest_version', { length: 40 }),
+  latestCheckedAt: timestamp('latest_checked_at', { withTimezone: true }),
   createdBy: uuid('created_by').notNull().references(() => mspUsers.id),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),

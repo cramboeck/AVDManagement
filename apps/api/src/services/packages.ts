@@ -4,7 +4,7 @@
 
 import { Readable } from 'node:stream';
 import { and, desc, eq, inArray } from 'drizzle-orm';
-import { detectionKeyPath, normalizeManifest, packageIdentifier } from '@zerostress/core';
+import { detectionKeyPath, normalizeManifest, packageIdentifier, usesWrapper } from '@zerostress/core';
 import type { AppDeployment, AppManifest, AppPackage, DeploymentStatus, PackageStatus, StoredFile, TenantId } from '@zerostress/types';
 import { db, appPackages, appDeployments, managedTenants, mspUsers } from '../db/index.js';
 import { getArtifactStore } from './artifact-store.js';
@@ -43,6 +43,8 @@ async function toPackage(row: PackageRow, createdByEmail: string, deployments: A
     buildLog: row.buildLog,
     buildError: row.buildError,
     detectionKeyPath: row.detectionKeyPath,
+    latestVersion: row.latestVersion,
+    latestCheckedAt: row.latestCheckedAt?.toISOString() ?? null,
     createdByEmail,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
@@ -89,8 +91,10 @@ export async function getPackage(mspId: string, packageId: string): Promise<AppP
 }
 
 function initialStatus(manifest: AppManifest): PackageStatus {
-  // winget braucht kein Artefakt; alles andere wartet auf Upload oder Build
-  return manifest.installerType === 'winget' ? 'ready' : 'draft';
+  // store braucht kein Artefakt; winget hat den Installer aus dem Katalog; der Rest wartet auf Upload
+  if (manifest.installerType === 'store') return 'ready';
+  if (manifest.installerType === 'winget') return 'installer-uploaded';
+  return 'draft';
 }
 
 export async function createPackage(mspId: string, userId: string, input: Record<string, unknown>): Promise<AppPackage> {
@@ -101,7 +105,7 @@ export async function createPackage(mspId: string, userId: string, input: Record
       mspId,
       manifest,
       status: initialStatus(manifest),
-      detectionKeyPath: manifest.installerType === 'psadt' ? detectionKeyPath(detectionPrefix(), manifest) : null,
+      detectionKeyPath: usesWrapper(manifest) ? detectionKeyPath(detectionPrefix(), manifest) : null,
       createdBy: userId,
     })
     .returning();
@@ -120,7 +124,7 @@ export async function updateManifest(mspId: string, packageId: string, input: Re
     .update(appPackages)
     .set({
       manifest,
-      detectionKeyPath: manifest.installerType === 'psadt' ? detectionKeyPath(detectionPrefix(), manifest) : null,
+      detectionKeyPath: usesWrapper(manifest) ? detectionKeyPath(detectionPrefix(), manifest) : null,
       status: existing.status === 'draft' ? initialStatus(manifest) : existing.status,
       updatedAt: new Date(),
     })
@@ -197,6 +201,16 @@ export async function upsertDeployment(
     return;
   }
   await db.insert(appDeployments).values({ mspId, packageId, tenantId, status: patch.status ?? 'pending', intuneAppId: patch.intuneAppId ?? null, contentVersion: patch.contentVersion ?? null, error: patch.error ?? null, jobId: patch.jobId ?? null, publishedAt: patch.publishedAt ?? null });
+}
+
+export async function setLatestVersion(packageId: string, latestVersion: string | null, checkedAt: Date): Promise<void> {
+  await db.update(appPackages).set({ latestVersion, latestCheckedAt: checkedAt }).where(eq(appPackages.id, packageId));
+}
+
+/** Alle winget-Pakete (MSP-uebergreifend) fuer die naechtliche Versionspruefung. */
+export async function listWingetPackagesForCheck(): Promise<Array<{ id: string; mspId: string; manifest: AppManifest; latestCheckedAt: Date | null }>> {
+  const rows = await db.select({ id: appPackages.id, mspId: appPackages.mspId, manifest: appPackages.manifest, latestCheckedAt: appPackages.latestCheckedAt }).from(appPackages);
+  return rows.map((r) => ({ id: r.id, mspId: r.mspId, manifest: r.manifest as AppManifest, latestCheckedAt: r.latestCheckedAt })).filter((r) => r.manifest.installerType === 'winget');
 }
 
 export async function getDeployment(packageId: string, tenantId: string): Promise<DeploymentRow | null> {

@@ -45,7 +45,7 @@ const columns: ColumnDef<AppPackage>[] = [
     cell: (p) => <PackageStatusBadge status={p.status} />,
     searchable: false,
   },
-  { id: 'artifact', header: 'Artefakt', accessor: (p) => p.artifact?.fileName ?? null, cell: (p) => (p.artifact ? <span className="text-xs">{p.artifact.fileName} · {formatBytes(p.artifact.sizeBytes)}</span> : <span className="text-xs text-muted-foreground">{p.manifest.installerType === 'winget' ? 'nicht noetig' : '—'}</span>) },
+  { id: 'artifact', header: 'Artefakt', accessor: (p) => p.artifact?.fileName ?? null, cell: (p) => (p.artifact ? <span className="text-xs">{p.artifact.fileName} · {formatBytes(p.artifact.sizeBytes)}</span> : <span className="text-xs text-muted-foreground">{p.manifest.installerType === 'store' ? 'nicht noetig' : p.manifest.installerType === 'winget' ? 'aus Katalog bauen' : '—'}</span>) },
   {
     id: 'deployments',
     header: 'Tenants',
@@ -118,7 +118,7 @@ export default function CatalogPage() {
       ) : query.error ? (
         <ErrorState error={query.error as Error} onRetry={query.refetch} />
       ) : items.length === 0 ? (
-        <EmptyState title="Noch keine Pakete" description="Lege das erste Paket an: winget-Id fuer Standardsoftware, Installer fuer den Build-Worker oder ein fertiges .intunewin." action={<button onClick={() => setCreating(true)} className="rounded-md border px-4 py-2 text-sm font-medium hover:bg-accent">Neues Paket</button>} />
+        <EmptyState title="Noch keine Pakete" description="Lege das erste Paket an: aus dem winget-Katalog (Basis-Set oder Id), Installer fuer den Build-Worker oder ein fertiges .intunewin." action={<button onClick={() => setCreating(true)} className="rounded-md border px-4 py-2 text-sm font-medium hover:bg-accent">Neues Paket</button>} />
       ) : (
         <DataTable rows={items} columns={columns} getRowId={(p) => p.id} storageKey="packages" initialSort={{ columnId: 'updated', direction: 'desc' }} searchPlaceholder="Hersteller, Name, Version..." onRowClick={(p) => router.push(`/apps/catalog/${p.id}`)} exportFileName="paketkatalog" />
       )}

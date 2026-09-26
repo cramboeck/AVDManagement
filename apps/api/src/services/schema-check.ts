@@ -13,6 +13,7 @@ const REQUIRED_COLUMNS: ReadonlyArray<readonly [table: string, column: string]> 
   ['inventory_snapshots', 'unavailable'],
   ['alerts', 'id'],
   ['app_packages', 'id'],
+  ['app_packages', 'latest_version'],
   ['app_deployments', 'id'],
   ['build_jobs', 'id'],
   ['cve_explanations', 'cve_id'],

@@ -13,6 +13,8 @@ import { createPackage, deletePackage, getPackage, listPackages, openFile, store
 import { getArtifactStore } from '../services/artifact-store.js';
 import { startRollout } from '../services/publishing.js';
 import { BuildError, enqueueBuild, listBuilds, workerTokenConfigured } from '../services/builds.js';
+import { baseSet, browsePublisher, checkPackageVersion, createNewVersion, manifestFromResolution, resolveWinget } from '../services/winget-catalog.js';
+import { WingetError } from '@zerostress/core';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
 import type { CorrelationId } from '@zerostress/types';
@@ -53,6 +55,36 @@ app.post('/', requireRole('engineer'), async (c) => {
     return c.json(pkg, 201);
   } catch (error) {
     if (error instanceof ManifestError) return c.json({ ...problem(400, 'Manifest ungueltig', error.message), problems: error.problems }, 400);
+    throw error;
+  }
+});
+
+// winget-Katalog: Basis-Set, Blaettern nach Herausgeber, Aufloesung einer Id
+app.get('/winget/base-set', (c) => c.json({ items: baseSet(), githubToken: !!process.env.GITHUB_TOKEN }));
+
+app.get('/winget/browse', async (c) => {
+  const publisher = c.req.query('publisher') ?? '';
+  if (!publisher.trim()) return c.json(problem(400, 'publisher fehlt'), 400);
+  try {
+    return c.json({ items: await browsePublisher(publisher) });
+  } catch (error) {
+    if (error instanceof WingetError) return c.json(problem(error.code === 'invalid' ? 400 : 502, 'winget-Katalog', error.message), error.code === 'invalid' ? 400 : 502);
+    throw error;
+  }
+});
+
+const resolveSchema = z.object({ id: z.string().min(3).max(128), version: z.string().max(40).nullable().default(null), architecture: z.enum(['x64', 'x86', 'arm64', 'neutral']).default('x64') });
+
+app.post('/winget/resolve', requireRole('engineer'), zValidator('json', resolveSchema), async (c) => {
+  const body = c.req.valid('json');
+  try {
+    const resolution = await resolveWinget(body.id, body.version, body.architecture);
+    return c.json({ resolution, manifest: manifestFromResolution(resolution, body.architecture) });
+  } catch (error) {
+    if (error instanceof WingetError) {
+      const status = error.code === 'invalid' ? 400 : error.code === 'not-found' || error.code === 'unsupported' ? 404 : 502;
+      return c.json({ ...problem(status, 'winget-Katalog', error.message), code: error.code }, status);
+    }
     throw error;
   }
 });
@@ -147,6 +179,52 @@ app.post('/:packageId/build', requireRole('engineer'), async (c) => {
     return c.json({ ...build, workerConfigured: workerTokenConfigured() }, 202);
   } catch (error) {
     if (error instanceof BuildError) return c.json(problem(error.status, error.message), error.status);
+    throw error;
+  }
+});
+
+// winget: Katalogversion pruefen, neue Version als Paket anlegen
+app.post('/:packageId/check-version', requireRole('engineer'), async (c) => {
+  const auth = c.get('auth');
+  try {
+    return c.json(await checkPackageVersion(auth.mspId, c.req.param('packageId')));
+  } catch (error) {
+    if (error instanceof WingetError) return c.json(problem(502, 'winget-Katalog', error.message), 502);
+    if (error instanceof Error && /Package not found/.test(error.message)) return c.json(problem(404, 'Package not found'), 404);
+    if (error instanceof Error && /Nur winget/.test(error.message)) return c.json(problem(400, error.message), 400);
+    throw error;
+  }
+});
+
+const newVersionSchema = z.object({ version: z.string().max(40).nullable().default(null) });
+
+app.post('/:packageId/new-version', requireRole('engineer'), zValidator('json', newVersionSchema), async (c) => {
+  const auth = c.get('auth');
+  const packageId = c.req.param('packageId');
+  try {
+    const created = await createNewVersion(auth.mspId, auth.user.id, packageId, c.req.valid('json').version);
+    await audit.log({
+      mspId: auth.mspId,
+      tenantId: null,
+      userId: auth.user.id,
+      action: 'apps.package.new-version',
+      targetType: 'package',
+      targetId: created.id,
+      targetDisplayName: `${created.manifest.vendor} ${created.manifest.name} ${created.manifest.version}`,
+      beforeState: { predecessor: packageId },
+      afterState: { version: created.manifest.version, source: created.manifest.sourceInstaller?.url ?? null, status: created.status },
+      result: 'success',
+      correlationId: randomUUID() as CorrelationId,
+    });
+    return c.json(created, 201);
+  } catch (error) {
+    if (error instanceof WingetError) {
+      const status = error.code === 'invalid' ? 400 : error.code === 'not-found' || error.code === 'unsupported' ? 404 : 502;
+      return c.json(problem(status, 'winget-Katalog', error.message), status);
+    }
+    if (error instanceof ManifestError) return c.json({ ...problem(400, 'Manifest ungueltig', error.message), problems: error.problems }, 400);
+    if (error instanceof Error && /Package not found/.test(error.message)) return c.json(problem(404, 'Package not found'), 404);
+    if (error instanceof Error && /Nur winget/.test(error.message)) return c.json(problem(400, error.message), 400);
     throw error;
   }
 });

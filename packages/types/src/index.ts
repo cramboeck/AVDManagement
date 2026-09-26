@@ -758,7 +758,28 @@ export interface ForwardingScan {
 // Apps: Paketkatalog (Stufe C) und Build-Worker (Stufe D)
 // ============================================
 
-export type PackageInstallerType = 'msi' | 'exe' | 'psadt' | 'intunewin' | 'winget';
+// winget: Installer aus dem winget-Community-Katalog, der Worker baut daraus ein Win32-Paket.
+// store: Microsoft-Store-App (Produkt-Id), Intune installiert selbst (winGetApp).
+export type PackageInstallerType = 'msi' | 'exe' | 'psadt' | 'intunewin' | 'winget' | 'store';
+
+export type SourceInstallerType = 'msi' | 'wix' | 'exe' | 'inno' | 'nullsoft' | 'burn';
+
+/** Aus dem winget-Manifest aufgeloester Installer; der Worker laedt ihn von der URL. */
+export interface SourceInstaller {
+  packageIdentifier: string;
+  version: string;
+  url: string;
+  sha256: string;
+  installerType: SourceInstallerType;
+  architecture: PackageArchitecture;
+  scope: 'machine' | 'user' | null;
+  silentSwitch: string | null;
+  productCode: string | null;
+  // Anzeigename unter Apps und Features, fuer die Deinstallation von EXE-Installern
+  displayName: string | null;
+  fileName: string;
+  resolvedAt: string;
+}
 export type PackageArchitecture = 'x64' | 'x86' | 'arm64' | 'neutral';
 export type DetectionOperator = 'equal' | 'notEqual' | 'greaterThan' | 'greaterThanOrEqual' | 'lessThan' | 'lessThanOrEqual';
 
@@ -805,8 +826,12 @@ export interface AppManifest {
   privacyUrl: string | null;
   owner: string | null;
   notes: string | null;
-  // Nur bei installerType winget
+  // winget: Community-Id (z. B. 7zip.7zip); store: Store-Produkt-Id (z. B. 9NBLGGH4NNS1)
   wingetPackageIdentifier: string | null;
+  // winget: gewuenschte Version ('latest' oder fest), version traegt die aufgeloeste
+  wingetVersion: string | null;
+  // winget: aufgeloester Installer aus dem Katalog
+  sourceInstaller: SourceInstaller | null;
 }
 
 export type PackageStatus = 'draft' | 'installer-uploaded' | 'queued' | 'building' | 'ready' | 'failed';
@@ -829,8 +854,11 @@ export interface AppPackage {
   installer: StoredFile | null;
   buildLog: string | null;
   buildError: string | null;
-  // Erkennungsschluessel, den der Worker in das Paket schreibt (psadt)
+  // Erkennungsschluessel, den der Worker in das Paket schreibt (psadt, winget)
   detectionKeyPath: string | null;
+  // winget: zuletzt im Katalog gesehene Version und Zeitpunkt der Pruefung
+  latestVersion: string | null;
+  latestCheckedAt: string | null;
   createdByEmail: string;
   createdAt: string;
   updatedAt: string;
@@ -886,8 +914,38 @@ export interface BuildPlan {
   markerKeyPath: string | null;
   installerArguments: string;
   uninstallCommand: string | null;
+  // Deinstallation ohne Befehl: Produktcode oder Anzeigename unter Apps und Features
+  uninstallProductCode: string | null;
+  uninstallDisplayName: string | null;
+  uninstallArguments: string | null;
+  // winget: der Worker laedt den Installer von hier statt von der API
+  downloadUrl: string | null;
   processesToClose: string[];
   artifactFileName: string;
+}
+
+/** Eintrag des mitgelieferten Basis-Sets gaengiger winget-Pakete. */
+export interface WingetCatalogEntry {
+  id: string;
+  name: string;
+  publisher: string;
+  category: string;
+  note: string | null;
+}
+
+/** Ergebnis der Katalogaufloesung fuer das Formular. */
+export interface WingetResolution {
+  packageIdentifier: string;
+  version: string;
+  availableVersions: string[];
+  publisher: string;
+  name: string;
+  description: string | null;
+  homepage: string | null;
+  license: string | null;
+  installer: SourceInstaller;
+  // Installer, die nicht in Frage kamen (Typ, Architektur), zur Erklaerung
+  skipped: string[];
 }
 
 // ============================================

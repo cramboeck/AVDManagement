@@ -36,7 +36,7 @@ export default function PackageDetailPage({ params }: { params: { packageId: str
   const builds = useQuery({
     queryKey: ['package-builds', packageId],
     queryFn: () => api.get<{ items: BuildJob[]; workerConfigured: boolean }>(`/packages/${packageId}/builds`),
-    enabled: !!query.data && ['msi', 'exe', 'psadt'].includes(query.data.manifest.installerType),
+    enabled: !!query.data && ['msi', 'exe', 'psadt', 'winget'].includes(query.data.manifest.installerType),
     refetchInterval: (q) => (q.state.data?.items.some((b) => ['queued', 'claimed', 'building'].includes(b.status)) ? 5000 : false),
   });
 
@@ -64,6 +64,19 @@ export default function PackageDetailPage({ params }: { params: { packageId: str
     onSuccess: refresh,
     onError: (e: Error) => setUploadError(e),
   });
+  const checkVersion = useMutation({
+    mutationFn: () => api.post<{ current: string; latest: string | null; newer: boolean }>(`/packages/${packageId}/check-version`),
+    onSuccess: refresh,
+    onError: (e: Error) => setUploadError(e),
+  });
+  const newVersion = useMutation({
+    mutationFn: () => api.post<AppPackage>(`/packages/${packageId}/new-version`, { version: null }),
+    onSuccess: (created) => {
+      queryClient.invalidateQueries({ queryKey: ['packages'] });
+      router.push(`/apps/catalog/${created.id}`);
+    },
+    onError: (e: Error) => setUploadError(e),
+  });
   const remove = useMutation({
     mutationFn: () => api.delete<{ deleted: boolean }>(`/packages/${packageId}`),
     onSuccess: () => {
@@ -78,8 +91,11 @@ export default function PackageDetailPage({ params }: { params: { packageId: str
   const pkg = query.data;
   if (!pkg) return <EmptyState title="Paket nicht gefunden" />;
   const m = pkg.manifest;
-  const needsArtifact = m.installerType !== 'winget';
-  const canBuild = ['msi', 'exe', 'psadt'].includes(m.installerType) && !!pkg.installer && !['queued', 'building'].includes(pkg.status);
+  const needsArtifact = m.installerType !== 'store';
+  const wrapper = m.installerType === 'psadt' || m.installerType === 'winget';
+  const hasInput = m.installerType === 'winget' ? !!m.sourceInstaller : !!pkg.installer;
+  const canBuild = ['msi', 'exe', 'psadt', 'winget'].includes(m.installerType) && hasInput && !['queued', 'building'].includes(pkg.status);
+  const newerAvailable = m.installerType === 'winget' && !!pkg.latestVersion && pkg.latestVersion !== m.version;
   const canRollout = pkg.status === 'ready' && tenants.some((t) => t.connectionStatus === 'connected');
 
   return (
@@ -94,10 +110,17 @@ export default function PackageDetailPage({ params }: { params: { packageId: str
               {m.vendor} {m.name} {m.version}
             </h1>
             <p className="text-sm text-muted-foreground">
-              {installerTypeLabels[m.installerType]} · {m.architecture} · {m.language} · Rev. {m.revision} · angelegt von {pkg.createdByEmail} am {formatDateTime(pkg.createdAt)}
+              {installerTypeLabels[m.installerType]}
+              {m.wingetPackageIdentifier ? ` · ${m.wingetPackageIdentifier}` : ''} · {m.architecture} · {m.language} · Rev. {m.revision} · angelegt von {pkg.createdByEmail} am {formatDateTime(pkg.createdAt)}
             </p>
             <div className="mt-2 flex flex-wrap gap-2">
               <PackageStatusBadge status={pkg.status} />
+              {newerAvailable && (
+                <span className="rounded-full bg-warning/10 px-2 py-0.5 text-xs font-medium text-warning" title={`Katalog geprueft ${pkg.latestCheckedAt ? formatDateTime(pkg.latestCheckedAt) : ''}`}>
+                  Neue Version im Katalog: {pkg.latestVersion}
+                </span>
+              )}
+              {m.installerType === 'winget' && !newerAvailable && pkg.latestCheckedAt && <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">Katalog aktuell, geprueft {formatDateTime(pkg.latestCheckedAt)}</span>}
               {pkg.detectionKeyPath && (
                 <span className="rounded-full bg-muted px-2 py-0.5 font-mono text-[10px] text-muted-foreground" title="Erkennungsschluessel, den der Worker in das Paket schreibt">
                   {pkg.detectionKeyPath.replace('HKEY_LOCAL_MACHINE\\SOFTWARE\\', 'HKLM\\...\\')}
@@ -107,6 +130,18 @@ export default function PackageDetailPage({ params }: { params: { packageId: str
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
+          {m.installerType === 'winget' && (
+            <>
+              <button onClick={() => checkVersion.mutate()} disabled={checkVersion.isPending} className="inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm hover:bg-accent disabled:opacity-50">
+                {checkVersion.isPending && <LoadingSpinner size="sm" />}
+                Katalog pruefen
+              </button>
+              <button onClick={() => window.confirm(`Neues Paket mit der Katalogversion ${pkg.latestVersion ?? '(neueste)'} anlegen und bauen? Dieses Paket bleibt bestehen.`) && newVersion.mutate()} disabled={newVersion.isPending} className={clsx('inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm hover:bg-accent disabled:opacity-50', newerAvailable && 'border-warning text-warning')}>
+                {newVersion.isPending && <LoadingSpinner size="sm" />}
+                Neue Version anlegen
+              </button>
+            </>
+          )}
           <button onClick={() => setEditing(true)} className="rounded-md border px-3 py-1.5 text-sm hover:bg-accent">
             Bearbeiten
           </button>
@@ -123,7 +158,7 @@ export default function PackageDetailPage({ params }: { params: { packageId: str
           <h2 className="mb-3 font-medium">Dateien</h2>
           {!needsArtifact ? (
             <p className="text-sm text-muted-foreground">
-              winget-Paket <span className="font-mono">{m.wingetPackageIdentifier}</span>: Intune laedt die Software selbst aus dem Microsoft-Store-Katalog. Kein Upload noetig.
+              Store-App <span className="font-mono">{m.wingetPackageIdentifier}</span>: Intune laedt die Software selbst aus dem Microsoft Store. Kein Upload noetig.
             </p>
           ) : (
             <div className="space-y-3 text-sm">
@@ -135,12 +170,29 @@ export default function PackageDetailPage({ params }: { params: { packageId: str
                 onPick={() => artifactInput.current?.click()}
                 downloadHref={pkg.artifact ? `/packages/${packageId}/artifact` : null}
               />
-              {m.installerType !== 'intunewin' && (
+              {m.installerType === 'winget' && m.sourceInstaller && (
+                <div className="rounded-md border px-3 py-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="font-medium">Installer aus dem winget-Katalog</span>
+                    <span className="text-xs text-muted-foreground">
+                      {m.sourceInstaller.packageIdentifier} {m.sourceInstaller.version} · {m.sourceInstaller.installerType} · {m.sourceInstaller.architecture}
+                    </span>
+                  </div>
+                  <p className="mt-1 break-all text-xs text-muted-foreground">{m.sourceInstaller.url}</p>
+                  <p className="text-xs text-muted-foreground">
+                    SHA-256 {m.sourceInstaller.sha256.slice(0, 16)}… · {m.sourceInstaller.fileName}
+                    {m.sourceInstaller.silentSwitch ? ` · still: ${m.sourceInstaller.silentSwitch}` : ''}
+                    {m.sourceInstaller.productCode ? ` · Produktcode ${m.sourceInstaller.productCode}` : ''}
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">Der Worker laedt die Datei vom Hersteller, prueft den Hash und baut das Paket. Kein Upload noetig.</p>
+                </div>
+              )}
+              {!['intunewin', 'winget'].includes(m.installerType) && (
                 <FileRow label="Installer (msi/exe)" file={pkg.installer} hint="Eingabe fuer den Build-Worker" pending={upload.isPending && upload.variables?.kind === 'installer'} onPick={() => installerInput.current?.click()} downloadHref={pkg.installer ? `/packages/${packageId}/installer` : null} />
               )}
               <input ref={artifactInput} type="file" accept=".intunewin" className="hidden" onChange={(e) => e.target.files?.[0] && upload.mutate({ kind: 'artifact', file: e.target.files[0] })} />
               <input ref={installerInput} type="file" accept=".msi,.exe" className="hidden" onChange={(e) => e.target.files?.[0] && upload.mutate({ kind: 'installer', file: e.target.files[0] })} />
-              {['msi', 'exe', 'psadt'].includes(m.installerType) && (
+              {['msi', 'exe', 'psadt', 'winget'].includes(m.installerType) && (
                 <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-dashed px-3 py-2">
                   <span className="text-xs text-muted-foreground">
                     {pkg.status === 'queued' ? 'Build wartet auf einen Worker.' : pkg.status === 'building' ? 'Der Worker baut gerade.' : pkg.status === 'failed' ? `Letzter Build fehlgeschlagen: ${pkg.buildError ?? ''}` : 'Der Windows-Worker erzeugt aus Installer und Manifest das .intunewin.'}
@@ -151,7 +203,7 @@ export default function PackageDetailPage({ params }: { params: { packageId: str
                   </button>
                 </div>
               )}
-              {builds.data && !builds.data.workerConfigured && ['msi', 'exe', 'psadt'].includes(m.installerType) && (
+              {builds.data && !builds.data.workerConfigured && ['msi', 'exe', 'psadt', 'winget'].includes(m.installerType) && (
                 <p className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs">
                   Kein Build-Worker eingerichtet: in der API fehlt WORKER_TOKEN. Auftraege bleiben auf &quot;wartet&quot;, bis ein Worker laeuft (siehe apps/worker-windows/README.md). Alternativ das fertige .intunewin direkt hochladen.
                 </p>
@@ -185,14 +237,14 @@ export default function PackageDetailPage({ params }: { params: { packageId: str
         <section className="rounded-lg border p-4">
           <h2 className="mb-3 font-medium">Manifest</h2>
           <dl className="grid gap-x-4 gap-y-1 text-sm sm:grid-cols-2">
-            <Row k="Installation" v={m.installerType === 'psadt' ? `PSADT Silent${m.installCommand ? ` (Installer-Parameter ${m.installCommand})` : ''}` : (m.installCommand ?? (m.installerType === 'msi' ? 'msiexec /qn' : '—'))} mono />
-            <Row k="Deinstallation" v={m.installerType === 'psadt' ? `PSADT Silent${m.uninstallCommand ? ` (${m.uninstallCommand})` : m.installerFileName?.toLowerCase().endsWith('.msi') ? ' (msiexec /x)' : ' (kein Befehl hinterlegt)'}` : (m.uninstallCommand ?? (m.installerType === 'msi' && m.msiProductCode ? `msiexec /x ${m.msiProductCode}` : '—'))} mono />
+            <Row k="Installation" v={wrapper ? `PSADT Silent${m.installerType === 'winget' ? (m.sourceInstaller?.silentSwitch ? ` (Installer-Parameter ${m.sourceInstaller.silentSwitch})` : '') : m.installCommand ? ` (Installer-Parameter ${m.installCommand})` : ''}` : (m.installCommand ?? (m.installerType === 'msi' ? 'msiexec /qn' : '—'))} mono />
+            <Row k="Deinstallation" v={wrapper ? `PSADT Silent${m.uninstallCommand ? ` (${m.uninstallCommand})` : m.installerFileName?.toLowerCase().endsWith('.msi') ? ' (msiexec /x)' : m.sourceInstaller?.productCode ? ` (Produktcode ${m.sourceInstaller.productCode})` : m.sourceInstaller?.displayName ? ` (Apps und Features: ${m.sourceInstaller.displayName})` : ' (kein Befehl hinterlegt)'}` : (m.uninstallCommand ?? (m.installerType === 'msi' && m.msiProductCode ? `msiexec /x ${m.msiProductCode}` : '—'))} mono />
             <Row k="Kontext" v={m.installContext === 'system' ? 'System' : 'Benutzer'} />
             <Row k="Neustart" v={m.restartBehavior} />
             <Row k="Windows ab" v={m.requirements.minimumWindowsRelease ?? '—'} />
             <Row k="Architektur" v={m.requirements.architecture} />
             <Row k="Prozesse schliessen" v={m.processesToClose.join(', ') || '—'} />
-            <Row k="Erkennung" v={m.installerType === 'psadt' ? 'Registry-Marker (Installed = Y, Version)' : m.installerType === 'winget' ? 'durch Intune' : m.detection.map((d) => (d.type === 'registry' ? `Registry ${d.keyPath}` : d.type === 'file' ? `Datei ${d.path}\\${d.fileOrFolderName}` : d.type === 'msi' ? `MSI ${d.productCode}` : 'Skript')).join('; ') || (m.msiProductCode ? `MSI ${m.msiProductCode}` : '—')} mono />
+            <Row k="Erkennung" v={wrapper ? 'Registry-Marker (Installed = Y, Version)' : m.installerType === 'store' ? 'durch Intune (Store)' : m.detection.map((d) => (d.type === 'registry' ? `Registry ${d.keyPath}` : d.type === 'file' ? `Datei ${d.path}\\${d.fileOrFolderName}` : d.type === 'msi' ? `MSI ${d.productCode}` : 'Skript')).join('; ') || (m.msiProductCode ? `MSI ${m.msiProductCode}` : '—')} mono />
             <Row k="Rueckgabecodes" v={m.returnCodes.map((r) => `${r.code}=${r.type}`).join(', ')} mono />
             <Row k="Herausgeber" v={m.publisher} />
           </dl>

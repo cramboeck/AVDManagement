@@ -7,7 +7,10 @@ N Tenants) sowie Stufe D (Windows-Build-Worker in `apps/worker-windows`,
 Auftraege in `build_jobs`, Endpunkte unter `/worker` mit `WORKER_TOKEN`,
 PSADT-v4-Wrapper aus `templates/`, Bauplan `BuildPlan` aus dem Manifest).
 Offen aus D: zip-Installer, Transforms, Signierung ist vorgesehen, aber
-ohne Zertifikat inaktiv. Grundlage:
+ohne Zertifikat inaktiv. Ergaenzt: winget als Installerquelle mit
+Katalogaufloesung, Basis-Set, Blaettern nach Herausgeber, taeglicher
+Versionspruefung und "Neue Version anlegen"; Store als Sonderfall.
+Grundlage:
 Modul-Standard (`docs/backlog.md`) und die Analyse von PackageFactory und
 CloudManagementPortal (beide MIT, eigener Code des Auftraggebers).
 
@@ -137,6 +140,11 @@ neuer Version mit Preview der betroffenen Tenants.
 3. Paketablage: Cockpit-DB plus Azure Blob Storage (EU), lokal ein Ordner.
 4. Detection-Praefix pro MSP (`APP_DETECTION_PREFIX`).
 5. Im Portal angelegte Apps werden nur angezeigt, nicht importiert.
-6. winget ist ein Katalogtyp ohne Artefakt.
+6. winget ist Installerquelle: Manifeste aus `microsoft/winget-pkgs`,
+   Installer wird vom Worker geladen und als Win32-Paket mit Wrapper
+   gebaut. Microsoft Store (`store`) bleibt der Sonderfall ohne Artefakt,
+   nur fuer Store-Produkt-Ids. Basis-Set gaengiger Ids im Code.
+   Versionspruefung taeglich, neue Version als eigenes Paket auf Knopfdruck;
+   Rollout bleibt manuell.
 7. Code-Signierung der PSADT-Skripte kommt spaeter (Worker sieht den
    Haken vor, Zertifikat bleibt ausserhalb des Repos).

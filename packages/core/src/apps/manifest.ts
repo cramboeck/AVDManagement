@@ -7,7 +7,8 @@
  * Bauen in das Paket schreibt. Kein Parsen von Ordnernamen.
  */
 
-import type { AppDetectionRule, AppManifest, BuildPlan, PackageArchitecture, ReturnCodeType, StoredFile } from '@zerostress/types';
+import type { AppDetectionRule, AppManifest, BuildPlan, PackageArchitecture, ReturnCodeType, SourceInstaller, StoredFile } from '@zerostress/types';
+import { isStoreProductId, isWingetId } from './winget.js';
 
 export const DEFAULT_RETURN_CODES: { code: number; type: ReturnCodeType }[] = [
   { code: 0, type: 'success' },
@@ -19,10 +20,10 @@ export const DEFAULT_RETURN_CODES: { code: number; type: ReturnCodeType }[] = [
 
 export const WINDOWS_RELEASES = ['1607', '1703', '1709', '1803', '1809', '1903', '1909', '2004', '20H2', '21H1', '21H2', '22H2', '23H2', '24H2'];
 const ARCHITECTURES: PackageArchitecture[] = ['x64', 'x86', 'arm64', 'neutral'];
-const INSTALLER_TYPES: AppManifest['installerType'][] = ['msi', 'exe', 'psadt', 'intunewin', 'winget'];
+const INSTALLER_TYPES: AppManifest['installerType'][] = ['msi', 'exe', 'psadt', 'intunewin', 'winget', 'store'];
 const NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9 ._+()-]{0,79}$/;
 const VERSION_PATTERN = /^[0-9A-Za-z][0-9A-Za-z.-]{0,39}$/;
-const WINGET_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*\.[A-Za-z0-9][A-Za-z0-9._-]*$/;
+const WINGET_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._+-]*$/;
 const PRODUCT_CODE_PATTERN = /^\{[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}\}$/;
 
 export class ManifestError extends Error {
@@ -48,7 +49,7 @@ export function normalizeManifest(input: Partial<AppManifest> & Record<string, u
   };
 
   const installerType = INSTALLER_TYPES.includes(input.installerType as AppManifest['installerType']) ? (input.installerType as AppManifest['installerType']) : null;
-  if (!installerType) problems.push('installerType muss msi, exe, psadt, intunewin oder winget sein');
+  if (!installerType) problems.push('installerType muss msi, exe, psadt, intunewin, winget oder store sein');
 
   const manifest: AppManifest = {
     schemaVersion: 1,
@@ -84,9 +85,22 @@ export function normalizeManifest(input: Partial<AppManifest> & Record<string, u
     owner: typeof input.owner === 'string' && input.owner.trim() ? input.owner.trim().slice(0, 100) : null,
     notes: typeof input.notes === 'string' && input.notes.trim() ? input.notes.trim().slice(0, 2000) : null,
     wingetPackageIdentifier: str('wingetPackageIdentifier', WINGET_ID_PATTERN, false) || null,
+    wingetVersion: str('wingetVersion', VERSION_PATTERN, false) || null,
+    sourceInstaller: normalizeSourceInstaller(input.sourceInstaller),
   };
 
-  if (manifest.installerType === 'winget' && !manifest.wingetPackageIdentifier) problems.push('wingetPackageIdentifier fehlt (z. B. Google.Chrome)');
+  if (manifest.installerType === 'winget') {
+    if (!manifest.wingetPackageIdentifier) problems.push('wingetPackageIdentifier fehlt (z. B. 7zip.7zip)');
+    else if (!isWingetId(manifest.wingetPackageIdentifier)) problems.push(`wingetPackageIdentifier '${manifest.wingetPackageIdentifier}' ist keine winget-Id (Form Herausgeber.Paket)`);
+    if (!manifest.sourceInstaller) problems.push('sourceInstaller fehlt: Paket erst aus dem winget-Katalog aufloesen');
+    else if (manifest.sourceInstaller.packageIdentifier.toLowerCase() !== (manifest.wingetPackageIdentifier ?? '').toLowerCase()) problems.push('sourceInstaller gehoert zu einer anderen winget-Id');
+    if (manifest.sourceInstaller) manifest.installerFileName = manifest.sourceInstaller.fileName;
+  }
+  if (manifest.installerType === 'store') {
+    if (!manifest.wingetPackageIdentifier) problems.push('wingetPackageIdentifier fehlt (Store-Produkt-Id, z. B. 9NBLGGH4NNS1)');
+    else if (!isStoreProductId(manifest.wingetPackageIdentifier)) problems.push(`'${manifest.wingetPackageIdentifier}' ist keine Store-Produkt-Id (12 Zeichen, aus der Store-URL); fuer Community-Pakete den Typ winget nehmen`);
+  }
+  if (manifest.installerType !== 'winget') manifest.sourceInstaller = null;
   if ((manifest.installerType === 'msi' || manifest.installerType === 'exe') && !manifest.installerFileName) problems.push('installerFileName fehlt');
   if (manifest.installerType === 'exe' && !manifest.installCommand) problems.push('installCommand fehlt fuer exe');
   if (manifest.installerType === 'intunewin' && manifest.detection.length === 0) problems.push('intunewin braucht mindestens eine Erkennungsregel');
@@ -97,6 +111,30 @@ export function normalizeManifest(input: Partial<AppManifest> & Record<string, u
 
   if (problems.length > 0) throw new ManifestError(problems);
   return manifest;
+}
+
+function normalizeSourceInstaller(value: unknown): SourceInstaller | null {
+  if (!value || typeof value !== 'object') return null;
+  const v = value as Partial<SourceInstaller>;
+  if (typeof v.url !== 'string' || !/^https:\/\/[^\s]+$/.test(v.url)) return null;
+  if (typeof v.sha256 !== 'string' || !/^[0-9a-f]{64}$/i.test(v.sha256)) return null;
+  if (typeof v.packageIdentifier !== 'string' || typeof v.version !== 'string' || typeof v.fileName !== 'string') return null;
+  const types = ['msi', 'wix', 'exe', 'inno', 'nullsoft', 'burn'];
+  if (!types.includes(String(v.installerType))) return null;
+  return {
+    packageIdentifier: v.packageIdentifier,
+    version: v.version,
+    url: v.url,
+    sha256: v.sha256.toLowerCase(),
+    installerType: v.installerType as SourceInstaller['installerType'],
+    architecture: ARCHITECTURES.includes(v.architecture as PackageArchitecture) ? (v.architecture as PackageArchitecture) : 'x64',
+    scope: v.scope === 'machine' || v.scope === 'user' ? v.scope : null,
+    silentSwitch: typeof v.silentSwitch === 'string' && v.silentSwitch.trim() ? v.silentSwitch.trim() : null,
+    productCode: typeof v.productCode === 'string' && PRODUCT_CODE_PATTERN.test(v.productCode) ? v.productCode.toUpperCase() : null,
+    displayName: typeof v.displayName === 'string' && v.displayName.trim() ? v.displayName.trim().slice(0, 200) : null,
+    fileName: v.fileName.replace(/[\\/:*?"<>|]/g, '_').slice(0, 200),
+    resolvedAt: typeof v.resolvedAt === 'string' ? v.resolvedAt : new Date(0).toISOString(),
+  };
 }
 
 function urlOrNull(value: unknown): string | null {
@@ -172,7 +210,7 @@ export function packageDisplayName(m: AppManifest): string {
  * (nicht nur "Schluessel existiert", sonst gilt eine Deinstallation als installiert).
  */
 export function effectiveDetectionRules(m: AppManifest, prefix: string): AppDetectionRule[] {
-  if (m.installerType === 'psadt') {
+  if (usesWrapper(m)) {
     return [
       { type: 'registry', keyPath: detectionKeyPath(prefix, m), valueName: 'Installed', detectionType: 'string', operator: 'equal', value: 'Y', check32BitOn64System: false },
       { type: 'registry', keyPath: detectionKeyPath(prefix, m), valueName: 'DisplayVersion', detectionType: 'string', operator: 'equal', value: m.version, check32BitOn64System: false },
@@ -229,15 +267,20 @@ export const PSADT_ENTRY_SCRIPT = 'Invoke-AppDeployToolkit.ps1';
  * Intune-Kommandozeile. Bei psadt immer der Wrapper: installCommand traegt
  * dort nur die stillen Parameter des Installers, die der Wrapper anhaengt.
  */
+/** Pakettypen, die der Worker mit PSADT-Wrapper und Registry-Marker baut. */
+export function usesWrapper(m: Pick<AppManifest, 'installerType'>): boolean {
+  return m.installerType === 'psadt' || m.installerType === 'winget';
+}
+
 export function installCommandLine(m: AppManifest): string {
-  if (m.installerType === 'psadt') return `powershell.exe -ExecutionPolicy Bypass -NoProfile -File "${PSADT_ENTRY_SCRIPT}" -DeploymentType Install -DeployMode Silent`;
+  if (usesWrapper(m)) return `powershell.exe -ExecutionPolicy Bypass -NoProfile -File "${PSADT_ENTRY_SCRIPT}" -DeploymentType Install -DeployMode Silent`;
   if (m.installCommand) return m.installCommand;
   if (m.installerType === 'msi') return `msiexec.exe /i "${m.installerFileName}" /qn /norestart`;
   return m.installerFileName ? `"${m.installerFileName}" /S` : '';
 }
 
 export function uninstallCommandLine(m: AppManifest): string {
-  if (m.installerType === 'psadt') return `powershell.exe -ExecutionPolicy Bypass -NoProfile -File "${PSADT_ENTRY_SCRIPT}" -DeploymentType Uninstall -DeployMode Silent`;
+  if (usesWrapper(m)) return `powershell.exe -ExecutionPolicy Bypass -NoProfile -File "${PSADT_ENTRY_SCRIPT}" -DeploymentType Uninstall -DeployMode Silent`;
   if (m.uninstallCommand) return m.uninstallCommand;
   if (m.installerType === 'msi' && m.msiProductCode) return `msiexec.exe /x ${m.msiProductCode} /qn /norestart`;
   return installCommandLine(m);
@@ -250,27 +293,36 @@ export function uninstallCommandLine(m: AppManifest): string {
  */
 export function buildPlanFor(
   m: AppManifest,
-  installer: Pick<StoredFile, 'fileName' | 'sha256' | 'sizeBytes'>,
+  installer: Pick<StoredFile, 'fileName' | 'sha256' | 'sizeBytes'> | null,
   prefix: string,
   ids: { buildId: string; packageId: string }
 ): BuildPlan {
-  if (m.installerType === 'winget' || m.installerType === 'intunewin') {
+  if (m.installerType === 'store' || m.installerType === 'intunewin') {
     throw new Error(`Pakete vom Typ ${m.installerType} werden nicht gebaut`);
   }
-  const wrapper = m.installerType === 'psadt' ? 'psadt' : 'plain';
+  const source = m.installerType === 'winget' ? m.sourceInstaller : null;
+  if (m.installerType === 'winget' && !source) throw new Error('winget-Paket ohne aufgeloesten Installer; erst aus dem Katalog laden');
+  const file = source ? { fileName: source.fileName, sha256: source.sha256, sizeBytes: 0 } : installer;
+  if (!file) throw new Error('Kein Installer vorhanden');
+  const wrapper = usesWrapper(m) ? 'psadt' : 'plain';
   const identifier = packageIdentifier(m);
+  const sourceIsMsi = source ? source.installerType === 'msi' || source.installerType === 'wix' : false;
   return {
     buildId: ids.buildId,
     packageId: ids.packageId,
     packageIdentifier: identifier,
     displayName: packageDisplayName(m),
     manifest: m,
-    installer: { fileName: installer.fileName, sha256: installer.sha256, sizeBytes: installer.sizeBytes },
+    installer: { fileName: file.fileName, sha256: file.sha256, sizeBytes: file.sizeBytes },
     wrapper,
-    setupFile: wrapper === 'psadt' ? PSADT_ENTRY_SCRIPT : installer.fileName,
+    setupFile: wrapper === 'psadt' ? PSADT_ENTRY_SCRIPT : file.fileName,
     markerKeyPath: wrapper === 'psadt' ? detectionKeyPath(prefix, m).replace(/^HKEY_LOCAL_MACHINE\\/, 'HKLM:\\') : null,
-    installerArguments: wrapper === 'psadt' ? (m.installCommand ?? '') : '',
+    installerArguments: wrapper === 'psadt' ? (source ? (sourceIsMsi ? '' : (source.silentSwitch ?? '')) : (m.installCommand ?? '')) : '',
     uninstallCommand: wrapper === 'psadt' ? m.uninstallCommand : null,
+    uninstallProductCode: source?.productCode ?? m.msiProductCode ?? null,
+    uninstallDisplayName: source?.displayName ?? null,
+    uninstallArguments: source && !sourceIsMsi ? source.silentSwitch : null,
+    downloadUrl: source?.url ?? null,
     processesToClose: m.processesToClose,
     artifactFileName: `${identifier}.intunewin`,
   };
@@ -280,7 +332,7 @@ export function buildPlanFor(
  * Graph-Objekt fuer eine Win32-App (ohne Inhalt; der kommt ueber die Content-Version).
  */
 export function buildWin32LobAppPayload(m: AppManifest, artifact: Pick<StoredFile, 'fileName'>, prefix: string): Record<string, unknown> {
-  const setupFilePath = m.installerType === 'psadt' ? PSADT_ENTRY_SCRIPT : (m.installerFileName ?? artifact.fileName);
+  const setupFilePath = usesWrapper(m) ? PSADT_ENTRY_SCRIPT : (m.installerFileName ?? artifact.fileName);
   return {
     '@odata.type': '#microsoft.graph.win32LobApp',
     displayName: packageDisplayName(m),
@@ -307,7 +359,7 @@ export function buildWin32LobAppPayload(m: AppManifest, artifact: Pick<StoredFil
 }
 
 /**
- * Graph-Objekt fuer eine winget-App aus dem Microsoft-Store-Katalog (kein Upload).
+ * Graph-Objekt fuer eine Microsoft-Store-App (Produkt-Id, kein Upload).
  */
 export function buildWinGetAppPayload(m: AppManifest): Record<string, unknown> {
   return {

@@ -73,7 +73,7 @@ describe('apps.publish job', () => {
   const base = { jobId: 'j' as JobId, tenantId: 't' as TenantId, mspId: 'm' as MspId, userId: 'u' as UserId, correlationId: 'c' as CorrelationId, attempt: 0 };
   const winget: AppPackage = {
     id: 'p1',
-    manifest: normalizeManifest({ vendor: 'Google', name: 'Chrome', version: 'latest', installerType: 'winget', wingetPackageIdentifier: 'Google.Chrome' }),
+    manifest: normalizeManifest({ vendor: 'Google', name: 'Chrome', version: 'latest', installerType: 'store', wingetPackageIdentifier: '9NBLGGH4NNS1' }),
     status: 'ready',
     artifact: null,
     installer: null,
@@ -97,16 +97,16 @@ describe('apps.publish job', () => {
     };
   }
 
-  it('publishes a winget package and records the deployment', async () => {
+  it('publishes a store package and records the deployment', async () => {
     const o = ops();
     registerAppPublishJobs(o);
     const job = getRegisteredJob('apps.publish')!;
     const payload = { packageId: 'p1', packageName: 'Chrome', tenantName: 'Contoso' };
     const preview = await job.previewGenerator!({ ...base, payload });
-    expect(preview.changes[0].after).toMatchObject({ type: 'winGetApp', packageIdentifier: 'Google.Chrome' });
+    expect(preview.changes[0].after).toMatchObject({ type: 'winGetApp', packageIdentifier: '9NBLGGH4NNS1' });
     const result = await job.handler({ ...base, payload });
     expect(result.success).toBe(true);
-    expect(o.publishWinGet).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ packageIdentifier: 'Google.Chrome' }));
+    expect(o.publishWinGet).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ packageIdentifier: '9NBLGGH4NNS1' }));
     expect(o.recordDeployment).toHaveBeenLastCalledWith('m', 'p1', 't', expect.objectContaining({ status: 'published', intuneAppId: 'wg-1' }));
   });
 

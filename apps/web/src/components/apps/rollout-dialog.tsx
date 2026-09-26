@@ -51,7 +51,7 @@ export function RolloutDialog({ pkg, onClose, onStarted }: { pkg: AppPackage; on
           <h2 id="rollout-title" className="font-medium">
             {pkg.manifest.vendor} {pkg.manifest.name} {pkg.manifest.version} ausrollen
           </h2>
-          <p className="mt-0.5 text-xs text-muted-foreground">Je Tenant entsteht ein Job mit Vorschau. Die App wird in Intune angelegt, aber noch niemandem zugewiesen; Zuweisungen folgen unter Apps.</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">Je Tenant entsteht ein Job mit Vorschau. Das Paket wird als Win32-App mit Inhalt nach Intune geladen (Store-Apps nur als Verweis), aber noch niemandem zugewiesen; Zuweisungen folgen unter Apps.</p>
         </div>
         <div className="space-y-3 p-4">
           <ErrorBanner error={start.error as Error | null} onDismiss={() => start.reset()} />

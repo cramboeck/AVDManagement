@@ -5,6 +5,7 @@ import clsx from 'clsx';
 import { ErrorBanner } from '@/components/ui/error-state';
 import { LoadingSpinner } from '@/components/ui/loading';
 import { installerTypeLabels } from '@/components/apps/package-badges';
+import { WingetSourcePicker } from '@/components/apps/winget-source-picker';
 import type { AppDetectionRule, AppManifest, PackageInstallerType } from '@zerostress/types';
 
 export type ManifestDraft = Partial<AppManifest> & { installerType: PackageInstallerType };
@@ -36,7 +37,8 @@ const typeHints: Record<PackageInstallerType, string> = {
   msi: 'Installer hochladen; der Worker packt es zum .intunewin. Erkennung ueber den Produktcode.',
   exe: 'Installer hochladen; Kommandozeile fuer stilles Setup und Erkennungsregel angeben.',
   intunewin: 'Fertiges .intunewin hochladen (z. B. aus PackageFactory); Kommandozeilen und Erkennung wie im Paket.',
-  winget: 'Kein Paket: Intune installiert aus dem Microsoft-Store-Katalog (winget). Nur die Paket-Id angeben.',
+  winget: 'Installer aus dem winget-Community-Katalog: Id waehlen, aus dem Katalog laden, der Worker baut daraus ein Win32-Paket mit PSADT-Wrapper und eigener Erkennung. Versionen bleiben unter Kontrolle.',
+  store: 'Sonderfall Microsoft Store: Intune installiert die App selbst aus dem Store. Nur fuer Store-Produkt-Ids (12 Zeichen), nicht fuer Community-Pakete.',
 };
 
 interface PackageFormProps {
@@ -126,8 +128,8 @@ export function PackageForm({ initial, submitLabel, pending, error, problems, lo
             <Field label="Name">
               <input className={inputClass} disabled={lockIdentity} value={draft.name ?? ''} onChange={(e) => set('name', e.target.value)} placeholder="Chrome" />
             </Field>
-            <Field label="Version" hint={t === 'winget' ? 'Bei winget nur informativ, z. B. latest' : undefined}>
-              <input className={inputClass} disabled={lockIdentity} value={draft.version ?? ''} onChange={(e) => set('version', e.target.value)} placeholder="129.0.6668.59" />
+            <Field label="Version" hint={t === 'store' ? 'Bei Store-Apps nur informativ, z. B. latest' : t === 'winget' ? 'Kommt aus der Katalogaufloesung unten' : undefined}>
+              <input className={inputClass} disabled={lockIdentity || t === 'winget'} value={draft.version ?? ''} onChange={(e) => set('version', e.target.value)} placeholder="129.0.6668.59" />
             </Field>
             <Field label="Architektur">
               <select className={inputClass} disabled={lockIdentity} value={draft.architecture ?? 'x64'} onChange={(e) => set('architecture', e.target.value as AppManifest['architecture'])}>
@@ -139,10 +141,36 @@ export function PackageForm({ initial, submitLabel, pending, error, problems, lo
             </Field>
           </div>
 
-          {t === 'winget' ? (
-            <Field label="winget-Paket-Id" hint="Aus 'winget search', z. B. Google.Chrome oder 7zip.7zip">
-              <input className={inputClass} value={draft.wingetPackageIdentifier ?? ''} onChange={(e) => set('wingetPackageIdentifier', e.target.value)} placeholder="Google.Chrome" />
+          {t === 'store' ? (
+            <Field label="Store-Produkt-Id" hint="Aus der Store-URL (apps.microsoft.com/detail/<Id>), z. B. 9NBLGGH4NNS1. Community-Ids wie 7zip.7zip gehoeren zum Typ winget-Katalog.">
+              <input className={inputClass} value={draft.wingetPackageIdentifier ?? ''} onChange={(e) => set('wingetPackageIdentifier', e.target.value.toUpperCase())} placeholder="9NBLGGH4NNS1" />
             </Field>
+          ) : t === 'winget' ? (
+            <>
+              <WingetSourcePicker draft={draft} locked={lockIdentity} onApply={(patch) => setDraft((d) => ({ ...d, ...patch }))} />
+              <div className="grid gap-3 sm:grid-cols-3">
+                <Field label="Kontext">
+                  <select className={inputClass} value={draft.installContext ?? 'system'} onChange={(e) => set('installContext', e.target.value as AppManifest['installContext'])}>
+                    <option value="system">System</option>
+                    <option value="user">Benutzer</option>
+                  </select>
+                </Field>
+                <Field label="Neustart">
+                  <select className={inputClass} value={draft.restartBehavior ?? 'basedOnReturnCode'} onChange={(e) => set('restartBehavior', e.target.value as AppManifest['restartBehavior'])}>
+                    <option value="basedOnReturnCode">Nach Rueckgabecode</option>
+                    <option value="suppress">Unterdruecken</option>
+                    <option value="allow">Erlauben</option>
+                    <option value="force">Erzwingen</option>
+                  </select>
+                </Field>
+                <Field label="Prozesse schliessen" hint="Kommagetrennt, ohne .exe">
+                  <input className={inputClass} value={(draft.processesToClose ?? []).join(', ')} onChange={(e) => set('processesToClose', e.target.value.split(',').map((p) => p.trim()).filter(Boolean))} placeholder="7zFM" />
+                </Field>
+              </div>
+              <Field label="Deinstallationsbefehl (optional)" hint="Leer: MSI ueber Produktcode, sonst der Eintrag unter Apps und Features aus dem Katalog">
+                <input className={inputClass} value={draft.uninstallCommand ?? ''} onChange={(e) => set('uninstallCommand', e.target.value)} placeholder='"C:\\Program Files\\App\\uninstall.exe" /S' />
+              </Field>
+            </>
           ) : (
             <>
               {t !== 'intunewin' && (
