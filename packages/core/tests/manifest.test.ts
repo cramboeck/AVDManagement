@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { normalizeManifest, ManifestError, buildWin32LobAppPayload, buildWinGetAppPayload, buildPlanFor, detectionKeyPath, effectiveDetectionRules, normalizeRegistryPath, packageIdentifier } from '../src/apps/manifest.js';
+import { normalizeManifest, ManifestError, buildWin32LobAppPayload, buildWinGetAppPayload, buildPlanFor, detectionKeyPath, effectiveDetectionRules, normalizeRegistryPath, packageIdentifier, safeInstallerFileName } from '../src/apps/manifest.js';
 
 const base = { vendor: 'Google', name: 'Chrome', version: '129.0.6668.59', installerType: 'msi', installerFileName: 'googlechromestandaloneenterprise64.msi', msiProductCode: '{12345678-1234-1234-1234-123456789012}' };
 
@@ -80,6 +80,13 @@ describe('normalizeManifest', () => {
     expect(buildPlanFor(msi, { fileName: base.installerFileName, sha256: 'x', sizeBytes: 1 }, 'ZSC', { buildId: 'b', packageId: 'p' })).toMatchObject({ wrapper: 'plain', setupFile: base.installerFileName, markerKeyPath: null });
     const store = normalizeManifest({ vendor: 'Google', name: 'Chrome', version: 'latest', installerType: 'store', wingetPackageIdentifier: '9NBLGGH4NNS1' });
     expect(() => buildPlanFor(store, { fileName: 'x', sha256: 'x', sizeBytes: 1 }, 'ZSC', { buildId: 'b', packageId: 'p' })).toThrow(/nicht gebaut/);
+  });
+
+  it('never turns dots or path parts into an installer file name', () => {
+    expect(safeInstallerFileName('..')).toBe('installer.bin');
+    expect(safeInstallerFileName('..\\evil.exe')).toBe('evil.exe');
+    expect(safeInstallerFileName('C:/x/setup.msi')).toBe('C__x_setup.msi');
+    expect(safeInstallerFileName('setup.msi')).toBe('setup.msi');
   });
 
   it('maps a store manifest to a winGetApp payload', () => {

@@ -12,6 +12,8 @@ import { getPackage, upsertDeployment, getDeployment, openFile, detectionPrefix 
 import { getJobQueue } from './job-queue.js';
 import { rememberMicrosoftTenantId } from './microsoft-clients.js';
 
+export const MAX_IN_MEMORY_ARTIFACT_BYTES = 2 * 1024 * 1024 * 1024;
+
 async function readAll(stream: AsyncIterable<Uint8Array>): Promise<Buffer> {
   const chunks: Buffer[] = [];
   for await (const chunk of stream) chunks.push(Buffer.from(chunk));
@@ -24,6 +26,10 @@ export const publishOperations: PublishOperations = {
     if (!pkg) return null;
     let artifact: Buffer | null = null;
     if (pkg.artifact) {
+      // Der Upload haelt das Artefakt im Speicher; groessere Pakete brauchen den Stream-Upload (Backlog)
+      if (pkg.artifact.sizeBytes > MAX_IN_MEMORY_ARTIFACT_BYTES) {
+        throw new Error(`Artefakt ist ${Math.round(pkg.artifact.sizeBytes / 1024 / 1024)} MB; mehr als ${MAX_IN_MEMORY_ARTIFACT_BYTES / 1024 / 1024} MB werden noch nicht hochgeladen`);
+      }
       const opened = await openFile(mspId, packageId, 'artifact');
       artifact = opened ? await readAll(opened.stream) : null;
     }

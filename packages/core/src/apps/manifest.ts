@@ -113,6 +113,17 @@ export function normalizeManifest(input: Partial<AppManifest> & Record<string, u
   return manifest;
 }
 
+/** Dateiname ohne Pfadanteile; '.' und '..' werden nie zu einem Dateinamen. */
+export function safeInstallerFileName(name: string): string {
+  const clean = name
+    .replace(/[\\/:*?"<>|]/g, '_')
+    .replace(/\.{2,}/g, '')
+    .replace(/^[._]+/, '')
+    .trim()
+    .slice(0, 200);
+  return !clean || /^\.+$/.test(clean) ? 'installer.bin' : clean;
+}
+
 function normalizeSourceInstaller(value: unknown): SourceInstaller | null {
   if (!value || typeof value !== 'object') return null;
   const v = value as Partial<SourceInstaller>;
@@ -132,7 +143,7 @@ function normalizeSourceInstaller(value: unknown): SourceInstaller | null {
     silentSwitch: typeof v.silentSwitch === 'string' && v.silentSwitch.trim() ? v.silentSwitch.trim() : null,
     productCode: typeof v.productCode === 'string' && PRODUCT_CODE_PATTERN.test(v.productCode) ? v.productCode.toUpperCase() : null,
     displayName: typeof v.displayName === 'string' && v.displayName.trim() ? v.displayName.trim().slice(0, 200) : null,
-    fileName: v.fileName.replace(/[\\/:*?"<>|]/g, '_').slice(0, 200),
+    fileName: safeInstallerFileName(v.fileName),
     resolvedAt: typeof v.resolvedAt === 'string' ? v.resolvedAt : new Date(0).toISOString(),
   };
 }

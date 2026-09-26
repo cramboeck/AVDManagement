@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect, vi } from 'vitest';
-import { MailboxProvider, toInboxRule, describeConditions, type GraphMessageRule } from '../src/providers/mailbox-provider.js';
+import { MailboxProvider, toInboxRule, describeConditions, textToHtml, type GraphMessageRule } from '../src/providers/mailbox-provider.js';
 import { registerMailboxJobs, type MailboxOperations } from '../src/jobs/mailbox-job-handlers.js';
 import { getRegisteredJob } from '../src/jobs/job-types.js';
 import { GraphClient } from '../src/providers/graph-client.js';
@@ -58,6 +58,12 @@ function graphMock(over: Partial<Record<'get' | 'post' | 'patch' | 'delete', unk
     ...over,
   };
 }
+
+describe('textToHtml', () => {
+  it('escapes markup and keeps line breaks', () => {
+    expect(textToHtml('Bin weg <b>bis</b>\nGruss & Dank')).toBe('Bin weg &lt;b&gt;bis&lt;/b&gt;<br>Gruss &amp; Dank');
+  });
+});
 
 describe('MailboxProvider', () => {
   it('builds the mailbox detail with settings, aliases and sorted rules', async () => {

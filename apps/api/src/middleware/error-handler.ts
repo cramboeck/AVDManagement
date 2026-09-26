@@ -49,7 +49,7 @@ export const errorHandler: ErrorHandler = (err, c) => {
       type: 'https://api.zerostress.io/problems/schema-outdated',
       title: 'Datenbankschema veraltet: im Repo "npm run db:push" ausfuehren und die API neu starten.',
       status: 500,
-      detail: message,
+      detail: process.env.NODE_ENV === 'development' ? message : undefined,
       correlationId,
     };
     return c.json(problem, 500);

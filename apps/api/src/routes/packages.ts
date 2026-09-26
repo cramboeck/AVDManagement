@@ -17,12 +17,27 @@ import { baseSet, browsePublisher, checkPackageVersion, createNewVersion, manife
 import { WingetError } from '@zerostress/core';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
-import type { CorrelationId } from '@zerostress/types';
+import type { AppManifest, CorrelationId } from '@zerostress/types';
 
 const app = new Hono();
 const audit = new DrizzleAuditLogger();
 
 app.use('*', authMiddleware);
+
+/** Die sicherheitsrelevanten Felder eines Manifests fuer Vorher/Nachher im Audit. */
+function manifestAuditView(m: AppManifest): Record<string, unknown> {
+  return {
+    installerType: m.installerType,
+    version: m.version,
+    installCommand: m.installCommand,
+    uninstallCommand: m.uninstallCommand,
+    installContext: m.installContext,
+    detection: m.detection.map((d) => (d.type === 'registry' ? `registry ${d.keyPath}` : d.type === 'file' ? `file ${d.path}\\${d.fileOrFolderName}` : d.type === 'msi' ? `msi ${d.productCode}` : 'script')),
+    processesToClose: m.processesToClose,
+    wingetPackageIdentifier: m.wingetPackageIdentifier,
+    sourceInstaller: m.sourceInstaller ? { url: m.sourceInstaller.url, sha256: m.sourceInstaller.sha256, version: m.sourceInstaller.version } : null,
+  };
+}
 
 function problem(status: number, title: string, detail?: string) {
   const kind = status === 404 ? 'not-found' : status === 409 ? 'conflict' : 'validation';
@@ -100,8 +115,26 @@ app.put('/:packageId', requireRole('engineer'), async (c) => {
   const body = (await c.req.json().catch(() => null)) as Record<string, unknown> | null;
   if (!body) return c.json(problem(400, 'Manifest fehlt'), 400);
   try {
-    const pkg = await updateManifest(auth.mspId, c.req.param('packageId'), body);
-    return pkg ? c.json(pkg) : c.json(problem(404, 'Package not found'), 404);
+    const packageId = c.req.param('packageId');
+    const before = await getPackage(auth.mspId, packageId);
+    if (!before) return c.json(problem(404, 'Package not found'), 404);
+    const pkg = await updateManifest(auth.mspId, packageId, body);
+    if (!pkg) return c.json(problem(404, 'Package not found'), 404);
+    // Das Manifest ist Code, der als SYSTEM auf Kundengeraeten laeuft: jede Aenderung mit Vorher/Nachher ins Audit
+    await audit.log({
+      mspId: auth.mspId,
+      tenantId: null,
+      userId: auth.user.id,
+      action: 'apps.package.update',
+      targetType: 'package',
+      targetId: pkg.id,
+      targetDisplayName: `${pkg.manifest.vendor} ${pkg.manifest.name} ${pkg.manifest.version}`,
+      beforeState: manifestAuditView(before.manifest),
+      afterState: manifestAuditView(pkg.manifest),
+      result: 'success',
+      correlationId: randomUUID() as CorrelationId,
+    });
+    return c.json(pkg);
   } catch (error) {
     if (error instanceof ManifestError) return c.json({ ...problem(400, 'Manifest ungueltig', error.message), problems: error.problems }, 400);
     if (error instanceof Error && /nach dem Upload fest/.test(error.message)) return c.json(problem(400, 'Bezeichner fest', error.message), 400);

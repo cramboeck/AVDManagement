@@ -144,8 +144,12 @@ export async function deletePackage(mspId: string, packageId: string): Promise<b
 }
 
 function safeFileName(name: string): string {
-  const cleaned = name.replace(/[\\/:*?"<>|]/g, '_').trim();
-  return cleaned.slice(0, 200) || 'file.bin';
+  const cleaned = name
+    .replace(/[\\/:*?"<>|]/g, '_')
+    .replace(/\.{2,}/g, '')
+    .replace(/^[._]+/, '')
+    .trim();
+  return !cleaned || /^\.+$/.test(cleaned) ? 'file.bin' : cleaned.slice(0, 200);
 }
 
 /**

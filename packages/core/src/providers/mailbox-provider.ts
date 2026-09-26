@@ -202,6 +202,15 @@ function toAutoReply(s: GraphMailboxSettings['automaticRepliesSetting']): Mailbo
   };
 }
 
+/**
+ * Graph erwartet HTML; der Text aus dem Formular wird maskiert, Zeilenumbrueche
+ * werden zu <br>. So landet kein Markup aus der Eingabe in der Antwort.
+ */
+export function textToHtml(text: string): string {
+  const escaped = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  return escaped.split(/\r?\n/).join('<br>');
+}
+
 export interface AutoReplyInput {
   status: AutoReplyStatus;
   externalAudience: AutoReplyAudience;
@@ -336,8 +345,8 @@ export class MailboxProvider extends BaseResourceProvider {
       automaticRepliesSetting: {
         status: input.status,
         externalAudience: input.externalAudience,
-        internalReplyMessage: input.internalMessage,
-        externalReplyMessage: input.externalMessage,
+        internalReplyMessage: textToHtml(input.internalMessage),
+        externalReplyMessage: textToHtml(input.externalMessage),
         ...(input.status === 'scheduled' && input.scheduledStart && input.scheduledEnd
           ? {
               scheduledStartDateTime: { dateTime: input.scheduledStart, timeZone: input.timeZone },

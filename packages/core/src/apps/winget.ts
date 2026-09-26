@@ -113,7 +113,7 @@ function fileNameFromUrl(url: string, id: string, type: SourceInstallerType): st
   try {
     const last = decodeURIComponent(new URL(url).pathname.split('/').filter(Boolean).pop() ?? '');
     const clean = last.replace(/[\\/:*?"<>|]/g, '_');
-    if (/\.(msi|exe)$/i.test(clean)) return clean;
+    if (/\.(msi|exe)$/i.test(clean) && !/^\.+$/.test(clean) && !clean.includes('..')) return clean;
   } catch {
     // URL unbrauchbar: generischer Name
   }

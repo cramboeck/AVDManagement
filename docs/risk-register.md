@@ -189,6 +189,39 @@
 
 ---
 
+### SEC-004: Paketmanifest ist Code, der als SYSTEM auf Kundengeraeten laeuft
+
+| Aspekt | Bewertung |
+|--------|-----------|
+| **Beschreibung** | Install-/Deinstallationsbefehle, Installer-URL und Hash im Katalogmanifest werden vom Worker in ein Paket verwandelt, das Intune mit SYSTEM-Rechten auf allen zugewiesenen Geraeten ausfuehrt. Ein kompromittiertes Engineer-Konto kann so beliebigen Code verteilen |
+| **Wahrscheinlichkeit** | Niedrig |
+| **Auswirkung** | Kritisch |
+| **Risiko-Level** | Hoch |
+| **Fruehwarnindikator** | Audit-Eintraege `apps.package.update` mit geaenderten Befehlen oder Quell-URLs ausserhalb der Arbeitszeit; Rollout-Vorschauen mit fremden Domaenen als Quelle |
+| **Gegenmassnahme** | Manifestaenderungen mit Vorher/Nachher im Audit; Rollout-Vorschau zeigt Befehle, Quelle und Hash; Freigabe getrennt vom Anlegen; winget-Quelle nur https mit Hash aus dem oeffentlichen Manifest; MFA phishing-resistent fuer Engineer-Konten; spaeter Vier-Augen-Freigabe fuer Rollouts auf mehr als N Tenants |
+
+### SEC-005: Worker-Token gilt fuer die ganze Installation
+
+| Aspekt | Bewertung |
+|--------|-----------|
+| **Beschreibung** | `WORKER_TOKEN` authentifiziert Build-Worker installationsweit. Ein Worker sieht Auftraege aller MSPs derselben Installation, ein geleaktes Token erlaubt das Hochladen beliebiger Artefakte fuer offene Auftraege |
+| **Wahrscheinlichkeit** | Niedrig |
+| **Auswirkung** | Hoch |
+| **Risiko-Level** | Mittel |
+| **Fruehwarnindikator** | Claims von unbekannten `X-Worker-Id`; Builds, die ohne Log-Zeilen abgeschlossen werden |
+| **Gegenmassnahme** | Token nur in Umgebungsvariable oder DPAPI-Datei, nie in Konfig oder Repo; Worker sieht nur den Auftrag, den er haelt; Artefakt-Hash wird beim Upload gebildet und in der Vorschau gezeigt. Vor dem Mehr-MSP-Betrieb: Token je MSP mit Bindung der Auftraege an den MSP, Rotation, Worker-Registrierung |
+
+### SEC-006: Installer-Download vom Hersteller durch den Worker
+
+| Aspekt | Bewertung |
+|--------|-----------|
+| **Beschreibung** | Bei winget-Paketen laedt der Worker den Installer von der URL aus dem Manifest. Wird die URL im Manifest manipuliert oder der Hersteller-Download kompromittiert, kommt fremder Code ins Paket |
+| **Wahrscheinlichkeit** | Niedrig |
+| **Auswirkung** | Kritisch |
+| **Risiko-Level** | Hoch |
+| **Fruehwarnindikator** | Hash-Fehler im Build-Protokoll; Quell-URLs, die nicht zur Herstellerdomaene passen |
+| **Gegenmassnahme** | SHA-256 aus dem oeffentlichen winget-Manifest ist Pflicht, Download nur https, Hash wird vor dem Bauen geprueft und bricht sonst ab; URL und Hash stehen im Audit und in der Rollout-Vorschau; spaeter Signaturpruefung (Authenticode) des Installers und Abgleich der Domaene mit dem Manifest |
+
 ## Geschaeftliche Risiken
 
 ### BIZ-001: Keine Kunden fuer SaaS-Modell

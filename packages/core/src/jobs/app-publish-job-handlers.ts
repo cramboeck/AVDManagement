@@ -40,6 +40,14 @@ function describeManifest(m: AppManifest, prefix: string): Record<string, unknow
       : {
           install: installCommandLine(m),
           uninstall: uninstallCommandLine(m),
+          // Bei Wrapper-Paketen laeuft im Wrapper das hier; das muss die Freigabe sehen
+          ...(m.installerType === 'psadt' || m.installerType === 'winget'
+            ? {
+                installerArguments: m.installerType === 'winget' ? (m.sourceInstaller?.silentSwitch ?? '') : (m.installCommand ?? ''),
+                innerUninstall: m.uninstallCommand ?? (m.sourceInstaller?.productCode ? `MSI ${m.sourceInstaller.productCode}` : m.sourceInstaller?.displayName ? `Apps und Features: ${m.sourceInstaller.displayName}` : m.installerFileName?.toLowerCase().endsWith('.msi') ? 'MSI aus dem Paket' : '(keiner)'),
+              }
+            : {}),
+          ...(m.sourceInstaller ? { source: `${m.sourceInstaller.url} (SHA-256 ${m.sourceInstaller.sha256.slice(0, 12)})` } : {}),
           detection: effectiveDetectionRules(m, prefix).map((r) => (r.type === 'registry' ? `Registry ${r.keyPath}${r.valueName ? `\\${r.valueName}` : ''}` : r.type === 'msi' ? `MSI ${r.productCode}` : r.type === 'file' ? `Datei ${r.path}\\${r.fileOrFolderName}` : 'Skript')),
           context: m.installContext,
           restart: m.restartBehavior,
