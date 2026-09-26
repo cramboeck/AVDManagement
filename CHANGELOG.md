@@ -93,6 +93,14 @@ Alle nennenswerten Aenderungen an ZeroStress Cockpit. Format angelehnt an
 
 ### Geaendert
 
+- Audit: `target_id` und `target_display_name` sind jetzt Text statt
+  varchar(100/255); Jobs auf Azure-VMs scheiterten am zu langen
+  Ressourcenpfad ("value too long for type character varying(100)").
+  Braucht `npm run db:push`.
+- BitLocker: das Aufdecken sendet die von Graph verlangten Client-Header
+  mit; fehlt der Schluessel trotzdem, nennt die Meldung die noetige
+  Berechtigung BitLockerKey.Read.All.
+
 - Graph-Client: leere 200-Antworten (z. B. LAPS ohne Eintrag) fuehren nicht
   mehr zu "Unexpected end of JSON input"; der Tab Wiederherstellung zeigt
   dann eine Karte mit Erklaerung statt eines Fehlers.

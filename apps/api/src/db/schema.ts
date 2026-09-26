@@ -89,8 +89,9 @@ export const auditEntries = pgTable('audit_entries', {
   userId: uuid('user_id').notNull().references(() => mspUsers.id),
   action: varchar('action', { length: 100 }).notNull(),
   targetType: varchar('target_type', { length: 50 }).notNull(),
-  targetId: varchar('target_id', { length: 100 }).notNull(),
-  targetDisplayName: varchar('target_display_name', { length: 255 }),
+  // ARM-Ressourcen-Ids sind laenger als 100 Zeichen; deshalb text statt varchar
+  targetId: text('target_id').notNull(),
+  targetDisplayName: text('target_display_name'),
   beforeState: jsonb('before_state'),
   afterState: jsonb('after_state'),
   result: varchar('result', { length: 20 }).notNull(),

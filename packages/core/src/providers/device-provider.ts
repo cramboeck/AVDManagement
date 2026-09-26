@@ -507,14 +507,16 @@ export class DeviceProvider extends BaseResourceProvider {
   async revealBitLockerKey(ctx: ProviderContext, keyId: string): Promise<RevealedBitLockerKey> {
     this.validateContext(ctx);
 
+    // Graph liefert die Eigenschaft key nur mit $select=key und den Client-Headern ocp-client-name/-version
     const key = await this.graphClient.get<GraphBitLockerKey>(
       ctx.tenantId as string,
       `/informationProtection/bitlocker/recoveryKeys/${encodeURIComponent(keyId)}?$select=key,volumeType,createdDateTime`,
-      this.bitlockerScopes
+      this.bitlockerScopes,
+      { headers: { 'ocp-client-name': 'ZeroStress Cockpit', 'ocp-client-version': '1.0' } }
     );
 
-    if (!key.key) {
-      throw new Error('Graph returned no BitLocker key');
+    if (!key?.key) {
+      throw new Error('Graph lieferte den BitLocker-Schluessel nicht. Die Anwendungsberechtigung BitLockerKey.Read.All (nicht nur ReadBasic) muss erteilt und der Consent erneuert sein.');
     }
 
     return {
