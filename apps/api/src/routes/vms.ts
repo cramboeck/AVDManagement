@@ -4,7 +4,7 @@
 
 import { randomUUID } from 'node:crypto';
 import { Hono } from 'hono';
-import { zValidator } from '@hono/zod-validator';
+import { validate } from '../middleware/validate.js';
 import { z } from 'zod';
 import { loadVmTemplates, toTemplateSummary } from '@zerostress/core';
 import { authMiddleware, requireRole } from '../middleware/auth.js';
@@ -90,7 +90,7 @@ const deploySchema = z.object({
 
 const actionTypes: Record<string, string> = { start: 'vm.start', stop: 'vm.stop', restart: 'vm.restart' };
 
-app.post('/actions/:action{start|stop|restart}', requireRole('engineer'), requireConnectedTenant, zValidator('json', actionSchema), async (c) => {
+app.post('/actions/:action{start|stop|restart}', requireRole('engineer'), requireConnectedTenant, validate('json', actionSchema), async (c) => {
   const auth = c.get('auth');
   const tenant = c.get('tenant');
   const body = c.req.valid('json');
@@ -105,7 +105,7 @@ app.post('/actions/:action{start|stop|restart}', requireRole('engineer'), requir
   return c.json(job, 202);
 });
 
-app.post('/actions/resize', requireRole('engineer'), requireConnectedTenant, zValidator('json', resizeSchema), async (c) => {
+app.post('/actions/resize', requireRole('engineer'), requireConnectedTenant, validate('json', resizeSchema), async (c) => {
   const auth = c.get('auth');
   const tenant = c.get('tenant');
   const body = c.req.valid('json');
@@ -120,7 +120,7 @@ app.post('/actions/resize', requireRole('engineer'), requireConnectedTenant, zVa
   return c.json(job, 202);
 });
 
-app.post('/actions/deploy', requireRole('engineer'), requireConnectedTenant, zValidator('json', deploySchema), async (c) => {
+app.post('/actions/deploy', requireRole('engineer'), requireConnectedTenant, validate('json', deploySchema), async (c) => {
   const auth = c.get('auth');
   const tenant = c.get('tenant');
   const body = c.req.valid('json');

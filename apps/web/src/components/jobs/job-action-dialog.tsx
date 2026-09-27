@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import clsx from 'clsx';
 import { api } from '@/lib/api';
 import { useTenant } from '@/hooks/use-tenant';
+import { useJobTracker } from '@/hooks/use-job-tracker';
 import { ErrorBanner } from '@/components/ui/error-state';
 import { LoadingSpinner } from '@/components/ui/loading';
 import type { Job, PlannedChange } from '@zerostress/types';
@@ -40,6 +41,7 @@ export function JobActionDialog({
   onCompleted,
 }: JobActionDialogProps) {
   const { activeTenant } = useTenant();
+  const { track } = useJobTracker();
   const queryClient = useQueryClient();
   const [jobId, setJobId] = useState<string | null>(null);
   const [phase, setPhase] = useState<Phase>('creating');
@@ -234,9 +236,21 @@ export function JobActionDialog({
             </button>
           )}
           {(phase === 'creating' || phase === 'running') && (
-            <span className="text-xs text-muted-foreground">
+            <span className="mr-auto self-center text-xs text-muted-foreground">
               {jobId ? `Job ${jobId.slice(0, 8)}` : ''}
             </span>
+          )}
+          {(phase === 'running' || phase === 'second') && jobId && job && (
+            <button
+              onClick={() => {
+                // Der Dialog geht zu, der Job laeuft weiter; Toast oben rechts meldet das Ergebnis
+                track({ id: jobId, tenantId: activeTenant!.id, title, status: job.status });
+                onClose();
+              }}
+              className="rounded-md border px-4 py-2 text-sm hover:bg-accent"
+            >
+              Im Hintergrund weiterlaufen
+            </button>
           )}
         </div>
       </div>

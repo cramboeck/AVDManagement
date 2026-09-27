@@ -4,7 +4,7 @@
 
 import { randomUUID } from 'node:crypto';
 import { Hono } from 'hono';
-import { zValidator } from '@hono/zod-validator';
+import { validate } from '../middleware/validate.js';
 import { z } from 'zod';
 import { authMiddleware, requireRole } from '../middleware/auth.js';
 import { tenantContextMiddleware, requireConnectedTenant } from '../middleware/tenant-context.js';
@@ -32,7 +32,7 @@ app.get('/blocklist', async (c) => {
 
 const blockSchema = z.object({ kind: z.enum(['name', 'winget-id']), pattern: z.string().min(3).max(200), note: z.string().max(500).nullable().default(null) });
 
-app.post('/blocklist', requireRole('engineer'), zValidator('json', blockSchema), async (c) => {
+app.post('/blocklist', requireRole('engineer'), validate('json', blockSchema), async (c) => {
   const auth = c.get('auth');
   const tenant = c.get('tenant');
   const body = c.req.valid('json');

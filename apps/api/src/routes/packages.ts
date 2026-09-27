@@ -17,7 +17,7 @@ import { workerTokenAvailable } from '../services/worker-tokens.js';
 import { tenantFilter } from '../services/access.js';
 import { baseSet, browsePublisher, checkPackageVersion, createNewVersion, manifestFromResolution, resolveWinget } from '../services/winget-catalog.js';
 import { WingetError } from '@zerostress/core';
-import { zValidator } from '@hono/zod-validator';
+import { validate } from '../middleware/validate.js';
 import { z } from 'zod';
 import type { AppManifest, CorrelationId } from '@zerostress/types';
 
@@ -92,7 +92,7 @@ app.get('/winget/browse', async (c) => {
 
 const resolveSchema = z.object({ id: z.string().min(3).max(128), version: z.string().max(40).nullable().default(null), architecture: z.enum(['x64', 'x86', 'arm64', 'neutral']).default('x64') });
 
-app.post('/winget/resolve', requireRole('engineer'), zValidator('json', resolveSchema), async (c) => {
+app.post('/winget/resolve', requireRole('engineer'), validate('json', resolveSchema), async (c) => {
   const body = c.req.valid('json');
   try {
     const resolution = await resolveWinget(body.id, body.version, body.architecture);
@@ -168,7 +168,7 @@ app.delete('/:packageId', requireRole('owner'), async (c) => {
 // Rollout: je gewaehltem Tenant ein Job apps.publish mit Vorschau
 const rolloutSchema = z.object({ tenantIds: z.array(z.string().uuid()).min(1).max(100), autoApprove: z.boolean().default(false) });
 
-app.post('/:packageId/rollout', requireRole('engineer'), zValidator('json', rolloutSchema), async (c) => {
+app.post('/:packageId/rollout', requireRole('engineer'), validate('json', rolloutSchema), async (c) => {
   const auth = c.get('auth');
   const packageId = c.req.param('packageId');
   const body = c.req.valid('json');
@@ -234,7 +234,7 @@ app.post('/:packageId/check-version', requireRole('engineer'), async (c) => {
 
 const newVersionSchema = z.object({ version: z.string().max(40).nullable().default(null) });
 
-app.post('/:packageId/new-version', requireRole('engineer'), zValidator('json', newVersionSchema), async (c) => {
+app.post('/:packageId/new-version', requireRole('engineer'), validate('json', newVersionSchema), async (c) => {
   const auth = c.get('auth');
   const packageId = c.req.param('packageId');
   try {

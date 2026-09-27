@@ -56,6 +56,7 @@ function toResult(state: RemediationRunState_, scriptId: LibraryScriptId | 'temp
     detectionError: state.detectionError,
     remediationError: state.remediationError,
     deviceReportedAt: state.updatedAt ?? state.syncedAt,
+        observedAt: new Date().toISOString(),
     possiblyStale: false,
     stateSource: state.source,
   };

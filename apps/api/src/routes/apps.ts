@@ -4,7 +4,7 @@
 
 import { randomUUID } from 'node:crypto';
 import { Hono } from 'hono';
-import { zValidator } from '@hono/zod-validator';
+import { validate } from '../middleware/validate.js';
 import { z } from 'zod';
 import { authMiddleware, requireRole } from '../middleware/auth.js';
 import { tenantContextMiddleware, requireConnectedTenant } from '../middleware/tenant-context.js';
@@ -53,7 +53,7 @@ const assignSchema = z.object({
   filterType: z.enum(['include', 'exclude']).nullable().optional(),
 });
 
-app.post('/:appId/assign', requireRole('engineer'), requireConnectedTenant, zValidator('json', assignSchema), async (c) => {
+app.post('/:appId/assign', requireRole('engineer'), requireConnectedTenant, validate('json', assignSchema), async (c) => {
   const auth = c.get('auth');
   const tenant = c.get('tenant');
   const appId = c.req.param('appId');
@@ -103,7 +103,7 @@ const unassignSchema = z.object({
   intent: z.enum(['required', 'available', 'uninstall', 'availableWithoutEnrollment']),
 });
 
-app.post('/:appId/unassign', requireRole('engineer'), requireConnectedTenant, zValidator('json', unassignSchema), async (c) => {
+app.post('/:appId/unassign', requireRole('engineer'), requireConnectedTenant, validate('json', unassignSchema), async (c) => {
   const auth = c.get('auth');
   const tenant = c.get('tenant');
   const appId = c.req.param('appId');
@@ -133,7 +133,7 @@ const deploymentGroupsSchema = z.object({
   autoAssign: z.boolean().default(true),
 });
 
-app.post('/:appId/deployment-groups', requireRole('engineer'), requireConnectedTenant, zValidator('json', deploymentGroupsSchema), async (c) => {
+app.post('/:appId/deployment-groups', requireRole('engineer'), requireConnectedTenant, validate('json', deploymentGroupsSchema), async (c) => {
   const auth = c.get('auth');
   const tenant = c.get('tenant');
   const appId = c.req.param('appId');

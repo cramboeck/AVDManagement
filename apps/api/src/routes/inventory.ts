@@ -3,7 +3,7 @@
  */
 
 import { Hono } from 'hono';
-import { zValidator } from '@hono/zod-validator';
+import { validate } from '../middleware/validate.js';
 import { z } from 'zod';
 import { INVENTORY_KINDS } from '@zerostress/core';
 import { authMiddleware } from '../middleware/auth.js';
@@ -27,7 +27,7 @@ app.get('/', requireConnectedTenant, async (c) => {
 });
 
 // Lesender Abgleich mit Microsoft; kein Job, weil nichts im Tenant veraendert wird
-app.post('/refresh', requireConnectedTenant, zValidator('json', refreshSchema), async (c) => {
+app.post('/refresh', requireConnectedTenant, validate('json', refreshSchema), async (c) => {
   const tenant = c.get('tenant');
   const { kinds } = c.req.valid('json');
   // Manuell heisst meist: Berechtigung oder Consent wurde gerade geaendert

@@ -3,8 +3,9 @@
  */
 
 import { Hono } from 'hono';
-import { zValidator } from '@hono/zod-validator';
+import { validate } from '../middleware/validate.js';
 import { z } from 'zod';
+import { getLibraryScript } from '@zerostress/core';
 import { authMiddleware, requireRole } from '../middleware/auth.js';
 import { tenantContextMiddleware, requireConnectedTenant } from '../middleware/tenant-context.js';
 import { getAvdProvider } from '../services/microsoft-clients.js';
@@ -193,7 +194,7 @@ app.post(
   '/actions/set-drain-mode',
   requireRole('engineer'),
   requireConnectedTenant,
-  zValidator('json', setDrainModeSchema),
+  validate('json', setDrainModeSchema),
   async (c) => {
     const auth = c.get('auth');
     const tenant = c.get('tenant');
@@ -229,10 +230,11 @@ const runScriptSchema = z.object({
   sessionHostId: z.string(),
   sessionHostName: z.string(),
   vmResourceId: z.string().min(1),
-  scriptId: z.enum(['update-status', 'update-scan', 'system-info', 'winget-updates', 'network-info', 'storage-info', 'local-admins', 'battery-info']),
+  // Gegen die Bibliothek pruefen statt gegen eine Liste, die bei jedem neuen Skript nachgezogen werden muesste
+  scriptId: z.string().refine((id) => getLibraryScript(id) !== null, 'Unbekanntes Skript'),
 });
 
-app.post('/actions/run-script', requireRole('engineer'), requireConnectedTenant, zValidator('json', runScriptSchema), async (c) => {
+app.post('/actions/run-script', requireRole('engineer'), requireConnectedTenant, validate('json', runScriptSchema), async (c) => {
   const auth = c.get('auth');
   const tenant = c.get('tenant');
   const body = c.req.valid('json');
@@ -267,7 +269,7 @@ app.post(
   '/actions/start-session-host',
   requireRole('engineer'),
   requireConnectedTenant,
-  zValidator('json', startStopSessionHostSchema),
+  validate('json', startStopSessionHostSchema),
   async (c) => {
     const auth = c.get('auth');
     const tenant = c.get('tenant');
@@ -300,7 +302,7 @@ app.post(
   '/actions/stop-session-host',
   requireRole('engineer'),
   requireConnectedTenant,
-  zValidator('json', startStopSessionHostSchema.extend({ force: z.boolean().optional() })),
+  validate('json', startStopSessionHostSchema.extend({ force: z.boolean().optional() })),
   async (c) => {
     const auth = c.get('auth');
     const tenant = c.get('tenant');
@@ -343,7 +345,7 @@ app.post(
   '/actions/disconnect-session',
   requireRole('engineer'),
   requireConnectedTenant,
-  zValidator('json', disconnectSessionSchema),
+  validate('json', disconnectSessionSchema),
   async (c) => {
     const auth = c.get('auth');
     const tenant = c.get('tenant');
@@ -381,7 +383,7 @@ app.post(
   '/actions/logoff-session',
   requireRole('engineer'),
   requireConnectedTenant,
-  zValidator('json', logoffSessionSchema),
+  validate('json', logoffSessionSchema),
   async (c) => {
     const auth = c.get('auth');
     const tenant = c.get('tenant');
@@ -427,7 +429,7 @@ app.post(
   '/actions/send-message',
   requireRole('engineer'),
   requireConnectedTenant,
-  zValidator('json', sendMessageSchema),
+  validate('json', sendMessageSchema),
   async (c) => {
     const auth = c.get('auth');
     const tenant = c.get('tenant');

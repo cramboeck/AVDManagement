@@ -8,6 +8,14 @@ Alle nennenswerten Aenderungen an ZeroStress Cockpit. Format angelehnt an
 
 ### Hinzugefuegt
 
+- Jobs im Hintergrund: laufende Jobs lassen sich aus dem Dialog mit "Im
+  Hintergrund weiterlaufen" loslassen; eine Leiste oben rechts zeigt
+  Laufzeit und Ergebnis mit Link auf den Job, Fehler bleiben stehen,
+  Erfolge blenden sich aus. Bei nicht sichtbarem Tab zusaetzlich eine
+  Browser-Benachrichtigung (nach Zustimmung). Der Stand ueberlebt
+  Seitenwechsel innerhalb des Tabs.
+- Skriptergebnis: Zeitkette Anstoss, Meldung des Geraets, Sichtbarkeit in
+  Graph (`observedAt`), damit der Verzug der Intune-Berichte messbar ist.
 - Betriebs-Alerts (Einstellungen, nur Owner, Standard aus): veraltete
   Software laut winget-Katalog ab N Geraeten, Postfach ab N Prozent der
   Sendesperre (ab 100 Prozent hoch), laufende Azure-VMs ausserhalb der
@@ -127,6 +135,13 @@ Alle nennenswerten Aenderungen an ZeroStress Cockpit. Format angelehnt an
   KI-Erklaerung, Geraetemodul aus Intune und Defender.
 
 ### Geaendert
+
+- Eingabefehler der API (Zod) kommen jetzt als Problem-Details mit Titel
+  und Beschreibung; vorher zeigte die Oberflaeche eine leere Fehlerbox.
+  Der API-Client zeigt ausserdem nie mehr eine leere Meldung.
+- Skript-Ids fuer `device.run-script` und `avd.run-script` werden gegen die
+  Bibliothek geprueft statt gegen eine feste Liste; `winget-inventory`
+  liess sich deshalb aus dem Tab Skripte nicht starten.
 
 - Audit: `target_id` und `target_display_name` sind jetzt Text statt
   varchar(100/255); Jobs auf Azure-VMs scheiterten am zu langen

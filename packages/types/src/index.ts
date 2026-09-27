@@ -1588,6 +1588,8 @@ export interface ScriptRunResult {
   detectionError: string | null;
   remediationError: string | null;
   deviceReportedAt: string | null;
+  // Zeitpunkt, zu dem die Konsole das Ergebnis in Graph gesehen hat (Verzug der Intune-Berichte)
+  observedAt?: string;
   // true: Wartezeit abgelaufen, gezeigt wird der letzte bekannte Zustand
   possiblyStale: boolean;
   stateSource: 'device' | 'script' | 'run-command';

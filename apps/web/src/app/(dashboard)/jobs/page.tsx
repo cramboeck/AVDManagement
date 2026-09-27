@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTenant } from '@/hooks/use-tenant';
 import { api } from '@/lib/api';
@@ -65,6 +65,17 @@ export default function JobsPage() {
     enabled: !!activeTenant,
     refetchInterval: 5000,
   });
+
+  // Link aus einem Toast (/jobs?job=<id>): den Job nach dem Laden auswaehlen
+  const openedFromLink = useRef(false);
+  useEffect(() => {
+    if (openedFromLink.current || !data?.items.length) return;
+    const wanted = new URLSearchParams(window.location.search).get('job');
+    if (!wanted) return;
+    openedFromLink.current = true;
+    const job = data.items.find((j) => j.id === wanted);
+    if (job) setSelectedJob(job);
+  }, [data]);
 
   const approveMutation = useMutation({
     mutationFn: (jobId: string) =>

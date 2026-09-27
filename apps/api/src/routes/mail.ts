@@ -5,7 +5,7 @@
 
 import { randomUUID } from 'node:crypto';
 import { Hono, type Context } from 'hono';
-import { zValidator } from '@hono/zod-validator';
+import { validate } from '../middleware/validate.js';
 import { z } from 'zod';
 import { authMiddleware, requireRole } from '../middleware/auth.js';
 import { tenantContextMiddleware, requireConnectedTenant } from '../middleware/tenant-context.js';
@@ -141,14 +141,14 @@ async function createMailboxJob(c: Context, type: string, upn: string, payload: 
   return c.json(job, 202);
 }
 
-app.post('/mailboxes/:upn/auto-reply', requireRole('engineer'), requireConnectedTenant, zValidator('json', autoReplySchema), async (c) => {
+app.post('/mailboxes/:upn/auto-reply', requireRole('engineer'), requireConnectedTenant, validate('json', autoReplySchema), async (c) => {
   const upn = c.req.param('upn');
   if (!UPN.test(upn)) return c.json(invalidUpn(upn), 400);
   const body = c.req.valid('json');
   return createMailboxJob(c, 'mailbox.set-auto-reply', upn, body, `${body.displayName}: Abwesenheit ${body.status === 'disabled' ? 'aus' : 'an'}`);
 });
 
-app.post('/mailboxes/:upn/rules', requireRole('engineer'), requireConnectedTenant, zValidator('json', forwardRuleSchema), async (c) => {
+app.post('/mailboxes/:upn/rules', requireRole('engineer'), requireConnectedTenant, validate('json', forwardRuleSchema), async (c) => {
   const upn = c.req.param('upn');
   if (!UPN.test(upn)) return c.json(invalidUpn(upn), 400);
   const body = c.req.valid('json');
@@ -157,7 +157,7 @@ app.post('/mailboxes/:upn/rules', requireRole('engineer'), requireConnectedTenan
 
 const ruleActions: Record<string, string> = { enable: 'mailbox.enable-rule', disable: 'mailbox.disable-rule', delete: 'mailbox.delete-rule' };
 
-app.post('/mailboxes/:upn/rules/:ruleId/:action{enable|disable|delete}', requireRole('engineer'), requireConnectedTenant, zValidator('json', ruleSchema), async (c) => {
+app.post('/mailboxes/:upn/rules/:ruleId/:action{enable|disable|delete}', requireRole('engineer'), requireConnectedTenant, validate('json', ruleSchema), async (c) => {
   const upn = c.req.param('upn');
   if (!UPN.test(upn)) return c.json(invalidUpn(upn), 400);
   const body = c.req.valid('json');

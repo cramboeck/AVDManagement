@@ -139,6 +139,7 @@ export function registerScriptJobs(remediations: RemediationOperations, options:
         detectionError: state.detectionError,
         remediationError: state.remediationError,
         deviceReportedAt: state.updatedAt ?? state.syncedAt,
+        observedAt: new Date().toISOString(),
         possiblyStale,
         stateSource: state.source,
       };
@@ -289,6 +290,7 @@ export function registerAvdScriptJobs(runner: VmCommandRunner, options: RunScrip
         detectionError: detectionState === 'scriptError' ? outcome.stderr || `Exit code ${outcome.exitCode}` : outcome.stderr,
         remediationError: remediationState === 'remediationFailed' ? `Remediation exit code ${outcome.remediation.exitCode}` : null,
         deviceReportedAt: new Date().toISOString(),
+        observedAt: new Date().toISOString(),
         possiblyStale: false,
         stateSource: 'run-command',
       };

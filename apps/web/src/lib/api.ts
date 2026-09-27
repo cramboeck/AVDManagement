@@ -12,7 +12,8 @@ export class ApiError extends Error {
     public readonly status: number,
     public readonly problem: ProblemDetails
   ) {
-    super(problem.detail ?? problem.title);
+    // Nie eine leere Meldung: ohne Problem-Details bleibt wenigstens der Statuscode
+    super(problem.detail || problem.title || `Anfrage fehlgeschlagen (HTTP ${status})`);
     this.name = 'ApiError';
   }
 

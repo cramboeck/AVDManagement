@@ -4,7 +4,7 @@
 
 import { randomUUID } from 'node:crypto';
 import { Hono } from 'hono';
-import { zValidator } from '@hono/zod-validator';
+import { validate } from '../middleware/validate.js';
 import { z } from 'zod';
 import { getAllRegisteredJobs, isValidTimeZone } from '@zerostress/core';
 import { authMiddleware, requireRole } from '../middleware/auth.js';
@@ -43,7 +43,7 @@ const teamSchema = z.object({
   isActive: z.boolean().optional(),
 });
 
-app.put('/team/:userId', requireRole('owner'), zValidator('json', teamSchema), async (c) => {
+app.put('/team/:userId', requireRole('owner'), validate('json', teamSchema), async (c) => {
   const auth = c.get('auth');
   const userId = c.req.param('userId');
   const body = c.req.valid('json');
@@ -77,7 +77,7 @@ app.get('/worker-tokens', requireRole('engineer'), async (c) => {
   return c.json({ items: await listWorkerTokens(auth.mspId), envTokenConfigured: (process.env.WORKER_TOKEN ?? '').length >= 16 });
 });
 
-app.post('/worker-tokens', requireRole('owner'), zValidator('json', z.object({ label: z.string().min(2).max(100) })), async (c) => {
+app.post('/worker-tokens', requireRole('owner'), validate('json', z.object({ label: z.string().min(2).max(100) })), async (c) => {
   const auth = c.get('auth');
   const { token, info } = await createWorkerToken(auth.mspId, auth.user.id, c.req.valid('json').label);
   await audit.log({
@@ -136,7 +136,7 @@ const schema = z.object({
 });
 
 // Nur Owner: die Regel schuetzt vor dem Engineer-Konto selbst
-app.put('/', requireRole('owner'), zValidator('json', schema), async (c) => {
+app.put('/', requireRole('owner'), validate('json', schema), async (c) => {
   const auth = c.get('auth');
   const before = await getMspSettings(auth.mspId);
   const after = await updateMspSettings(auth.mspId, c.req.valid('json'));

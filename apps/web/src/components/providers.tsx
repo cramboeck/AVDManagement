@@ -3,6 +3,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useState, useEffect } from 'react';
 import { TenantProvider } from '@/hooks/use-tenant';
+import { JobTrackerProvider } from '@/hooks/use-job-tracker';
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(
@@ -40,7 +41,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <TenantProvider>{children}</TenantProvider>
+      <TenantProvider>
+        <JobTrackerProvider>{children}</JobTrackerProvider>
+      </TenantProvider>
     </QueryClientProvider>
   );
 }

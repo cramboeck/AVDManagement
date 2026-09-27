@@ -4,7 +4,7 @@
 
 import { randomUUID } from 'node:crypto';
 import { Hono } from 'hono';
-import { zValidator } from '@hono/zod-validator';
+import { validate } from '../middleware/validate.js';
 import { z } from 'zod';
 import { authMiddleware, requireRole } from '../middleware/auth.js';
 import { getJobQueue } from '../services/job-queue.js';
@@ -55,7 +55,7 @@ const membershipActions: Record<string, string> = {
   'remove-owner': 'group.remove-owner',
 };
 
-app.post('/:groupId/:action{add-member|remove-member|add-owner|remove-owner}', requireRole('engineer'), requireConnectedTenant, zValidator('json', membershipSchema), async (c) => {
+app.post('/:groupId/:action{add-member|remove-member|add-owner|remove-owner}', requireRole('engineer'), requireConnectedTenant, validate('json', membershipSchema), async (c) => {
   const auth = c.get('auth');
   const tenant = c.get('tenant');
   const groupId = c.req.param('groupId');

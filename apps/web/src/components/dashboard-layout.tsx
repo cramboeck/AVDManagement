@@ -5,6 +5,7 @@ import Link from 'next/link';
 import clsx from 'clsx';
 import { TenantSwitcher } from './tenant-switcher';
 import { CommandPalette } from './command-palette';
+import { JobToaster } from './jobs/job-toaster';
 import { logout } from '@/lib/auth';
 
 interface DashboardLayoutProps {
@@ -17,6 +18,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   return (
     <>
       <CommandPalette />
+      <JobToaster />
       <div className="flex min-h-screen">
         <aside className="fixed left-0 top-0 z-30 flex h-screen w-64 flex-col border-r bg-background">
           <div className="flex h-14 items-center border-b px-4">

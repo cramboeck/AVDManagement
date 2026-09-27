@@ -292,6 +292,7 @@ export function ScriptResultView({ result, error }: { result: ScriptRunResult | 
         Vom Geraet gemeldet {dateText(result.deviceReportedAt)} · Erkennung {result.detectionState}
         {result.remediationState !== 'skipped' && result.remediationState !== 'unknown' && <> · Behebung {result.remediationState}</>}
       </p>
+      <TimingChain result={result} />
       {result.possiblyStale && (
         <p className="rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-sm">
           Das Geraet hat innerhalb der Wartezeit nichts Neues gemeldet. Gezeigt wird der letzte Zustand, den Intune fuer dieses Skript kennt; er kann von
@@ -734,5 +735,23 @@ function Stat({ label, value, tone }: { label: string; value: string; tone?: 'go
       <p className="text-xs text-muted-foreground">{label}</p>
       <p className={clsx('text-sm font-medium', tone === 'warning' && 'text-warning', tone === 'good' && 'text-success')}>{value}</p>
     </div>
+  );
+}
+
+/**
+ * Zeitkette eines Laufs: Anstoss durch die Konsole, Meldung des Geraets,
+ * Sichtbarkeit in Graph. Macht den Verzug der Intune-Berichte messbar.
+ */
+function TimingChain({ result }: { result: ScriptRunResult }) {
+  const requested = Date.parse(result.requestedAt);
+  const reported = result.deviceReportedAt ? Date.parse(result.deviceReportedAt) : NaN;
+  const observed = result.observedAt ? Date.parse(result.observedAt) : NaN;
+  if (!Number.isFinite(requested) || !Number.isFinite(reported)) return null;
+  const seconds = (ms: number) => (ms < 0 ? '0 s' : ms < 90_000 ? `${Math.round(ms / 1000)} s` : `${Math.round(ms / 60_000)} min`);
+  return (
+    <p className="text-xs text-muted-foreground">
+      Angestossen {dateText(result.requestedAt)} · Geraet hat nach {seconds(reported - requested)} gemeldet
+      {Number.isFinite(observed) && <> · in Graph sichtbar nach weiteren {seconds(observed - reported)} (Verzug der Intune-Berichte)</>}
+    </p>
   );
 }

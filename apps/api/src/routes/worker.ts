@@ -12,7 +12,7 @@ import { Readable } from 'node:stream';
 import { Hono } from 'hono';
 import { stream } from 'hono/streaming';
 import { createMiddleware } from 'hono/factory';
-import { zValidator } from '@hono/zod-validator';
+import { validate } from '../middleware/validate.js';
 import { z } from 'zod';
 import { appendBuildLog, claimBuild, finishBuild, getOwnedBuild } from '../services/builds.js';
 import { resolveWorkerToken } from '../services/worker-tokens.js';
@@ -77,7 +77,7 @@ app.get('/builds/:buildId/installer', async (c) => {
 
 const logSchema = z.object({ message: z.string().min(1).max(2000) });
 
-app.post('/builds/:buildId/log', zValidator('json', logSchema), async (c) => {
+app.post('/builds/:buildId/log', validate('json', logSchema), async (c) => {
   const ok = await appendBuildLog(c.req.param('buildId'), c.get('workerId'), c.req.valid('json').message, c.get('workerMspId'));
   return ok ? c.json({ ok: true }) : c.json({ title: 'Build not found', status: 404 }, 404);
 });
@@ -101,7 +101,7 @@ app.put('/builds/:buildId/artifact', async (c) => {
 
 const completeSchema = z.object({ success: z.boolean(), log: z.string().max(200_000).default(''), error: z.string().max(4000).nullable().default(null) });
 
-app.post('/builds/:buildId/complete', zValidator('json', completeSchema), async (c) => {
+app.post('/builds/:buildId/complete', validate('json', completeSchema), async (c) => {
   const body = c.req.valid('json');
   const ok = await finishBuild(c.req.param('buildId'), c.get('workerId'), { success: body.success, log: body.log, error: body.error }, c.get('workerMspId'));
   return ok ? c.json({ ok: true }) : c.json({ title: 'Build not found or already finished', status: 404 }, 404);
@@ -115,7 +115,7 @@ app.post('/exchange/claim', async (c) => {
   return c.json(claim);
 });
 
-app.post('/exchange/:jobId/log', zValidator('json', logSchema), async (c) => {
+app.post('/exchange/:jobId/log', validate('json', logSchema), async (c) => {
   const ok = await appendExchangeLog(c.req.param('jobId'), c.get('workerId'), c.req.valid('json').message, c.get('workerMspId'));
   return ok ? c.json({ ok: true }) : c.json({ title: 'Job not found', status: 404 }, 404);
 });
@@ -127,7 +127,7 @@ const exchangeCompleteSchema = z.object({
   result: z.record(z.unknown()).nullable().default(null),
 });
 
-app.post('/exchange/:jobId/complete', zValidator('json', exchangeCompleteSchema), async (c) => {
+app.post('/exchange/:jobId/complete', validate('json', exchangeCompleteSchema), async (c) => {
   const body = c.req.valid('json');
   const ok = await finishExchangeJob(c.req.param('jobId'), c.get('workerId'), { success: body.success, log: body.log, error: body.error, result: body.result }, c.get('workerMspId'));
   return ok ? c.json({ ok: true }) : c.json({ title: 'Job not found or already finished', status: 404 }, 404);

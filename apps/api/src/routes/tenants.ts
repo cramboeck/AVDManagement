@@ -4,7 +4,7 @@
 
 import { randomUUID } from 'node:crypto';
 import { Hono } from 'hono';
-import { zValidator } from '@hono/zod-validator';
+import { validate } from '../middleware/validate.js';
 import { z } from 'zod';
 import { eq, and } from 'drizzle-orm';
 import { db, managedTenants } from '../db/index.js';
@@ -72,7 +72,7 @@ const createTenantSchema = z.object({
   authMethod: z.enum(['gdap', 'app-consent']),
 });
 
-app.post('/', requireRole('engineer'), zValidator('json', createTenantSchema), async (c) => {
+app.post('/', requireRole('engineer'), validate('json', createTenantSchema), async (c) => {
   const auth = c.get('auth');
   const body = c.req.valid('json');
   const correlationId = randomUUID() as CorrelationId;
@@ -146,7 +146,7 @@ const removeTenantSchema = z.object({
   confirmName: z.string().min(1),
 });
 
-app.delete('/:tenantId', requireRole('owner'), zValidator('json', removeTenantSchema), async (c) => {
+app.delete('/:tenantId', requireRole('owner'), validate('json', removeTenantSchema), async (c) => {
   const auth = c.get('auth');
   const tenantId = c.req.param('tenantId');
   const { confirmName } = c.req.valid('json');

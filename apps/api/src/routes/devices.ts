@@ -4,7 +4,7 @@
 
 import { randomUUID } from 'node:crypto';
 import { Hono } from 'hono';
-import { zValidator } from '@hono/zod-validator';
+import { validate } from '../middleware/validate.js';
 import { z } from 'zod';
 import { authMiddleware, requireRole } from '../middleware/auth.js';
 import { tenantContextMiddleware, requireConnectedTenant } from '../middleware/tenant-context.js';
@@ -178,7 +178,7 @@ app.get('/:deviceId/remote-support', requireConnectedTenant, async (c) => {
 });
 
 // Remotehilfe: Sitzungsstart mit Begruendung und Audit; der Client baut die Verbindung auf
-app.post('/:deviceId/remote-support/session', requireRole('engineer'), requireConnectedTenant, zValidator('json', revealSchema), async (c) => {
+app.post('/:deviceId/remote-support/session', requireRole('engineer'), requireConnectedTenant, validate('json', revealSchema), async (c) => {
   const tenant = c.get('tenant');
   const auth = c.get('auth');
   const deviceId = c.req.param('deviceId');
@@ -225,7 +225,7 @@ app.post(
   '/:deviceId/recovery/bitlocker/:keyId/reveal',
   requireRole('engineer'),
   requireConnectedTenant,
-  zValidator('json', revealSchema),
+  validate('json', revealSchema),
   async (c) => {
     const tenant = c.get('tenant');
     const auth = c.get('auth');
@@ -276,7 +276,7 @@ app.post(
   '/:deviceId/recovery/laps/reveal',
   requireRole('engineer'),
   requireConnectedTenant,
-  zValidator('json', revealSchema),
+  validate('json', revealSchema),
   async (c) => {
     const tenant = c.get('tenant');
     const auth = c.get('auth');

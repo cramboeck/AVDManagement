@@ -3,8 +3,9 @@
  */
 
 import { Hono } from 'hono';
-import { zValidator } from '@hono/zod-validator';
+import { validate } from '../middleware/validate.js';
 import { z } from 'zod';
+import { getLibraryScript } from '@zerostress/core';
 import { authMiddleware, requireRole } from '../middleware/auth.js';
 import { tenantContextMiddleware, requireConnectedTenant } from '../middleware/tenant-context.js';
 import { randomUUID } from 'node:crypto';
@@ -71,7 +72,7 @@ app.post(
   '/assign-license',
   requireRole('engineer'),
   requireConnectedTenant,
-  zValidator('json', createLicenseJobSchema),
+  validate('json', createLicenseJobSchema),
   async (c) => {
     const auth = c.get('auth');
     const tenant = c.get('tenant');
@@ -118,7 +119,7 @@ app.post(
   '/:action{disable-user|enable-user|revoke-sessions|reset-password}',
   requireRole('engineer'),
   requireConnectedTenant,
-  zValidator('json', accountActionSchema),
+  validate('json', accountActionSchema),
   async (c) => {
     const auth = c.get('auth');
     const tenant = c.get('tenant');
@@ -164,7 +165,7 @@ app.post(
   '/:action{sync-device|restart-device|defender-scan}',
   requireRole('engineer'),
   requireConnectedTenant,
-  zValidator('json', deviceActionSchema),
+  validate('json', deviceActionSchema),
   async (c) => {
     const auth = c.get('auth');
     const tenant = c.get('tenant');
@@ -195,10 +196,11 @@ app.post(
 const runScriptSchema = z.object({
   managedDeviceId: z.string().min(1),
   deviceName: z.string().min(1),
-  scriptId: z.enum(['update-status', 'update-scan', 'system-info', 'winget-updates', 'network-info', 'storage-info', 'local-admins', 'battery-info']),
+  // Gegen die Bibliothek pruefen statt gegen eine Liste, die bei jedem neuen Skript nachgezogen werden muesste
+  scriptId: z.string().refine((id) => getLibraryScript(id) !== null, 'Unbekanntes Skript'),
 });
 
-app.post('/run-script', requireRole('engineer'), requireConnectedTenant, zValidator('json', runScriptSchema), async (c) => {
+app.post('/run-script', requireRole('engineer'), requireConnectedTenant, validate('json', runScriptSchema), async (c) => {
   const auth = c.get('auth');
   const tenant = c.get('tenant');
   const body = c.req.valid('json');
@@ -269,7 +271,7 @@ const tempAdminSchema = z.object({
   reason: z.string().trim().min(10).max(500),
 });
 
-app.post('/temp-admin', requireRole('engineer'), requireConnectedTenant, zValidator('json', tempAdminSchema), async (c) => {
+app.post('/temp-admin', requireRole('engineer'), requireConnectedTenant, validate('json', tempAdminSchema), async (c) => {
   const auth = c.get('auth');
   const tenant = c.get('tenant');
   const body = c.req.valid('json');
@@ -291,7 +293,7 @@ const tempAdminRevokeSchema = z.object({
   reason: z.string().trim().min(10).max(500),
 });
 
-app.post('/temp-admin-revoke', requireRole('engineer'), requireConnectedTenant, zValidator('json', tempAdminRevokeSchema), async (c) => {
+app.post('/temp-admin-revoke', requireRole('engineer'), requireConnectedTenant, validate('json', tempAdminRevokeSchema), async (c) => {
   const auth = c.get('auth');
   const tenant = c.get('tenant');
   const body = c.req.valid('json');
@@ -319,7 +321,7 @@ const wingetInstallSchema = z.object({
   reason: z.string().trim().max(500).nullable().default(null),
 });
 
-app.post('/winget-install', requireRole('engineer'), requireConnectedTenant, zValidator('json', wingetInstallSchema), async (c) => {
+app.post('/winget-install', requireRole('engineer'), requireConnectedTenant, validate('json', wingetInstallSchema), async (c) => {
   const auth = c.get('auth');
   const tenant = c.get('tenant');
   const body = c.req.valid('json');
@@ -344,7 +346,7 @@ const wingetBulkSchema = z.object({
   reason: z.string().trim().max(500).nullable().default(null),
 });
 
-app.post('/winget-bulk', requireRole('engineer'), requireConnectedTenant, zValidator('json', wingetBulkSchema), async (c) => {
+app.post('/winget-bulk', requireRole('engineer'), requireConnectedTenant, validate('json', wingetBulkSchema), async (c) => {
   const auth = c.get('auth');
   const tenant = c.get('tenant');
   const body = c.req.valid('json');
@@ -362,7 +364,7 @@ app.post('/winget-bulk', requireRole('engineer'), requireConnectedTenant, zValid
 // Versiegeltes Ergebnis anzeigen: Begruendung, Rolle Engineer, Audit; der Klartext verlaesst nie die Antwort
 const revealSchema = z.object({ reason: z.string().trim().min(10).max(500) });
 
-app.post('/:jobId/reveal', requireRole('engineer'), requireConnectedTenant, zValidator('json', revealSchema), async (c) => {
+app.post('/:jobId/reveal', requireRole('engineer'), requireConnectedTenant, validate('json', revealSchema), async (c) => {
   const auth = c.get('auth');
   const tenant = c.get('tenant');
   const jobId = c.req.param('jobId') as JobId;
