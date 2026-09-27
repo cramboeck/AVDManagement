@@ -89,6 +89,7 @@ const methodLabels: Record<AuthenticationMethodKind, string> = {
 
 const jobStatusLabels: Record<JobStatus, string> = {
   pending_approval: 'Warte auf Freigabe',
+  pending_second_approval: 'Zweite Freigabe noetig',
   queued: 'In Warteschlange',
   running: 'Laeuft',
   completed: 'Abgeschlossen',

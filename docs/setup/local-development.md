@@ -499,6 +499,23 @@ $env:TEST_DATABASE_URL = "postgresql://zerostress:dev_password_only@localhost:54
 npm test --workspace=@zerostress/api
 ```
 
+## Vier-Augen-Prinzip (Einstellungen)
+
+Unter **Einstellungen** (Speichern nur als Owner, Audit `settings.update`)
+laesst sich das Vier-Augen-Prinzip einschalten: Jobs, deren Vorschau die
+Schwelle an betroffenen Objekten erreicht (Vorschauzeilen, Geraete einer
+Sammelaktion, Tenants eines Rollouts) oder deren Typ gelistet ist, brauchen
+nach der ersten Freigabe eine zweite von einer anderen Person. Der Job
+steht dann auf "Zweite Freigabe noetig", die Vorschau bleibt vier Stunden
+gueltig, danach wird er abgebrochen. Dieselbe Person kann nicht beide
+Freigaben erteilen; die API lehnt das ab. Beide Freigaben stehen im Audit
+(`job.approve.first`, `job.approve.second`). Standard: aus, weil ein
+einzelner Techniker sonst nichts mehr freigeben koennte. Voreingestellte
+Typen: Sammelaktionen, Postfachtyp, Beweissicherung, Weiterleitung auf
+Postfachebene, VM-Bereitstellung, Benutzer sperren, Passwort zuruecksetzen.
+Braucht `npm run db:push` (Spalten `jobs.approvals`, `jobs.second_approval`,
+`msp_organizations.settings`).
+
 ## DEV_AUTH_BYPASS
 
 Mit `DEV_AUTH_BYPASS=true` und `NEXT_PUBLIC_DEV_AUTH_BYPASS=true` entfaellt

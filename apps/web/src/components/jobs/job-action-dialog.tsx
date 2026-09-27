@@ -21,7 +21,7 @@ interface JobActionDialogProps {
   onCompleted?: (job: Job) => void;
 }
 
-type Phase = 'creating' | 'preview' | 'running' | 'done' | 'failed';
+type Phase = 'creating' | 'preview' | 'second' | 'running' | 'done' | 'failed';
 
 const actionLabels: Record<PlannedChange['action'], string> = {
   create: 'Anlegen',
@@ -56,7 +56,7 @@ export function JobActionDialog({
     createJob()
       .then((job) => {
         setJobId(job.id);
-        setPhase(job.status === 'pending_approval' ? 'preview' : 'running');
+        setPhase(job.status === 'pending_approval' ? 'preview' : job.status === 'pending_second_approval' ? 'second' : 'running');
       })
       .catch((err: Error) => {
         setError(err);
@@ -119,8 +119,8 @@ export function JobActionDialog({
     setIsApproving(true);
     setError(null);
     try {
-      await api.post(`/tenants/${activeTenant!.id}/jobs/${jobId}/approve`);
-      setPhase('running');
+      const approved = await api.post<Job>(`/tenants/${activeTenant!.id}/jobs/${jobId}/approve`);
+      setPhase(approved.status === 'pending_second_approval' ? 'second' : 'running');
       queryClient.invalidateQueries({ queryKey: ['job', activeTenant?.id, jobId] });
     } catch (err) {
       setError(err as Error);
@@ -167,6 +167,15 @@ export function JobActionDialog({
                 </Centered>
               )}
             </>
+          )}
+
+          {phase === 'second' && (
+            <div className="space-y-2 rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-sm" role="status">
+              <p className="font-medium">Wartet auf die zweite Freigabe</p>
+              <p className="text-xs">
+                Vier-Augen-Prinzip{job?.secondApproval?.reason ? `: ${job.secondApproval.reason}` : ''}. Eine andere Person muss den Job unter Jobs freigeben; die Vorschau bleibt vier Stunden gueltig. Bis dahin passiert nichts.
+              </p>
+            </div>
           )}
 
           {phase === 'running' && (
@@ -219,7 +228,7 @@ export function JobActionDialog({
               </button>
             </>
           )}
-          {(phase === 'done' || phase === 'failed') && (
+          {(phase === 'done' || phase === 'failed' || phase === 'second') && (
             <button onClick={onClose} className="rounded-md border px-4 py-2 text-sm hover:bg-accent">
               Schliessen
             </button>
@@ -306,6 +315,7 @@ function PhaseBadge({ phase }: { phase: Phase }) {
   const labels: Record<Phase, string> = {
     creating: 'Vorschau',
     preview: 'Vorschau',
+    second: 'Zweite Freigabe',
     running: 'Laeuft',
     done: 'Abgeschlossen',
     failed: 'Fehlgeschlagen',
@@ -313,6 +323,7 @@ function PhaseBadge({ phase }: { phase: Phase }) {
   const colors: Record<Phase, string> = {
     creating: 'bg-muted text-muted-foreground',
     preview: 'bg-warning/10 text-warning',
+    second: 'bg-warning/10 text-warning',
     running: 'bg-primary/10 text-primary',
     done: 'bg-success/10 text-success',
     failed: 'bg-destructive/10 text-destructive',

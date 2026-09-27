@@ -31,6 +31,8 @@ export class DrizzleJobStore implements JobStore {
       maxRetries: job.maxRetries,
       correlationId: job.correlationId,
       preview: job.preview,
+      approvals: job.approvals ?? [],
+      secondApproval: job.secondApproval ?? null,
     });
   }
 
@@ -44,6 +46,8 @@ export class DrizzleJobStore implements JobStore {
     if (updates.error !== undefined) updateData.error = updates.error;
     if (updates.retryCount !== undefined) updateData.retryCount = updates.retryCount;
     if (updates.preview !== undefined) updateData.preview = updates.preview;
+    if (updates.approvals !== undefined) updateData.approvals = updates.approvals;
+    if (updates.secondApproval !== undefined) updateData.secondApproval = updates.secondApproval;
 
     if (Object.keys(updateData).length === 0) return;
 
@@ -87,7 +91,7 @@ export class DrizzleJobStore implements JobStore {
   }
 
   // Freigaben, die niemand bestaetigt hat, nicht ewig offen lassen
-  async cancelExpiredPending(olderThan: Date): Promise<number> {
+  async cancelExpiredPending(olderThan: Date, secondApprovalOlderThan: Date = olderThan): Promise<number> {
     const cancelled = await db
       .update(jobs)
       .set({
@@ -97,8 +101,17 @@ export class DrizzleJobStore implements JobStore {
       })
       .where(and(eq(jobs.status, 'pending_approval'), lt(jobs.createdAt, olderThan)))
       .returning({ id: jobs.id });
+    const cancelledSecond = await db
+      .update(jobs)
+      .set({
+        status: 'cancelled',
+        completedAt: new Date(),
+        error: 'Second approval not given in time',
+      })
+      .where(and(eq(jobs.status, 'pending_second_approval'), lt(jobs.createdAt, secondApprovalOlderThan)))
+      .returning({ id: jobs.id });
 
-    return cancelled.length;
+    return cancelled.length + cancelledSecond.length;
   }
 
   // Jobs, die der Worker nie abgeschlossen hat (z. B. Neustart, Redis weg), nicht ewig "laufen" lassen
@@ -150,6 +163,8 @@ export class DrizzleJobStore implements JobStore {
       maxRetries: row.maxRetries,
       correlationId: row.correlationId as Job['correlationId'],
       preview: row.preview as Job['preview'],
+      approvals: (row.approvals as Job['approvals'] | null) ?? [],
+      secondApproval: (row.secondApproval as Job['secondApproval'] | null) ?? { required: false, reason: null },
     };
   }
 }

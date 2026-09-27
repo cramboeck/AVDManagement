@@ -6,13 +6,14 @@
  */
 
 import { Redis } from 'ioredis';
-import { JobQueue, registerIdentityJobs, registerAvdJobs, registerDeviceJobs, registerScriptJobs, registerAvdScriptJobs, registerAppJobs, registerTempAdminJobs, registerGroupJobs, registerAppPublishJobs, registerMailboxJobs, registerWingetJobs, registerWingetBulkJob, registerExchangeJobs, registerVmJobs } from '@zerostress/core';
+import { JobQueue, registerIdentityJobs, registerAvdJobs, registerDeviceJobs, registerScriptJobs, registerAvdScriptJobs, registerAppJobs, registerTempAdminJobs, registerGroupJobs, registerAppPublishJobs, registerMailboxJobs, registerWingetJobs, registerWingetBulkJob, registerExchangeJobs, registerVmJobs, evaluateFourEyes, SECOND_APPROVAL_WINDOW_MS } from '@zerostress/core';
 import { mailboxOperations } from './mailboxes.js';
 import { exchangeOperations } from './exchange.js';
 import { DrizzleJobStore } from './job-store.js';
 import { DrizzleAuditLogger } from './audit-logger.js';
 import { getIdentityProvider, getAvdProvider, getDeviceProvider, getRemediationProvider, getAppProvider, getGroupProvider, getVmProvider } from './microsoft-clients.js';
 import { estimateVmCost } from './azure-prices.js';
+import { getMspSettings } from './msp-settings.js';
 import { getResultSealer } from './result-crypto.js';
 import { publishOperations } from './publishing.js';
 
@@ -68,14 +69,22 @@ export function getJobQueue(): JobQueue {
     });
 
     jobStore = new DrizzleJobStore();
-    jobQueue = new JobQueue({ redis }, jobStore, new DrizzleAuditLogger());
+    jobQueue = new JobQueue(
+      {
+        redis,
+        // Vier-Augen-Prinzip nach den Einstellungen des MSP
+        approvalPolicy: async (job, preview) => evaluateFourEyes(await getMspSettings(job.mspId), job, preview),
+      },
+      jobStore,
+      new DrizzleAuditLogger()
+    );
     jobQueue.startWorker();
 
     const sweep = setInterval(() => {
       const store = jobStore;
       if (!store) return;
       Promise.all([
-        store.cancelExpiredPending(new Date(Date.now() - PENDING_APPROVAL_TTL_MS)),
+        store.cancelExpiredPending(new Date(Date.now() - PENDING_APPROVAL_TTL_MS), new Date(Date.now() - SECOND_APPROVAL_WINDOW_MS - PENDING_APPROVAL_TTL_MS)),
         store.failStaleActive(new Date(Date.now() - ACTIVE_JOB_TTL_MS)),
         store.purgeSealedResults(new Date(Date.now() - SEALED_RESULT_RETENTION_MS)),
       ])

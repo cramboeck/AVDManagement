@@ -13,6 +13,8 @@ export const mspOrganizations = pgTable('msp_organizations', {
   customDomain: varchar('custom_domain', { length: 255 }),
   subscriptionTier: varchar('subscription_tier', { length: 50 }).notNull().default('starter'),
   isActive: boolean('is_active').notNull().default(true),
+  // Sicherheitseinstellungen (Vier-Augen-Prinzip u. a.), siehe MspSettings
+  settings: jsonb('settings'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -78,6 +80,9 @@ export const jobs = pgTable('jobs', {
   correlationId: uuid('correlation_id').notNull(),
   parentJobId: uuid('parent_job_id'),
   preview: jsonb('preview'),
+  // Vier-Augen-Prinzip: erteilte Freigaben und ob eine zweite noetig ist
+  approvals: jsonb('approvals').notNull().default([]),
+  secondApproval: jsonb('second_approval'),
 });
 
 // Audit-Eintraege (unveraenderlich)

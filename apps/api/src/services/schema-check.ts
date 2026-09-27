@@ -11,6 +11,8 @@ import { db } from '../db/index.js';
 /** Spalten, die in juengeren Schemaaenderungen hinzugekommen sind. */
 const REQUIRED_COLUMNS: ReadonlyArray<readonly [table: string, column: string]> = [
   ['inventory_snapshots', 'unavailable'],
+  ['jobs', 'approvals'],
+  ['msp_organizations', 'settings'],
   ['alerts', 'id'],
   ['app_packages', 'id'],
   ['app_packages', 'latest_version'],

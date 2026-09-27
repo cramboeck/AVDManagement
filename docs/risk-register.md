@@ -198,7 +198,7 @@
 | **Auswirkung** | Kritisch |
 | **Risiko-Level** | Hoch |
 | **Fruehwarnindikator** | Audit-Eintraege `apps.package.update` mit geaenderten Befehlen oder Quell-URLs ausserhalb der Arbeitszeit; Rollout-Vorschauen mit fremden Domaenen als Quelle |
-| **Gegenmassnahme** | Manifestaenderungen mit Vorher/Nachher im Audit; Rollout-Vorschau zeigt Befehle, Quelle und Hash; Freigabe getrennt vom Anlegen; winget-Quelle nur https mit Hash aus dem oeffentlichen Manifest; MFA phishing-resistent fuer Engineer-Konten; spaeter Vier-Augen-Freigabe fuer Rollouts auf mehr als N Tenants |
+| **Gegenmassnahme** | Manifestaenderungen mit Vorher/Nachher im Audit; Rollout-Vorschau zeigt Befehle, Quelle und Hash; Freigabe getrennt vom Anlegen; winget-Quelle nur https mit Hash aus dem oeffentlichen Manifest; MFA phishing-resistent fuer Engineer-Konten; Vier-Augen-Prinzip (Einstellungen) fuer Rollouts und Sammelaktionen ab Schwelle sowie fuer gelistete Jobtypen, zweite Freigabe zwingend durch eine andere Person |
 
 ### SEC-005: Worker-Token gilt fuer die ganze Installation
 

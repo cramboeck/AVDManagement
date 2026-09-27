@@ -99,6 +99,8 @@ export interface UserLicense {
 // Job-Status
 export type JobStatus =
   | 'pending_approval'
+  // Erste Freigabe erteilt, zweite Person muss bestaetigen (Vier-Augen-Prinzip)
+  | 'pending_second_approval'
   | 'queued'
   | 'running'
   | 'completed'
@@ -153,6 +155,27 @@ export interface Job {
   maxRetries: number;
   correlationId: CorrelationId;
   preview: JobPreview | null;
+  // Erteilte Freigaben in Reihenfolge
+  approvals: JobApproval[];
+  // Vier-Augen-Prinzip: braucht der Job eine zweite Freigabe und warum
+  secondApproval: { required: boolean; reason: string | null };
+}
+
+export interface JobApproval {
+  userId: UserId;
+  email: string;
+  at: string;
+}
+
+/** Sicherheitseinstellungen je MSP (Tabelle msp_organizations.settings). */
+export interface MspSettings {
+  fourEyes: {
+    enabled: boolean;
+    // Ab so vielen Objekten in der Vorschau braucht ein Job eine zweite Freigabe (0 = nie ueber die Anzahl)
+    minObjects: number;
+    // Jobtypen, die immer eine zweite Freigabe brauchen
+    jobTypes: string[];
+  };
 }
 
 // Audit-Ergebnis

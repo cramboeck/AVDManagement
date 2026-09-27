@@ -230,7 +230,20 @@ app.post('/:jobId/approve', requireRole('engineer'), async (c) => {
   const queue = getJobQueue();
 
   try {
-    const job = await queue.approveJob(jobId, auth.user.id);
+    const job = await queue.approveJob(jobId, auth.user.id, auth.user.email);
+    // Jede Freigabe ist ein eigener Audit-Eintrag; bei zwei Personen stehen beide drin
+    await audit.log({
+      mspId: auth.mspId,
+      tenantId: job.tenantId,
+      userId: auth.user.id,
+      action: job.status === 'pending_second_approval' ? 'job.approve.first' : job.approvals.length > 1 ? 'job.approve.second' : 'job.approve',
+      targetType: 'job',
+      targetId: job.id,
+      targetDisplayName: typeof job.payload.targetDisplayName === 'string' ? job.payload.targetDisplayName : job.type,
+      afterState: { jobType: job.type, status: job.status, approvals: job.approvals.map((a) => a.email), reason: job.secondApproval?.reason ?? null },
+      result: 'success',
+      correlationId: job.correlationId,
+    });
     return c.json(job);
   } catch (error) {
     if ((error as { type?: string }).type === 'job-error') {

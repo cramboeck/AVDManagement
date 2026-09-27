@@ -26,7 +26,12 @@ export interface JobQueueConfig {
   redis: Redis;
   queueName?: string;
   concurrency?: number;
+  // Vier-Augen-Prinzip: entscheidet nach der Vorschau, ob eine zweite Freigabe noetig ist
+  approvalPolicy?: (job: Job, preview: PreviewResult) => Promise<{ required: boolean; reason: string | null }>;
 }
+
+// Eine zweite Person braucht Zeit; die Vorschau gilt dann laenger als fuenf Minuten
+export const SECOND_APPROVAL_WINDOW_MS = 4 * 60 * 60 * 1000;
 
 export interface JobStore {
   create(job: Job): Promise<void>;
@@ -77,7 +82,10 @@ export class JobQueue {
     });
     this.jobStore = jobStore;
     this.auditLogger = auditLogger;
+    this.approvalPolicy = config.approvalPolicy;
   }
+
+  private readonly approvalPolicy?: JobQueueConfig['approvalPolicy'];
 
   /**
    * Job erstellen und in Queue einreihen
@@ -112,17 +120,21 @@ export class JobQueue {
       maxRetries: registered.definition.maxRetries,
       correlationId,
       preview: null,
+      approvals: [],
+      secondApproval: { required: false, reason: null },
     };
 
     await this.jobStore.create(job);
 
     if (registered.definition.requiresPreview && registered.previewGenerator) {
       const preview = await this.generatePreview(job, registered.previewGenerator);
+      const secondApproval = this.approvalPolicy ? await this.approvalPolicy(job, preview) : { required: false, reason: null };
       await this.jobStore.update(id, {
         preview: {
           ...preview,
           expiresAt: new Date(Date.now() + 5 * 60 * 1000),
         },
+        secondApproval,
       });
     } else {
       await this.enqueue(job);
@@ -134,13 +146,13 @@ export class JobQueue {
   /**
    * Preview bestaetigen und Job ausfuehren
    */
-  async approveJob(jobId: JobId, _userId: UserId): Promise<Job> {
+  async approveJob(jobId: JobId, userId: UserId, userEmail = ''): Promise<Job> {
     const job = await this.jobStore.findById(jobId);
     if (!job) {
       throw new JobError(jobId, 'NOT_FOUND', 'Job not found', false);
     }
 
-    if (job.status !== 'pending_approval') {
+    if (job.status !== 'pending_approval' && job.status !== 'pending_second_approval') {
       throw new JobError(
         jobId,
         'INVALID_STATE',
@@ -153,8 +165,25 @@ export class JobQueue {
       throw new JobError(jobId, 'PREVIEW_EXPIRED', 'Preview has expired', false);
     }
 
-    await this.jobStore.update(jobId, { status: 'queued' });
-    await this.enqueue({ ...job, status: 'queued' });
+    const approvals = [...(job.approvals ?? []), { userId, email: userEmail, at: new Date().toISOString() }];
+
+    if (job.status === 'pending_second_approval') {
+      const first = job.approvals?.[0];
+      if (first && first.userId === userId) {
+        throw new JobError(jobId, 'SAME_APPROVER', 'Die zweite Freigabe muss von einer anderen Person kommen (Vier-Augen-Prinzip)', false);
+      }
+    } else if (job.secondApproval?.required) {
+      // Erste von zwei Freigaben: Vorschau fuer die zweite Person verlaengern, noch nichts ausfuehren
+      await this.jobStore.update(jobId, {
+        status: 'pending_second_approval',
+        approvals,
+        preview: job.preview ? { ...job.preview, expiresAt: new Date(Date.now() + SECOND_APPROVAL_WINDOW_MS) } : job.preview,
+      });
+      return (await this.jobStore.findById(jobId))!;
+    }
+
+    await this.jobStore.update(jobId, { status: 'queued', approvals });
+    await this.enqueue({ ...job, status: 'queued', approvals });
 
     return (await this.jobStore.findById(jobId))!;
   }

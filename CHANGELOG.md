@@ -8,6 +8,11 @@ Alle nennenswerten Aenderungen an ZeroStress Cockpit. Format angelehnt an
 
 ### Hinzugefuegt
 
+- Vier-Augen-Prinzip: MSP-Einstellungen (Seite Einstellungen, nur Owner)
+  mit Schwelle an betroffenen Objekten und Liste von Jobtypen; betroffene
+  Jobs brauchen eine zweite Freigabe durch eine andere Person (Status
+  "Zweite Freigabe noetig", Vorschau vier Stunden gueltig, beide
+  Freigaben im Audit). Standard aus.
 - Software (neue Seite): alle von Intune erkannten Programme des Tenants
   mit Versionen und Geraetezahl (Snapshot `software`), Abgleich mit dem
   winget-Katalog (eigene Pakete, Basis-Set, Versionscache) mit Stand

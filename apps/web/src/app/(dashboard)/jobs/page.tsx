@@ -18,6 +18,7 @@ interface JobsResponse {
 
 const statusLabels: Record<JobStatus, string> = {
   pending_approval: 'Warte auf Freigabe',
+  pending_second_approval: 'Zweite Freigabe noetig',
   queued: 'In Warteschlange',
   running: 'Laeuft',
   completed: 'Abgeschlossen',
@@ -27,6 +28,7 @@ const statusLabels: Record<JobStatus, string> = {
 
 const statusColors: Record<JobStatus, string> = {
   pending_approval: 'bg-warning/10 text-warning',
+  pending_second_approval: 'bg-warning/10 text-warning',
   queued: 'bg-muted text-muted-foreground',
   running: 'bg-primary/10 text-primary',
   completed: 'bg-success/10 text-success',
@@ -233,7 +235,20 @@ function JobDetailPanel({
           </div>
         )}
 
-        {job.status === 'pending_approval' && (
+        {(job.secondApproval?.required || (job.approvals?.length ?? 0) > 0) && (
+          <div className="rounded-md border px-3 py-2 text-xs">
+            <p className="font-medium">Vier-Augen-Prinzip</p>
+            {job.secondApproval?.reason && <p className="text-muted-foreground">{job.secondApproval.reason}</p>}
+            {(job.approvals ?? []).map((a, i) => (
+              <p key={`${a.userId}-${i}`} className="text-muted-foreground">
+                {i + 1}. Freigabe: {a.email || a.userId} am {new Date(a.at).toLocaleString('de-DE')}
+              </p>
+            ))}
+            {job.status === 'pending_second_approval' && <p className="mt-1 text-warning">Die zweite Freigabe muss von einer anderen Person kommen als der ersten.</p>}
+          </div>
+        )}
+
+        {(job.status === 'pending_approval' || job.status === 'pending_second_approval') && (
           <div className="flex gap-2 pt-4">
             <button
               onClick={onApprove}
@@ -245,7 +260,7 @@ function JobDetailPanel({
                 isApproving && 'cursor-not-allowed opacity-50'
               )}
             >
-              {isApproving ? 'Wird freigegeben...' : 'Freigeben'}
+              {isApproving ? 'Wird freigegeben...' : job.status === 'pending_second_approval' ? 'Zweite Freigabe erteilen' : 'Freigeben'}
             </button>
             <button
               onClick={onClose}

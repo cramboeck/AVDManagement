@@ -69,7 +69,7 @@ export async function startRollout(input: { mspId: string; userId: string; userE
       mspId: input.mspId as Job['mspId'],
       userId: input.userId as Job['createdBy'],
       userEmail: input.userEmail,
-      payload: { packageId: input.packageId, packageName, tenantName: tenant.displayName, targetType: 'app', targetId: input.packageId, targetDisplayName: `${packageName} -> ${tenant.displayName}` },
+      payload: { packageId: input.packageId, packageName, tenantName: tenant.displayName, batchSize: tenants.length, targetType: 'app', targetId: input.packageId, targetDisplayName: `${packageName} -> ${tenant.displayName}` },
     });
     await upsertDeployment(input.mspId, input.packageId, tenant.id, { status: 'pending', jobId: job.id, error: null });
     jobs.push(input.autoApprove && job.status === 'pending_approval' ? await queue.approveJob(job.id, input.userId as Job['createdBy']) : job);
