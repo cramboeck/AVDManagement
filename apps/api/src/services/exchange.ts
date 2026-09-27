@@ -11,6 +11,7 @@ import type { ExchangeOperations } from '@zerostress/core';
 import type { ExchangeFacts, ExchangeJobRecord, ExchangeJobStatus, ExchangeMailboxFacts, ExchangeOperation, ExchangeWorkerClaim, MailboxExchangeInfo, TenantId } from '@zerostress/types';
 import { db, exchangeJobs, exchangeFacts, managedTenants } from '../db/index.js';
 import { getMailboxProvider } from './microsoft-clients.js';
+import { mergeWorkerLogs } from './worker-log.js';
 
 type Row = typeof exchangeJobs.$inferSelect;
 
@@ -139,7 +140,7 @@ export async function finishExchangeJob(id: string, workerId: string, input: { s
       result = { mailboxes: facts.mailboxes.length, autoForwardingMode: facts.autoForwardingMode };
     }
   }
-  const mergedLog = [row.log, input.log].filter((s) => s && s.trim()).join('\n').slice(-MAX_LOG_CHARS) || null;
+  const mergedLog = mergeWorkerLogs(row.log, input.log, MAX_LOG_CHARS);
   await db
     .update(exchangeJobs)
     .set({ status: input.success ? 'succeeded' : 'failed', finishedAt: now, log: mergedLog, error: input.success ? null : (input.error ?? 'Fehler ohne Meldung'), result })

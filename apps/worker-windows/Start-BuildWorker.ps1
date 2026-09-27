@@ -421,7 +421,8 @@ function Invoke-Build {
             throw 'zip installers are not supported by the worker yet; upload the msi or exe'
         }
 
-        Write-Step -BuildId $buildId -Message ('Downloading installer ' + $Plan.installer.fileName + ' (' + [math]::Round([double]$Plan.installer.sizeBytes / 1MB, 1) + ' MB)')
+        $sizeText = if ([double]$Plan.installer.sizeBytes -gt 0) { ' (' + [math]::Round([double]$Plan.installer.sizeBytes / 1MB, 1) + ' MB)' } else { ' (size known after download)' }
+        Write-Step -BuildId $buildId -Message ('Downloading installer ' + $Plan.installer.fileName + $sizeText)
         $installerPath = Get-Installer -Plan $Plan -Folder $downloadDir
         Write-Step -BuildId $buildId -Message 'Installer hash verified'
 

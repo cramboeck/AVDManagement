@@ -10,6 +10,7 @@
 import { and, desc, eq, inArray, lt, sql } from 'drizzle-orm';
 import { buildPlanFor } from '@zerostress/core';
 import type { AppPackage, BuildJob, BuildPlan, BuildStatus } from '@zerostress/types';
+import { mergeWorkerLogs } from './worker-log.js';
 import { db, appPackages, buildJobs } from '../db/index.js';
 import { detectionPrefix, getPackage } from './packages.js';
 
@@ -150,7 +151,7 @@ export async function finishBuild(buildId: string, workerId: string, result: { s
   if (!row || row.status === 'succeeded' || row.status === 'failed') return false;
   if (mspId && row.mspId !== mspId) return false;
   const now = new Date();
-  const mergedLog = [row.log, result.log].filter((s) => s && s.trim()).join('\n').slice(-MAX_LOG_CHARS) || null;
+  const mergedLog = mergeWorkerLogs(row.log, result.log, MAX_LOG_CHARS);
   const pkgRow = await db.query.appPackages.findFirst({ where: eq(appPackages.id, row.packageId) });
   const hasArtifact = !!pkgRow?.artifact;
   const success = result.success && hasArtifact;

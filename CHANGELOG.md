@@ -149,6 +149,10 @@ Alle nennenswerten Aenderungen an ZeroStress Cockpit. Format angelehnt an
 
 ### Geaendert
 
+- Build- und Exchange-Protokolle: Zeilen, die der Worker waehrend des Laufs
+  gemeldet hat, stehen nach dem Abschluss nicht mehr doppelt; die
+  Groessenangabe beim Download entfaellt, wenn sie unbekannt ist.
+
 - Build-Worker: der PSADT-Wrapper wird nach dem Wrapper-Feld des Bauplans
   erzeugt, nicht nach dem Installertyp; winget-Pakete scheiterten mit
   "Install block is only generated for psadt packages".
