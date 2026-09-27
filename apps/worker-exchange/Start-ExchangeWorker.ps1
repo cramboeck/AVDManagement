@@ -68,8 +68,16 @@ function Read-Config {
     }
     if (-not ($cfg.PSObject.Properties.Name -contains 'pollSeconds') -or -not $cfg.pollSeconds) { Add-Member -InputObject $cfg -MemberType NoteProperty -Name 'pollSeconds' -Value 30 -Force }
     if ($cfg.workerId -notmatch '^[A-Za-z0-9._-]{1,100}$') { throw 'workerId may only contain letters, digits, dot, underscore and dash' }
+    if (-not ($cfg.PSObject.Properties.Name -contains 'allowInsecureHttp')) {
+        Add-Member -InputObject $cfg -MemberType NoteProperty -Name 'allowInsecureHttp' -Value $false -Force
+    }
     $cfg.apiUrl = ([string]$cfg.apiUrl).TrimEnd('/')
-    if ($cfg.apiUrl -notmatch '^https://' -and $cfg.apiUrl -notmatch '^http://(localhost|127\.0\.0\.1)') { throw 'apiUrl must use https (http only for localhost)' }
+    if ($cfg.apiUrl -match '/api$') { throw 'apiUrl must be the API root without /api (for example https://cockpit.example.com or http://localhost:3001)' }
+    if ($cfg.apiUrl -notmatch '^https://' -and $cfg.apiUrl -notmatch '^http://(localhost|127\.0\.0\.1)') {
+        # Ohne TLS wandert das Worker-Token im Klartext durchs Netz; nur fuer ein Labor mit ausdruecklichem Schalter
+        if ($cfg.allowInsecureHttp -ne $true) { throw 'apiUrl must use https (http only for localhost); for a lab set allowInsecureHttp to true in worker.config.json' }
+        Write-Host ('WARNING: apiUrl uses plain http (' + $cfg.apiUrl + '); the worker token is sent unencrypted. Lab use only.') -ForegroundColor Yellow
+    }
     if ($cfg.appId -notmatch '^[0-9a-fA-F-]{36}$') { throw 'appId must be the application (client) id GUID' }
     return $cfg
 }
@@ -389,6 +397,7 @@ if (-not (Get-Module -ListAvailable -Name 'ExchangeOnlineManagement')) {
 Import-Module -Name 'ExchangeOnlineManagement' -MinimumVersion '3.0.0' -ErrorAction Stop
 
 $script:Config = Read-Config -Path $ConfigPath
+Write-Host ('Config ' + $ConfigPath + ' -> API ' + $script:Config.apiUrl + ', worker id ' + $script:Config.workerId)
 $script:Token = Read-Token
 
 $ping = Invoke-Api -Method 'GET' -Path '/worker/ping'

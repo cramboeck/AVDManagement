@@ -62,7 +62,8 @@ Konfiguration:
 
 | Schluessel | Bedeutung |
 |---|---|
-| `apiUrl` | Basis-URL der API (https; http nur fuer localhost) |
+| `apiUrl` | Basis-URL der API ohne Pfad, z. B. `https://cockpit.example.com`; lokal `http://localhost:3001`. Plain http zu anderen Rechnern nur mit `allowInsecureHttp: true` (Labor, Token laeuft unverschluesselt) |
+| `allowInsecureHttp` | `true` erlaubt http zu einer fremden Adresse, nur fuer ein Labor ohne TLS |
 | `workerId` | Name im Cockpit-Protokoll, Standard Computername |
 | `workDir` | Arbeitsordner; je Auftrag ein Unterordner, danach geloescht |
 | `intuneWinAppUtilPath` | Pfad zu `IntuneWinAppUtil.exe` |

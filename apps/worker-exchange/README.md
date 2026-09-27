@@ -37,7 +37,7 @@ Postfachtyp).
 
 ```powershell
 Copy-Item worker.config.example.json worker.config.json
-# apiUrl, appId, certificateThumbprint anpassen
+# apiUrl (ohne /api, lokal http://localhost:3001), appId, certificateThumbprint anpassen
 .\Set-WorkerToken.ps1                    # Windows: Token DPAPI-geschuetzt ablegen
 $env:ZSC_WORKER_TOKEN = '...'            # oder als Umgebungsvariable (Linux immer so)
 .\Start-ExchangeWorker.ps1               # laeuft, bis er beendet wird

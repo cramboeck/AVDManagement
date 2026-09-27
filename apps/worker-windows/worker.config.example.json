@@ -1,5 +1,6 @@
 {
-  "apiUrl": "https://cockpit.example.com/api",
+  "apiUrl": "https://cockpit.example.com",
+  "allowInsecureHttp": false,
   "workerId": "BUILD01",
   "workDir": "C:\\ZeroStress\\work",
   "intuneWinAppUtilPath": "C:\\ZeroStress\\tools\\IntuneWinAppUtil.exe",

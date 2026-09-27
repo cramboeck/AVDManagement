@@ -149,6 +149,11 @@ Alle nennenswerten Aenderungen an ZeroStress Cockpit. Format angelehnt an
 
 ### Geaendert
 
+- Worker: Beispielkonfiguration ohne `/api` (die API hat keinen Pfadpraefix),
+  Startmeldung mit Konfigpfad und API-Adresse, verstaendlicher Fehler bei
+  `/api` am Ende; `allowInsecureHttp` erlaubt plain http zu einer fremden
+  Adresse fuer ein Labor ohne TLS, mit Warnung beim Start.
+
 - Worker: `Set-WorkerToken.ps1` und das Einlesen von `worker.token` nutzen
   DPAPI direkt ueber .NET statt `ConvertFrom-SecureString`; auf Systemen,
   auf denen sich das Modul Microsoft.PowerShell.Security nicht laden
