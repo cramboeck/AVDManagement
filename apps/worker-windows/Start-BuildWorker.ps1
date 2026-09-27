@@ -92,14 +92,16 @@ function Read-Token {
     }
     $tokenFile = Join-Path -Path $PSScriptRoot -ChildPath 'worker.token'
     if (Test-Path -LiteralPath $tokenFile -PathType Leaf) {
-        $secure = ConvertTo-SecureString -String (Get-Content -LiteralPath $tokenFile -Raw).Trim()
-        $ptr = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure)
+        # DPAPI direkt ueber .NET (siehe Set-WorkerToken.ps1); Datei ist an dieses Windows-Konto gebunden
+        Add-Type -AssemblyName System.Security
+        $protected = [Convert]::FromBase64String((Get-Content -LiteralPath $tokenFile -Raw).Trim())
         try {
-            return [System.Runtime.InteropServices.Marshal]::PtrToStringBSTR($ptr)
+            $bytes = [System.Security.Cryptography.ProtectedData]::Unprotect($protected, $null, [System.Security.Cryptography.DataProtectionScope]::CurrentUser)
         }
-        finally {
-            [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($ptr)
+        catch {
+            throw ('worker.token cannot be decrypted for user ' + $env:USERNAME + '; run Set-WorkerToken.ps1 as this account: ' + $_.Exception.Message)
         }
+        return [System.Text.Encoding]::UTF8.GetString($bytes)
     }
     throw 'No worker token: set ZSC_WORKER_TOKEN or run Set-WorkerToken.ps1'
 }

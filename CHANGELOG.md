@@ -149,6 +149,12 @@ Alle nennenswerten Aenderungen an ZeroStress Cockpit. Format angelehnt an
 
 ### Geaendert
 
+- Worker: `Set-WorkerToken.ps1` und das Einlesen von `worker.token` nutzen
+  DPAPI direkt ueber .NET statt `ConvertFrom-SecureString`; auf Systemen,
+  auf denen sich das Modul Microsoft.PowerShell.Security nicht laden
+  laesst, brach die Einrichtung ab. Bestehende `worker.token`-Dateien
+  einmal neu anlegen.
+
 - winget-Skripte: bei genau einer Ausgabezeile oder genau einem Update
   wurde die Liste zum Einzelwert und der Lauf endete mit "[System.String]
   keine Methode GetRange"; die Deinstallation war trotzdem durch, der Job

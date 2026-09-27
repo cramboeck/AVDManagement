@@ -78,10 +78,16 @@ function Read-Token {
     if (-not [string]::IsNullOrWhiteSpace($env:ZSC_WORKER_TOKEN)) { return $env:ZSC_WORKER_TOKEN }
     $tokenFile = Join-Path -Path $PSScriptRoot -ChildPath 'worker.token'
     if ((Test-Path -LiteralPath $tokenFile -PathType Leaf) -and ($env:OS -eq 'Windows_NT')) {
-        $secure = ConvertTo-SecureString -String (Get-Content -LiteralPath $tokenFile -Raw).Trim()
-        $ptr = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure)
-        try { return [System.Runtime.InteropServices.Marshal]::PtrToStringBSTR($ptr) }
-        finally { [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($ptr) }
+        # DPAPI direkt ueber .NET (siehe Set-WorkerToken.ps1); Datei ist an dieses Windows-Konto gebunden
+        Add-Type -AssemblyName System.Security
+        $protected = [Convert]::FromBase64String((Get-Content -LiteralPath $tokenFile -Raw).Trim())
+        try {
+            $bytes = [System.Security.Cryptography.ProtectedData]::Unprotect($protected, $null, [System.Security.Cryptography.DataProtectionScope]::CurrentUser)
+        }
+        catch {
+            throw ('worker.token cannot be decrypted for user ' + $env:USERNAME + '; run Set-WorkerToken.ps1 as this account: ' + $_.Exception.Message)
+        }
+        return [System.Text.Encoding]::UTF8.GetString($bytes)
     }
     throw 'No worker token: set ZSC_WORKER_TOKEN or run Set-WorkerToken.ps1 (Windows)'
 }
@@ -132,7 +138,11 @@ function Connect-Tenant {
         $password = $env:ZSC_EXO_CERT_PASSWORD
         if ([string]::IsNullOrEmpty($password)) { throw 'ZSC_EXO_CERT_PASSWORD is required for certificateFilePath' }
         $connectParams['CertificateFilePath'] = [string]$script:Config.certificateFilePath
-        $connectParams['CertificatePassword'] = (ConvertTo-SecureString -String $password -AsPlainText -Force)
+        # SecureString von Hand, damit das Modul Microsoft.PowerShell.Security nicht gebraucht wird
+        $securePassword = New-Object System.Security.SecureString
+        foreach ($ch in $password.ToCharArray()) { $securePassword.AppendChar($ch) }
+        $securePassword.MakeReadOnly()
+        $connectParams['CertificatePassword'] = $securePassword
     }
     Connect-ExchangeOnline @connectParams
     $script:Connected = $Organization
