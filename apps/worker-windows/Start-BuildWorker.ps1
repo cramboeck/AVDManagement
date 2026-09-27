@@ -46,6 +46,22 @@ function Write-Log {
     else { Write-Host $line }
 }
 
+function Get-Sha256Hex {
+    # SHA-256 ueber .NET statt Get-FileHash: das Cmdlet steckt im Skriptteil von
+    # Microsoft.PowerShell.Utility und fehlt, wenn Skriptmodule nicht geladen werden duerfen
+    param([Parameter(Mandatory = $true)][string]$Path)
+    $sha = [System.Security.Cryptography.SHA256]::Create()
+    $stream = [System.IO.File]::OpenRead($Path)
+    try {
+        $bytes = $sha.ComputeHash($stream)
+    }
+    finally {
+        $stream.Dispose()
+        $sha.Dispose()
+    }
+    return ([System.BitConverter]::ToString($bytes) -replace '-', '').ToLowerInvariant()
+}
+
 function Read-Config {
     param([string]$Path)
     if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
@@ -186,7 +202,7 @@ function Get-Installer {
     else {
         Invoke-Api -Method 'GET' -Path ('/worker/builds/' + $Plan.buildId + '/installer') -OutFile $target | Out-Null
     }
-    $hash = (Get-FileHash -LiteralPath $target -Algorithm SHA256).Hash.ToLowerInvariant()
+    $hash = Get-Sha256Hex -Path $target
     if ($hash -ne ([string]$Plan.installer.sha256).ToLowerInvariant()) {
         throw ('Installer hash mismatch: expected ' + $Plan.installer.sha256 + ', got ' + $hash)
     }
@@ -362,7 +378,7 @@ function Send-Artifact {
     param([object]$Plan, [string]$ArtifactPath)
     $fileName = [System.Uri]::EscapeDataString([string]$Plan.artifactFileName)
     $result = Invoke-Api -Method 'PUT' -Path ('/worker/builds/' + $Plan.buildId + '/artifact?fileName=' + $fileName) -InFile $ArtifactPath
-    $localHash = (Get-FileHash -LiteralPath $ArtifactPath -Algorithm SHA256).Hash.ToLowerInvariant()
+    $localHash = Get-Sha256Hex -Path $ArtifactPath
     if ($null -eq $result -or $null -eq $result.artifact -or ([string]$result.artifact.sha256).ToLowerInvariant() -ne $localHash) {
         throw 'Artifact upload did not return the expected SHA-256'
     }

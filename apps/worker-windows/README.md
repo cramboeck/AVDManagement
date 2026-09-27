@@ -72,6 +72,19 @@ Konfiguration:
 | `signingThumbprint` | Thumbprint eines Code-Signing-Zertifikats in `Cert:\CurrentUser\My` oder `Cert:\LocalMachine\My`; leer = nicht signieren |
 | `keepWorkFolders` | `true` laesst Arbeitsordner zur Fehlersuche stehen |
 
+## Fehlersuche
+
+- "The term 'Get-FileHash' is not recognized" oder "module could not be
+  loaded" fuer `Microsoft.PowerShell.Security`: auf dieser Maschine laedt
+  PowerShell keine Skriptmodule. Der Worker kommt seit dieser Version ohne
+  sie aus, andere Werkzeuge nicht. Ursache pruefen mit
+  `Get-ExecutionPolicy -List` (sollte RemoteSigned oder Bypass sein) und
+  `$env:PSModulePath -split ';'` (muss
+  `C:\Windows\System32\WindowsPowerShell\v1.0\Modules` enthalten).
+- "Unable to connect to the remote server" nach erfolgreichem Ping: die
+  API ist nicht mehr erreichbar (Neustart nach Dateiaenderung oder
+  Absturz). Der Worker versucht es mit wachsendem Abstand weiter.
+
 ## Als geplante Aufgabe
 
 Aufgabe mit dem Dienstkonto anlegen, Trigger "beim Start" oder alle 5

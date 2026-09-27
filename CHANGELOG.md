@@ -149,6 +149,10 @@ Alle nennenswerten Aenderungen an ZeroStress Cockpit. Format angelehnt an
 
 ### Geaendert
 
+- Build-Worker: SHA-256 ueber .NET statt `Get-FileHash`; das Cmdlet fehlt
+  auf Systemen, die keine Skriptmodule laden. Abschnitt Fehlersuche in
+  der README.
+
 - Jobs: "Zielobjekte" zaehlt Geraete, Tenants und Rollout-Groesse aus der
   Nutzlast statt immer 1; der Freigabe-Block heisst nur bei zweiter
   Freigabe "Vier-Augen-Prinzip".
