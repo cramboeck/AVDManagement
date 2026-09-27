@@ -248,7 +248,7 @@ function JobDetailPanel({
 
         {(job.secondApproval?.required || (job.approvals?.length ?? 0) > 0) && (
           <div className="rounded-md border px-3 py-2 text-xs">
-            <p className="font-medium">Vier-Augen-Prinzip</p>
+            <p className="font-medium">{job.secondApproval?.required ? 'Vier-Augen-Prinzip' : 'Freigabe'}</p>
             {job.secondApproval?.reason && <p className="text-muted-foreground">{job.secondApproval.reason}</p>}
             {(job.approvals ?? []).map((a, i) => (
               <p key={`${a.userId}-${i}`} className="text-muted-foreground">

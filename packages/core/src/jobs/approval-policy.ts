@@ -73,6 +73,13 @@ export function normalizeMspSettings(raw: unknown): MspSettings {
   };
 }
 
+/** Zahl der Zielobjekte aus der Nutzlast: Ziel-Ids, Geraete, Tenants oder Rollout-Groesse, mindestens 1. */
+export function targetCountOf(payload: Record<string, unknown>): number {
+  const len = (v: unknown) => (Array.isArray(v) ? v.length : 0);
+  const batch = Number(payload.batchSize ?? 0);
+  return Math.max(1, len(payload.targetIds), len(payload.devices), len(payload.tenantIds), Number.isFinite(batch) ? batch : 0);
+}
+
 export function affectedObjects(job: Pick<Job, 'payload'>, preview: Pick<PreviewResult, 'changes'>): number {
   const payload = job.payload;
   const batch = Number(payload.batchSize ?? 0);

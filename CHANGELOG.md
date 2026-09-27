@@ -149,6 +149,10 @@ Alle nennenswerten Aenderungen an ZeroStress Cockpit. Format angelehnt an
 
 ### Geaendert
 
+- Jobs: "Zielobjekte" zaehlt Geraete, Tenants und Rollout-Groesse aus der
+  Nutzlast statt immer 1; der Freigabe-Block heisst nur bei zweiter
+  Freigabe "Vier-Augen-Prinzip".
+
 - Worker: Beispielkonfiguration ohne `/api` (die API hat keinen Pfadpraefix),
   Startmeldung mit Konfigpfad und API-Adresse, verstaendlicher Fehler bei
   `/api` am Ende; `allowInsecureHttp` erlaubt plain http zu einer fremden

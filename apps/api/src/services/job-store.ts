@@ -4,7 +4,7 @@
 
 import { eq, and, desc, lt, inArray, sql } from 'drizzle-orm';
 import { db, jobs, mspUsers } from '../db/index.js';
-import type { JobStore } from '@zerostress/core';
+import { targetCountOf, type JobStore } from '@zerostress/core';
 import type { Job, JobId, TenantId, JobStatus } from '@zerostress/types';
 
 type JobRow = typeof jobs.$inferSelect;
@@ -153,7 +153,7 @@ export class DrizzleJobStore implements JobStore {
       priority: row.priority as Job['priority'],
       createdBy: row.createdBy as Job['createdBy'],
       createdByEmail,
-      targetCount: 1,
+      targetCount: targetCountOf(row.payload as Record<string, unknown>),
       createdAt: row.createdAt.toISOString(),
       startedAt: row.startedAt?.toISOString() ?? null,
       completedAt: row.completedAt?.toISOString() ?? null,

@@ -21,6 +21,7 @@ import {
   getRegisteredJob,
 } from './job-types.js';
 import { JobError } from '../errors.js';
+import { targetCountOf } from './approval-policy.js';
 
 export interface JobQueueConfig {
   redis: Redis;
@@ -110,7 +111,7 @@ export class JobQueue {
       priority: input.priority ?? 'normal',
       createdBy: input.userId,
       createdByEmail: input.userEmail ?? '',
-      targetCount: (input.payload.targetIds as unknown[])?.length ?? 1,
+      targetCount: targetCountOf(input.payload),
       createdAt: now.toISOString(),
       startedAt: null,
       completedAt: null,
