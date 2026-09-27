@@ -149,6 +149,10 @@ Alle nennenswerten Aenderungen an ZeroStress Cockpit. Format angelehnt an
 
 ### Geaendert
 
+- Build-Worker: der PSADT-Wrapper wird nach dem Wrapper-Feld des Bauplans
+  erzeugt, nicht nach dem Installertyp; winget-Pakete scheiterten mit
+  "Install block is only generated for psadt packages".
+
 - Build-Worker: SHA-256 ueber .NET statt `Get-FileHash`; das Cmdlet fehlt
   auf Systemen, die keine Skriptmodule laden. Abschnitt Fehlersuche in
   der README.

@@ -219,7 +219,8 @@ function Get-Installer {
 
 function New-InstallBlock {
     param([object]$Plan)
-    if ([string]$Plan.manifest.installerType -ne 'psadt') { throw 'Install block is only generated for psadt packages' }
+    # Massgeblich ist der Wrapper aus dem Bauplan: auch winget-Pakete laufen mit PSADT
+    if ([string]$Plan.wrapper -ne 'psadt') { throw 'Install block is only generated for psadt wrapper builds' }
     $installerKind = if ($Plan.installer.fileName -match '\.msi$') { 'msi' } else { 'exe' }
     $installerArguments = [string]$Plan.installerArguments
     $lines = New-Object -TypeName System.Collections.Generic.List[string]
