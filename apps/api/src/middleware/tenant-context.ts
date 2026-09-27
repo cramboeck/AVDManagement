@@ -9,6 +9,7 @@ import { HTTPException } from 'hono/http-exception';
 import { eq, and } from 'drizzle-orm';
 import { db, managedTenants } from '../db/index.js';
 import { rememberMicrosoftTenantId } from '../services/microsoft-clients.js';
+import { canAccessTenant } from '../services/access.js';
 import type { TenantId, ManagedTenant } from '@zerostress/types';
 
 declare module 'hono' {
@@ -39,6 +40,13 @@ export const tenantContextMiddleware = createMiddleware(async (c, next) => {
   });
 
   if (!tenant) {
+    throw new HTTPException(404, {
+      message: `Tenant '${tenantId}' not found or access denied`,
+    });
+  }
+
+  // Sichtbarkeit je Techniker: Owner sehen alles, andere nur zugewiesene Tenants
+  if (!(await canAccessTenant(auth, tenant.id))) {
     throw new HTTPException(404, {
       message: `Tenant '${tenantId}' not found or access denied`,
     });

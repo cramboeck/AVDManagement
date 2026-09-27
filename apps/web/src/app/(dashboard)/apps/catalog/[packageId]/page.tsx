@@ -205,7 +205,7 @@ export default function PackageDetailPage({ params }: { params: { packageId: str
               )}
               {builds.data && !builds.data.workerConfigured && ['msi', 'exe', 'psadt', 'winget'].includes(m.installerType) && (
                 <p className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs">
-                  Kein Build-Worker eingerichtet: in der API fehlt WORKER_TOKEN. Auftraege bleiben auf &quot;wartet&quot;, bis ein Worker laeuft (siehe apps/worker-windows/README.md). Alternativ das fertige .intunewin direkt hochladen.
+                  Kein Build-Worker eingerichtet: fuer diesen MSP gibt es kein Worker-Token (Einstellungen &gt; Worker-Token). Auftraege bleiben auf &quot;wartet&quot;, bis ein Worker laeuft (siehe apps/worker-windows/README.md). Alternativ das fertige .intunewin direkt hochladen.
                 </p>
               )}
               {builds.data && builds.data.items.length > 0 && (

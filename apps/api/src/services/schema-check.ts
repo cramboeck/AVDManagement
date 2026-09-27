@@ -12,6 +12,8 @@ import { db } from '../db/index.js';
 const REQUIRED_COLUMNS: ReadonlyArray<readonly [table: string, column: string]> = [
   ['inventory_snapshots', 'unavailable'],
   ['jobs', 'approvals'],
+  ['msp_user_tenants', 'user_id'],
+  ['worker_tokens', 'id'],
   ['msp_organizations', 'settings'],
   ['alerts', 'id'],
   ['app_packages', 'id'],

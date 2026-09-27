@@ -47,7 +47,7 @@ export const publishOperations: PublishOperations = {
 /**
  * Je Tenant einen Job apps.publish anlegen; optional sofort freigeben.
  */
-export async function startRollout(input: { mspId: string; userId: string; userEmail: string; packageId: string; tenantIds: string[]; autoApprove: boolean }): Promise<Job[]> {
+export async function startRollout(input: { mspId: string; userId: string; userEmail: string; packageId: string; tenantIds: string[]; autoApprove: boolean; visibleTenantIds?: string[] | null }): Promise<Job[]> {
   const pkg = await getPackage(input.mspId, input.packageId);
   if (!pkg) throw new Error('Package not found');
   if (pkg.status !== 'ready') {
@@ -62,6 +62,7 @@ export async function startRollout(input: { mspId: string; userId: string; userE
   const packageName = `${pkg.manifest.vendor} ${pkg.manifest.name} ${pkg.manifest.version}`;
   for (const tenant of tenants) {
     if (tenant.connectionStatus !== 'connected') continue;
+    if (input.visibleTenantIds && !input.visibleTenantIds.includes(tenant.id)) continue;
     rememberMicrosoftTenantId(tenant.id, tenant.microsoftTenantId);
     const job = await queue.createJob({
       type: 'apps.publish',

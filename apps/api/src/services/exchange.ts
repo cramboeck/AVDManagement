@@ -77,14 +77,14 @@ export async function expireStaleExchangeJobs(now = new Date()): Promise<number>
 }
 
 /** Aeltesten wartenden Auftrag atomar dem Worker zuweisen. */
-export async function claimExchangeJob(workerId: string): Promise<ExchangeWorkerClaim | null> {
+export async function claimExchangeJob(workerId: string, mspId: string): Promise<ExchangeWorkerClaim | null> {
   await expireStaleExchangeJobs();
   const claimed = (await db.execute(sql`
     update exchange_jobs
     set status = 'claimed', worker_id = ${workerId}, claimed_at = now()
     where id = (
       select id from exchange_jobs
-      where status = 'queued'
+      where status = 'queued' and msp_id = ${mspId}
       order by created_at
       limit 1
       for update skip locked
@@ -104,13 +104,14 @@ export async function claimExchangeJob(workerId: string): Promise<ExchangeWorker
   return { jobId: row.id, tenantId: tenant.id, microsoftTenantId: tenant.microsoftTenantId, organization, operation: row.operation as ExchangeOperation, parameters: row.parameters };
 }
 
-export async function getOwnedExchangeJob(id: string, workerId: string): Promise<Row | null> {
+export async function getOwnedExchangeJob(id: string, workerId: string, mspId?: string): Promise<Row | null> {
   const row = await db.query.exchangeJobs.findFirst({ where: and(eq(exchangeJobs.id, id), eq(exchangeJobs.workerId, workerId), inArray(exchangeJobs.status, ['claimed', 'running'])) });
-  return row ?? null;
+  if (!row || (mspId && row.mspId !== mspId)) return null;
+  return row;
 }
 
-export async function appendExchangeLog(id: string, workerId: string, line: string): Promise<boolean> {
-  const row = await getOwnedExchangeJob(id, workerId);
+export async function appendExchangeLog(id: string, workerId: string, line: string, mspId?: string): Promise<boolean> {
+  const row = await getOwnedExchangeJob(id, workerId, mspId);
   if (!row) return false;
   const next = `${row.log ?? ''}${row.log ? '\n' : ''}[${new Date().toISOString()}] ${line.slice(0, 2000)}`.slice(-MAX_LOG_CHARS);
   await db.update(exchangeJobs).set({ log: next, claimedAt: new Date() }).where(eq(exchangeJobs.id, id));
@@ -121,8 +122,8 @@ export async function appendExchangeLog(id: string, workerId: string, line: stri
  * Abschluss vom Worker. Bei collect-facts wandern die Postfachdaten in
  * exchange_facts; im Auftrag bleibt nur die Anzahl.
  */
-export async function finishExchangeJob(id: string, workerId: string, input: { success: boolean; log: string; error: string | null; result: Record<string, unknown> | null }): Promise<boolean> {
-  const row = await getOwnedExchangeJob(id, workerId);
+export async function finishExchangeJob(id: string, workerId: string, input: { success: boolean; log: string; error: string | null; result: Record<string, unknown> | null }, mspId?: string): Promise<boolean> {
+  const row = await getOwnedExchangeJob(id, workerId, mspId);
   if (!row) return false;
   const now = new Date();
   let result = input.result;

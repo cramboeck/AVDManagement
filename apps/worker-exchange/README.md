@@ -27,7 +27,11 @@ Postfachtyp).
 - Zertifikat im Zertifikatspeicher des Worker-Kontos (`certificateThumbprint`)
   oder als `.pfx` (`certificateFilePath`, Passwort in `ZSC_EXO_CERT_PASSWORD`,
   fuer Linux-Container). Nie im Repo.
-- In der API ist `WORKER_TOKEN` gesetzt.
+- Ein Worker-Token aus der Konsole: Einstellungen, Abschnitt "Worker-Token",
+  "Token anlegen" (nur Owner). Der Klartext (`zsw_...`) erscheint genau
+  einmal, die API speichert nur den Hash; das Token gehoert zu genau einem
+  MSP. Pro Worker-Installation ein eigenes Token. `WORKER_TOKEN` in der
+  API-Umgebung gilt nur noch uebergangsweise und nur bei genau einem MSP.
 
 ## Einrichten
 

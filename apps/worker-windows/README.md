@@ -35,8 +35,13 @@ gestartet werden.
   https://github.com/PSAppDeployToolkit/PSAppDeployToolkit). Der Ordner muss
   `PSAppDeployToolkit\PSAppDeployToolkit.psd1` enthalten. Die Vorlage liegt
   nicht im Repo.
-- In der API ist `WORKER_TOKEN` gesetzt (mindestens 16 Zeichen,
-  `openssl rand -base64 32`; in Produktion aus dem Key Vault).
+- Ein Worker-Token aus der Konsole: Einstellungen, Abschnitt "Worker-Token",
+  "Token anlegen" (nur Owner). Der Klartext (`zsw_...`) erscheint genau einmal;
+  die API speichert nur den Hash. Das Token gehoert zu genau einem MSP, der
+  Worker sieht nur dessen Auftraege. Pro Worker-Installation ein eigenes
+  Token, damit sich eines widerrufen laesst, ohne die anderen zu stoeren.
+  Uebergangsweise akzeptiert die API auch `WORKER_TOKEN` aus ihrer Umgebung,
+  aber nur solange genau ein MSP existiert.
 
 ## Einrichten
 

@@ -12,7 +12,9 @@ import { DrizzleAuditLogger } from '../services/audit-logger.js';
 import { createPackage, deletePackage, getPackage, listPackages, openFile, storeFile, updateManifest, detectionPrefix } from '../services/packages.js';
 import { getArtifactStore } from '../services/artifact-store.js';
 import { startRollout } from '../services/publishing.js';
-import { BuildError, enqueueBuild, listBuilds, workerTokenConfigured } from '../services/builds.js';
+import { BuildError, enqueueBuild, listBuilds } from '../services/builds.js';
+import { workerTokenAvailable } from '../services/worker-tokens.js';
+import { tenantFilter } from '../services/access.js';
 import { baseSet, browsePublisher, checkPackageVersion, createNewVersion, manifestFromResolution, resolveWinget } from '../services/winget-catalog.js';
 import { WingetError } from '@zerostress/core';
 import { zValidator } from '@hono/zod-validator';
@@ -171,7 +173,7 @@ app.post('/:packageId/rollout', requireRole('engineer'), zValidator('json', roll
   const packageId = c.req.param('packageId');
   const body = c.req.valid('json');
   try {
-    const jobs = await startRollout({ mspId: auth.mspId, userId: auth.user.id, userEmail: auth.user.email, packageId, tenantIds: body.tenantIds, autoApprove: body.autoApprove });
+    const jobs = await startRollout({ mspId: auth.mspId, userId: auth.user.id, userEmail: auth.user.email, packageId, tenantIds: body.tenantIds, autoApprove: body.autoApprove, visibleTenantIds: await tenantFilter(auth) });
     await audit.log({
       mspId: auth.mspId,
       tenantId: null,
@@ -210,7 +212,7 @@ app.post('/:packageId/build', requireRole('engineer'), async (c) => {
       result: 'success',
       correlationId: randomUUID() as CorrelationId,
     });
-    return c.json({ ...build, workerConfigured: workerTokenConfigured() }, 202);
+    return c.json({ ...build, workerConfigured: await workerTokenAvailable(auth.mspId) }, 202);
   } catch (error) {
     if (error instanceof BuildError) return c.json(problem(error.status, error.message), error.status);
     throw error;
@@ -265,7 +267,7 @@ app.post('/:packageId/new-version', requireRole('engineer'), zValidator('json', 
 
 app.get('/:packageId/builds', async (c) => {
   const auth = c.get('auth');
-  return c.json({ items: await listBuilds(auth.mspId, c.req.param('packageId')), workerConfigured: workerTokenConfigured() });
+  return c.json({ items: await listBuilds(auth.mspId, c.req.param('packageId')), workerConfigured: await workerTokenAvailable(auth.mspId) });
 });
 
 // Datei-Upload als roher Body (Content-Type application/octet-stream), Dateiname als Query

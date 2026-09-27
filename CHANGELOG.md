@@ -8,6 +8,17 @@ Alle nennenswerten Aenderungen an ZeroStress Cockpit. Format angelehnt an
 
 ### Hinzugefuegt
 
+- Tenant-Sichtbarkeit je Konto: Owner sehen alle Tenants, Engineer und
+  Nur-lesen nur zugewiesene (Einstellungen > Team, nur Owner, Audit
+  `team.update`). Gilt fuer Tenantliste, Tenantwechsel (fremder Tenant:
+  404), Dashboard, MCP-Server und Rollouts. Letzter Owner und eigenes
+  Konto geschuetzt. Tabelle `msp_user_tenants`, `npm run db:push`.
+- Worker-Token je MSP: Einstellungen > Worker-Token legt Token fuer Build-
+  und Exchange-Worker an (Klartext einmalig, Hash in `worker_tokens`,
+  Widerruf, letzte Nutzung, Audit `worker-token.create` und
+  `worker-token.revoke`). Auftraege sind an den MSP des Tokens gebunden;
+  `WORKER_TOKEN` aus der Umgebung gilt nur noch bei genau einem MSP.
+  Tabelle `worker_tokens`, `npm run db:push`.
 - Vier-Augen-Prinzip: MSP-Einstellungen (Seite Einstellungen, nur Owner)
   mit Schwelle an betroffenen Objekten und Liste von Jobtypen; betroffene
   Jobs brauchen eine zweite Freigabe durch eine andere Person (Status

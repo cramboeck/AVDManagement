@@ -181,9 +181,10 @@ Worker holt ihn per `POST /worker/builds/claim`, laedt den Installer, baut
 bei `psadt` den PSAppDeployToolkit-v4-Wrapper mit dem Registry-Marker aus
 `APP_DETECTION_PREFIX`, ruft `IntuneWinAppUtil.exe` auf, laedt das Artefakt
 hoch und meldet Protokoll und Ergebnis. Die Worker-Endpunkte unter
-`/worker` verlangen `WORKER_TOKEN` (mindestens 16 Zeichen) als Bearer und
-`X-Worker-Id`; ohne Token antworten sie mit 503 und das Paketdetail zeigt
-einen Hinweis. Ein Auftrag ohne Lebenszeichen faellt nach zwei Stunden auf
+`/worker` verlangen ein Worker-Token als Bearer und `X-Worker-Id` (siehe
+Abschnitt "Worker-Token"); ohne gueltiges Token antworten sie mit 401 und
+das Paketdetail zeigt einen Hinweis, solange fuer den MSP kein Token
+existiert. Ein Auftrag ohne Lebenszeichen faellt nach zwei Stunden auf
 "fehlgeschlagen". Einrichtung des Workers: `apps/worker-windows/README.md`.
 
 ## Azure VMs
@@ -404,7 +405,7 @@ Job mit Vorschau, Freigabe und Audit (`mailbox.set-quota`,
 `mailbox.enable-archive`, `mailbox.convert`, `mailbox.set-litigation-hold`).
 Der Job wartet bis 20 Minuten auf die Rueckmeldung des Workers; ohne Worker
 bleibt der Auftrag in `exchange_jobs` stehen und der Job meldet das. Die
-Worker-Endpunkte unter `/worker/exchange` nutzen dasselbe `WORKER_TOKEN`
+Worker-Endpunkte unter `/worker/exchange` nutzen dieselben Worker-Token
 wie der Build-Worker. Einrichtung: `apps/worker-exchange/README.md`.
 
 ## SharePoint und OneDrive
@@ -515,6 +516,36 @@ Typen: Sammelaktionen, Postfachtyp, Beweissicherung, Weiterleitung auf
 Postfachebene, VM-Bereitstellung, Benutzer sperren, Passwort zuruecksetzen.
 Braucht `npm run db:push` (Spalten `jobs.approvals`, `jobs.second_approval`,
 `msp_organizations.settings`).
+
+## Team und Tenant-Sichtbarkeit (Einstellungen)
+
+Owner sehen alle Tenants des MSP. Engineer und Nur-lesen sehen nur die
+Tenants, die ihnen unter **Einstellungen > Team** zugewiesen sind (Tabelle
+`msp_user_tenants`); ohne Zuweisung ist die Konsole fuer sie leer. Die
+Regel greift an einer Stelle fuer alles: Tenantliste, Tenantwechsel
+(`X-Tenant-Id` eines fremden Tenants antwortet mit 404, nicht 403, damit
+die Existenz nicht verraten wird), MSP-Dashboard, MCP-Server und Rollouts
+(Tenants ausserhalb der Sichtbarkeit werden uebersprungen). Aendern kann nur
+der Owner (`PUT /settings/team/:userId`, Audit `team.update` mit
+Vorher/Nachher): Rolle, Zuweisungen, aktiv/deaktiviert. Der letzte aktive
+Owner laesst sich nicht herabstufen, das eigene Konto nicht deaktivieren
+oder in der Rolle aendern. Braucht `npm run db:push` (Tabelle
+`msp_user_tenants`).
+
+## Worker-Token (Einstellungen)
+
+Build- und Exchange-Worker melden sich mit einem Token an, das unter
+**Einstellungen > Worker-Token** angelegt wird (nur Owner, Audit
+`worker-token.create`, `worker-token.revoke`). Der Klartext `zsw_...`
+erscheint genau einmal in der Antwort; in `worker_tokens` liegt nur der
+SHA-256 mit Bezeichnung, Erstelldatum, letzter Nutzung und Widerruf. Ein
+Token gehoert zu genau einem MSP, und `claim`, `log`, `artifact` und
+`complete` filtern nach diesem MSP: ein geleaktes Token eines MSP erreicht
+nie Auftraege eines anderen. Pro Worker-Installation ein eigenes Token,
+damit Widerrufen gezielt geht. `WORKER_TOKEN` in der API-Umgebung wird nur
+noch als Uebergang akzeptiert und nur, solange genau ein aktiver MSP
+existiert; die Einstellungsseite warnt, solange die Variable gesetzt ist.
+Braucht `npm run db:push` (Tabelle `worker_tokens`).
 
 ## DEV_AUTH_BYPASS
 

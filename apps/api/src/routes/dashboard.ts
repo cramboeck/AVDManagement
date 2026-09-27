@@ -9,6 +9,7 @@ import { authMiddleware } from '../middleware/auth.js';
 import { tenantContextMiddleware } from '../middleware/tenant-context.js';
 import { buildTenantDashboard, mapWithConcurrency } from '../services/dashboard.js';
 import { toManagedTenant } from '../services/tenant-mapper.js';
+import { tenantFilter } from '../services/access.js';
 
 const TENANT_CONCURRENCY = 3;
 
@@ -28,10 +29,12 @@ dashboardRouter.use('*', authMiddleware);
 dashboardRouter.get('/', async (c) => {
   const auth = c.get('auth');
 
-  const rows = await db.query.managedTenants.findMany({
+  const allRows = await db.query.managedTenants.findMany({
     where: and(eq(managedTenants.mspId, auth.mspId), eq(managedTenants.isActive, true)),
     orderBy: (t, { asc }) => [asc(t.displayName)],
   });
+  const visible = await tenantFilter(auth);
+  const rows = allRows.filter((t) => visible === null || visible.includes(t.id));
 
   const items = await mapWithConcurrency(rows.map(toManagedTenant), TENANT_CONCURRENCY, buildTenantDashboard);
   items.sort(

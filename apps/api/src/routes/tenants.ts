@@ -14,6 +14,7 @@ import { createConsentState } from '../services/consent-state.js';
 import { testTenantConnection, persistConnectionTestResult } from '../services/tenant-connection.js';
 import { toManagedTenant, type TenantRow } from '../services/tenant-mapper.js';
 import { DrizzleSnapshotStore } from '../services/inventory-store.js';
+import { tenantFilter } from '../services/access.js';
 import { getTokenProvider } from '../services/microsoft-clients.js';
 import type { TenantId, MspId, UserId, CorrelationId } from '@zerostress/types';
 
@@ -45,8 +46,9 @@ app.get('/', async (c) => {
     where: and(eq(managedTenants.mspId, auth.mspId), eq(managedTenants.isActive, true)),
     orderBy: (t, { asc }) => [asc(t.displayName)],
   });
+  const visible = await tenantFilter(auth);
 
-  return c.json({ items: tenants.map(toManagedTenant) });
+  return c.json({ items: tenants.filter((t) => visible === null || visible.includes(t.id)).map(toManagedTenant) });
 });
 
 // Tenant-Details

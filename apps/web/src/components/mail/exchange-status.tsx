@@ -64,7 +64,7 @@ export function ExchangeStatusPanel({ tenantId }: { tenantId: string }) {
         </button>
       </div>
       <ErrorBanner error={collect.error as Error | null} onDismiss={() => collect.reset()} />
-      {status && !status.workerConfigured && <p className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs">Kein Worker eingerichtet: in der API fehlt WORKER_TOKEN. Einrichtung in apps/worker-exchange/README.md.</p>}
+      {status && !status.workerConfigured && <p className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs">Kein Worker eingerichtet: fuer diesen MSP gibt es kein Worker-Token (Einstellungen &gt; Worker-Token). Einrichtung in apps/worker-exchange/README.md.</p>}
 
       {status && status.mailboxForwarders.length > 0 && (
         <div>

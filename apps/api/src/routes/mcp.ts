@@ -17,6 +17,7 @@ import { db, managedTenants } from '../db/index.js';
 import { authMiddleware, type AuthContext } from '../middleware/auth.js';
 import { toManagedTenant } from '../services/tenant-mapper.js';
 import { rememberMicrosoftTenantId } from '../services/microsoft-clients.js';
+import { canAccessTenant, tenantFilter } from '../services/access.js';
 import { getDeviceInventory, findDevice, getGroupInventory, getAppInventory, getMailOverview } from '../services/inventory.js';
 import { buildSecurityChecks } from '../services/checks.js';
 import { listAlerts, getAlertStats } from '../services/alerting.js';
@@ -60,7 +61,7 @@ async function loadTenant(auth: AuthContext, tenantId: string): Promise<ManagedT
   const row = await db.query.managedTenants.findFirst({
     where: and(eq(managedTenants.id, tenantId), eq(managedTenants.mspId, auth.mspId), eq(managedTenants.isActive, true)),
   });
-  if (!row) throw new ToolError(`Tenant '${tenantId}' nicht gefunden oder kein Zugriff`);
+  if (!row || !(await canAccessTenant(auth, row.id))) throw new ToolError(`Tenant '${tenantId}' nicht gefunden oder kein Zugriff`);
   rememberMicrosoftTenantId(row.id, row.microsoftTenantId);
   const tenant = toManagedTenant(row);
   if (tenant.connectionStatus !== 'connected') throw new ToolError(`Tenant '${tenant.displayName}' ist nicht verbunden (${tenant.connectionStatus})`);
@@ -77,7 +78,8 @@ const tools: ToolDefinition[] = [
     kind: 'readonly',
     run: async (auth) => {
       const rows = await db.query.managedTenants.findMany({ where: and(eq(managedTenants.mspId, auth.mspId), eq(managedTenants.isActive, true)) });
-      return rows.map((r) => ({ id: r.id, displayName: r.displayName, primaryDomain: r.primaryDomain, connectionStatus: r.connectionStatus, lastSyncAt: r.lastSyncAt }));
+      const visible = await tenantFilter(auth);
+      return rows.filter((r) => visible === null || visible.includes(r.id)).map((r) => ({ id: r.id, displayName: r.displayName, primaryDomain: r.primaryDomain, connectionStatus: r.connectionStatus, lastSyncAt: r.lastSyncAt }));
     },
   },
   {

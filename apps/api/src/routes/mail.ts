@@ -12,7 +12,7 @@ import { tenantContextMiddleware, requireConnectedTenant } from '../middleware/t
 import { getMailOverview } from '../services/inventory.js';
 import { getMailboxDetail, scanForwarding } from '../services/mailboxes.js';
 import { getExchangeFacts, listExchangeJobs } from '../services/exchange.js';
-import { workerTokenConfigured } from '../services/builds.js';
+import { workerTokenAvailable } from '../services/worker-tokens.js';
 import { getJobQueue } from '../services/job-queue.js';
 import { DrizzleAuditLogger } from '../services/audit-logger.js';
 import type { CorrelationId } from '@zerostress/types';
@@ -169,10 +169,11 @@ app.post('/mailboxes/:upn/rules/:ruleId/:action{enable|disable|delete}', require
 
 app.get('/exchange', requireConnectedTenant, async (c) => {
   const tenant = c.get('tenant');
+  const auth = c.get('auth');
   const facts = await getExchangeFacts(tenant.id);
   const jobs = await listExchangeJobs(tenant.id, 10);
   return c.json({
-    workerConfigured: workerTokenConfigured(),
+    workerConfigured: await workerTokenAvailable(auth.mspId),
     collectedAt: facts?.collectedAt ?? null,
     workerId: facts?.workerId ?? null,
     mailboxes: facts?.mailboxes.length ?? 0,

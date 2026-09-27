@@ -31,6 +31,31 @@ export const mspUsers = pgTable('msp_users', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
+// Sichtbarkeit je Techniker: Owner sehen alle Tenants, andere nur zugewiesene
+export const mspUserTenants = pgTable(
+  'msp_user_tenants',
+  {
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => mspUsers.id, { onDelete: 'cascade' }),
+    tenantId: uuid('tenant_id').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({ pk: primaryKey({ columns: [table.userId, table.tenantId] }) })
+);
+
+// Worker-Token je MSP (nur der SHA-256 liegt in der DB; der Klartext wird einmal gezeigt)
+export const workerTokens = pgTable('worker_tokens', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  mspId: uuid('msp_id').notNull().references(() => mspOrganizations.id),
+  label: varchar('label', { length: 100 }).notNull(),
+  tokenHash: varchar('token_hash', { length: 64 }).notNull().unique(),
+  createdBy: uuid('created_by').notNull().references(() => mspUsers.id),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
+  revokedAt: timestamp('revoked_at', { withTimezone: true }),
+});
+
 // Verwaltete Tenants
 export const managedTenants = pgTable('managed_tenants', {
   id: uuid('id').primaryKey().defaultRandom(),

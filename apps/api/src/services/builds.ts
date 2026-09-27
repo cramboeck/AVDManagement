@@ -7,7 +7,6 @@
  * stumm, faellt der Auftrag nach einer Frist auf "failed" zurueck.
  */
 
-import { timingSafeEqual } from 'node:crypto';
 import { and, desc, eq, inArray, lt, sql } from 'drizzle-orm';
 import { buildPlanFor } from '@zerostress/core';
 import type { AppPackage, BuildJob, BuildPlan, BuildStatus } from '@zerostress/types';
@@ -34,18 +33,6 @@ function toBuildJob(row: BuildRow): BuildJob {
   };
 }
 
-export function workerTokenConfigured(): boolean {
-  return (process.env.WORKER_TOKEN ?? '').length >= 16;
-}
-
-/** Zeitkonstanter Vergleich des Worker-Tokens. */
-export function verifyWorkerToken(presented: string | undefined): boolean {
-  const expected = process.env.WORKER_TOKEN ?? '';
-  if (!workerTokenConfigured() || !presented) return false;
-  const a = Buffer.from(presented);
-  const b = Buffer.from(expected);
-  return a.length === b.length && timingSafeEqual(a, b);
-}
 
 export async function listBuilds(mspId: string, packageId: string): Promise<BuildJob[]> {
   const rows = await db
@@ -103,14 +90,15 @@ export async function expireStaleBuilds(now = new Date()): Promise<number> {
 /**
  * Aeltesten wartenden Build atomar dem Worker zuweisen und den Bauplan liefern.
  */
-export async function claimBuild(workerId: string): Promise<BuildPlan | null> {
+export async function claimBuild(workerId: string, mspId: string): Promise<BuildPlan | null> {
   await expireStaleBuilds();
+  // Nur Auftraege des MSP, zu dem das Token gehoert
   const claimed = (await db.execute(sql`
     update build_jobs
     set status = 'claimed', worker_id = ${workerId}, claimed_at = now()
     where id = (
       select id from build_jobs
-      where status = 'queued'
+      where status = 'queued' and msp_id = ${mspId}
       order by created_at
       limit 1
       for update skip locked
@@ -137,14 +125,15 @@ export async function claimBuild(workerId: string): Promise<BuildPlan | null> {
 }
 
 /** Build, der diesem Worker gehoert und noch laeuft; sonst null. */
-export async function getOwnedBuild(buildId: string, workerId: string): Promise<BuildRow | null> {
+export async function getOwnedBuild(buildId: string, workerId: string, mspId?: string): Promise<BuildRow | null> {
   const row = await db.query.buildJobs.findFirst({ where: and(eq(buildJobs.id, buildId), eq(buildJobs.workerId, workerId), inArray(buildJobs.status, ['claimed', 'building'])) });
-  return row ?? null;
+  if (!row || (mspId && row.mspId !== mspId)) return null;
+  return row;
 }
 
 /** Fortschrittszeile anhaengen; zaehlt zugleich als Lebenszeichen. */
-export async function appendBuildLog(buildId: string, workerId: string, line: string): Promise<boolean> {
-  const row = await getOwnedBuild(buildId, workerId);
+export async function appendBuildLog(buildId: string, workerId: string, line: string, mspId?: string): Promise<boolean> {
+  const row = await getOwnedBuild(buildId, workerId, mspId);
   if (!row) return false;
   const stamp = new Date().toISOString();
   const next = `${row.log ?? ''}${row.log ? '\n' : ''}[${stamp}] ${line.slice(0, 2000)}`.slice(-MAX_LOG_CHARS);
@@ -156,9 +145,10 @@ export async function appendBuildLog(buildId: string, workerId: string, line: st
  * Abschluss: Erfolg setzt voraus, dass das Artefakt bereits hochgeladen
  * wurde (storeFile setzt dann status ready); sonst bleibt das Paket failed.
  */
-export async function finishBuild(buildId: string, workerId: string, result: { success: boolean; log: string; error: string | null }): Promise<boolean> {
+export async function finishBuild(buildId: string, workerId: string, result: { success: boolean; log: string; error: string | null }, mspId?: string): Promise<boolean> {
   const row = await db.query.buildJobs.findFirst({ where: and(eq(buildJobs.id, buildId), eq(buildJobs.workerId, workerId)) });
   if (!row || row.status === 'succeeded' || row.status === 'failed') return false;
+  if (mspId && row.mspId !== mspId) return false;
   const now = new Date();
   const mergedLog = [row.log, result.log].filter((s) => s && s.trim()).join('\n').slice(-MAX_LOG_CHARS) || null;
   const pkgRow = await db.query.appPackages.findFirst({ where: eq(appPackages.id, row.packageId) });
