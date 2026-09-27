@@ -58,6 +58,19 @@ code"), `GET /health` zeigt `schema.missing`, und Aufrufe antworten mit
 dem Problemtyp `schema-outdated` statt mit einem rohen Postgres-Fehler
 wie `column "unavailable" does not exist`.
 
+**Warnung "data-loss statements" bei `db:push`:** drizzle-kit bietet bei
+einer Typaenderung (z. B. `varchar(100)` auf `text`) an, die Tabelle zu
+leeren. Immer mit "No, abort" abbrechen, besonders bei `audit_entries`;
+das Audit-Log wird nie geleert. Die Aenderung stattdessen von Hand
+machen, sie ist in Postgres verlustfrei:
+
+```powershell
+docker exec -it zerostress-postgres psql -U zerostress -d zerostress -c "ALTER TABLE audit_entries ALTER COLUMN target_id TYPE text, ALTER COLUMN target_display_name TYPE text;"
+npm run db:push
+```
+
+Der zweite `db:push` legt dann nur noch die fehlenden Tabellen an.
+
 ## Bestands-Snapshot
 
 Geraete und Schwachstellen werden nicht bei jedem Seitenaufruf aus Intune
