@@ -149,6 +149,11 @@ Alle nennenswerten Aenderungen an ZeroStress Cockpit. Format angelehnt an
 
 ### Geaendert
 
+- winget-Skripte: bei genau einer Ausgabezeile oder genau einem Update
+  wurde die Liste zum Einzelwert und der Lauf endete mit "[System.String]
+  keine Methode GetRange"; die Deinstallation war trotzdem durch, der Job
+  meldete aber Fehler.
+
 - Eingabefehler der API (Zod) kommen jetzt als Problem-Details mit Titel
   und Beschreibung; vorher zeigte die Oberflaeche eine leere Fehlerbox.
   Der API-Client zeigt ausserdem nie mehr eine leere Meldung.

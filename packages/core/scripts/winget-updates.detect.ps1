@@ -83,7 +83,8 @@ function ConvertFrom-WingetTable {
         }
         $i = $row
     }
-    return $entries
+    # Komma haelt die Liste zusammen, auch bei genau einem Eintrag
+    return ,$entries
 }
 
 try {

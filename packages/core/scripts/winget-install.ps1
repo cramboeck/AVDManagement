@@ -60,7 +60,8 @@ function Get-CleanLines {
             [void]$lines.Add($clean)
         }
     }
-    return $lines
+    # Komma haelt die Liste zusammen; sonst wird ein einzelnes Element zum String und GetRange fehlt
+    return ,$lines
 }
 
 function Get-InstalledVersion {
@@ -98,11 +99,11 @@ try {
     $raw = @(& $winget @arguments 2>&1 | ForEach-Object { [string]$_ })
     $exitCode = $LASTEXITCODE
     $result.exitCode = $exitCode
-    $lines = Get-CleanLines -Raw $raw
+    $lines = @(Get-CleanLines -Raw $raw)
     $tail = @()
     if ($lines.Count -gt 0) {
         $start = [Math]::Max(0, $lines.Count - 3)
-        $tail = @($lines.GetRange($start, $lines.Count - $start))
+        $tail = @($lines[$start..($lines.Count - 1)])
     }
     $result.message = Get-Clipped -Text ($tail -join ' | ') -Max 300
 
