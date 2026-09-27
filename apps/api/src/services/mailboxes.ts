@@ -8,7 +8,7 @@ import type { MailboxOperations } from '@zerostress/core';
 import type { CapabilityResult, ForwardingScan, MailboxDetail, MailboxUsage, ManagedTenant, TenantId } from '@zerostress/types';
 import { getMailboxProvider } from './microsoft-clients.js';
 import { getMailOverview } from './inventory.js';
-import { mailboxExchangeInfo } from './exchange.js';
+import { getExchangeFacts, mailboxExchangeInfo } from './exchange.js';
 
 function ctxFor(tenantId: TenantId, correlationId?: string) {
   return { tenantId, correlationId: correlationId ?? randomUUID() };
@@ -33,10 +33,23 @@ export async function getMailboxDetail(tenant: ManagedTenant, upn: string, corre
  * Alle Postfaecher aus dem Nutzungsbericht auf Weiterleitungsregeln pruefen.
  */
 export async function scanForwarding(tenant: ManagedTenant, correlationId?: string): Promise<CapabilityResult<ForwardingScan>> {
+  const ctx = ctxFor(tenant.id, correlationId);
+  const provider = getMailboxProvider();
+  // Quelle 1: Nutzungsbericht, solange der Tenant dort Namen zeigt
   const overview = await getMailOverview(tenant);
-  if (!overview.available) return overview;
-  const mailboxes = overview.data.mailboxes.filter((m) => m.recipientType === 'UserMailbox' || m.recipientType === 'SharedMailbox');
-  return getMailboxProvider().scanForwarding(ctxFor(tenant.id, correlationId), mailboxes);
+  if (overview.available && !overview.data.anonymised) {
+    const mailboxes = overview.data.mailboxes.filter((m) => (m.recipientType === 'UserMailbox' || m.recipientType === 'SharedMailbox') && m.userPrincipalName.includes('@'));
+    if (mailboxes.length > 0) return provider.scanForwarding(ctx, mailboxes, 'report');
+  }
+  // Quelle 2: Postfachdaten des Exchange-Workers, falls gesammelt
+  const facts = await getExchangeFacts(tenant.id);
+  if (facts && facts.mailboxes.length > 0) {
+    const mailboxes = facts.mailboxes.filter((m) => /UserMailbox|SharedMailbox/i.test(m.recipientTypeDetails)).map((m) => ({ userPrincipalName: m.userPrincipalName, displayName: m.displayName }));
+    if (mailboxes.length > 0) return provider.scanForwarding(ctx, mailboxes, 'exchange-facts');
+  }
+  // Quelle 3: Verzeichnis (Mitglieder mit Exchange-Plan); ohne Bericht und ohne Worker
+  if (!overview.available && !facts) return overview;
+  return provider.scanForwarding(ctx, await provider.listMailboxUsers(ctx), 'directory');
 }
 
 export const mailboxOperations: MailboxOperations = {

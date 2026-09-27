@@ -1040,6 +1040,8 @@ export interface ForwardingScan {
   findings: ForwardingFinding[];
   externalCount: number;
   scannedAt: string;
+  // Woher die Postfachliste stammt: Nutzungsbericht, Exchange-Worker oder Verzeichnis (Bericht verbirgt Namen)
+  mailboxSource?: 'report' | 'exchange-facts' | 'directory';
 }
 
 // ============================================

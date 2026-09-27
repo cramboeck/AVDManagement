@@ -59,6 +59,12 @@ export function ForwardingScanPanel({ tenantId }: { tenantId: string }) {
             {query.data.data.scannedMailboxes} Postfaecher geprueft{query.data.data.failedMailboxes > 0 ? `, ${query.data.data.failedMailboxes} nicht lesbar` : ''}: {query.data.data.findings.length} Regel(n) mit Weiterleitung, davon {query.data.data.externalCount} aktiv an fremde Domaenen.
             <span className="block text-xs text-muted-foreground">Tenant-Domaenen: {query.data.data.tenantDomains.join(', ')} · Stand {new Date(query.data.data.scannedAt).toLocaleTimeString('de-DE')}</span>
           </p>
+          {query.data.data.mailboxSource === 'directory' && (
+            <p className="rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-xs">
+              Der Nutzungsbericht dieses Tenants verbirgt Namen, deshalb stammt die Postfachliste aus dem Verzeichnis (Mitglieder mit Exchange-Plan; freigegebene Postfaecher ohne Lizenz fehlen). Fuer Namen in Berichten im Microsoft 365 Admin Center unter Einstellungen, Organisationseinstellungen, Berichte die Option zum Verbergen von Benutzernamen abschalten. Alternativ Postfachdaten ueber den Exchange-Worker sammeln.
+            </p>
+          )}
+          {query.data.data.mailboxSource === 'exchange-facts' && <p className="text-xs text-muted-foreground">Postfachliste aus den Daten des Exchange-Workers (der Nutzungsbericht verbirgt Namen).</p>}
           {query.data.data.findings.length > 0 && (
             <ul className="divide-y rounded-md border">
               {query.data.data.findings.map((f) => (

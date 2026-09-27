@@ -26,6 +26,16 @@ import { BaseResourceProvider, type ProviderContext } from './resource-provider.
 import { GraphClient, type GraphResponse } from './graph-client.js';
 import { GraphApiError } from '../errors.js';
 
+interface GraphDirectoryUser {
+  id: string;
+  userPrincipalName: string;
+  displayName: string | null;
+  mail: string | null;
+  userType: string | null;
+  accountEnabled: boolean | null;
+  assignedPlans?: Array<{ service?: string; capabilityStatus?: string }>;
+}
+
 interface GraphUserRow {
   id: string;
   displayName: string | null;
@@ -257,6 +267,31 @@ export class MailboxProvider extends BaseResourceProvider {
     return Array.from(new Set(fallbackUpns.map(domainOf).filter(Boolean)));
   }
 
+  /**
+   * Benutzer mit Exchange-Postfach aus dem Verzeichnis: Ersatz fuer den
+   * Nutzungsbericht, wenn der Tenant dort Namen verbirgt. Mitglieder mit
+   * Mailadresse und aktivem Exchange-Serviceplan, bis SCAN_LIMIT.
+   */
+  async listMailboxUsers(ctx: ProviderContext): Promise<Array<{ userPrincipalName: string; displayName: string }>> {
+    this.validateContext(ctx);
+    const tenantId = ctx.tenantId as string;
+    const result: Array<{ userPrincipalName: string; displayName: string }> = [];
+    let next: string | null = '/users?$select=id,userPrincipalName,displayName,mail,userType,accountEnabled,assignedPlans&$top=999';
+    while (next && result.length < SCAN_LIMIT) {
+      const page: GraphResponse<GraphDirectoryUser[]> & { '@odata.nextLink'?: string } = await this.graphClient.get(tenantId, next, this.directoryScopes);
+      for (const u of page.value ?? []) {
+        if (!u.mail || !u.userPrincipalName.includes('@')) continue;
+        if (u.userType && u.userType.toLowerCase() !== 'member') continue;
+        const hasExchange = (u.assignedPlans ?? []).some((pl) => pl.service?.toLowerCase() === 'exchange' && pl.capabilityStatus?.toLowerCase() === 'enabled');
+        if (!hasExchange) continue;
+        result.push({ userPrincipalName: u.userPrincipalName, displayName: u.displayName ?? u.userPrincipalName });
+        if (result.length >= SCAN_LIMIT) break;
+      }
+      next = page['@odata.nextLink'] ?? null;
+    }
+    return result.sort((a, b) => a.displayName.localeCompare(b.displayName));
+  }
+
   async findUser(ctx: ProviderContext, upn: string): Promise<GraphUserRow | null> {
     this.validateContext(ctx);
     try {
@@ -407,7 +442,7 @@ export class MailboxProvider extends BaseResourceProvider {
    * Weiterleitung oder Umleitung melden. Fehler je Postfach werden gezaehlt,
    * nicht durchgereicht.
    */
-  async scanForwarding(ctx: ProviderContext, mailboxes: Array<{ userPrincipalName: string; displayName: string }>): Promise<CapabilityResult<ForwardingScan>> {
+  async scanForwarding(ctx: ProviderContext, mailboxes: Array<{ userPrincipalName: string; displayName: string }>, source: ForwardingScan['mailboxSource'] = 'report'): Promise<CapabilityResult<ForwardingScan>> {
     this.validateContext(ctx);
     const tenantId = ctx.tenantId as string;
     const targets = mailboxes.slice(0, SCAN_LIMIT);
@@ -465,6 +500,7 @@ export class MailboxProvider extends BaseResourceProvider {
         findings,
         externalCount: findings.filter((f) => f.rule.forwardsExternally && f.rule.isEnabled).length,
         scannedAt: this.now().toISOString(),
+        mailboxSource: source,
       },
     };
   }
