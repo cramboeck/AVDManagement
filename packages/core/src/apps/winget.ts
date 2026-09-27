@@ -330,11 +330,34 @@ export class WingetClient {
  * Basis-Set gaengiger Software fuer MSP-Kunden. Nur Ids, die als
  * Systeminstallation (msi/exe) im Community-Katalog vorliegen.
  */
+/**
+ * Id-Praefixe von Laufzeitkomponenten: werden von anderen Programmen
+ * gebraucht und tauchen im winget-Inventar zuhauf auf. Die Oberflaeche
+ * zeigt sie eingeklappt und ohne Deinstallieren-Knopf.
+ */
+export const WINGET_RUNTIME_PREFIXES: string[] = [
+  'Microsoft.VCRedist.',
+  'Microsoft.DotNet.',
+  'Microsoft.EdgeWebView2Runtime',
+  'Microsoft.VSTOR',
+  'Microsoft.VCLibs',
+  'Microsoft.UI.Xaml',
+  'Microsoft.WindowsAppRuntime',
+  'Microsoft.DirectX',
+  'Microsoft.XNARedist',
+  'Oracle.JavaRuntimeEnvironment',
+];
+
+export function isRuntimeWingetId(id: string): boolean {
+  const lower = id.toLowerCase();
+  return WINGET_RUNTIME_PREFIXES.some((prefix) => lower.startsWith(prefix.toLowerCase()));
+}
+
 export const WINGET_BASE_SET: WingetCatalogEntry[] = [
   { id: '7zip.7zip', name: '7-Zip', publisher: 'Igor Pavlov', category: 'Werkzeuge', note: null },
   { id: 'Google.Chrome', name: 'Google Chrome', publisher: 'Google', category: 'Browser', note: 'Enterprise-MSI' },
   { id: 'Mozilla.Firefox', name: 'Mozilla Firefox', publisher: 'Mozilla', category: 'Browser', note: null },
-  { id: 'Adobe.Acrobat.Reader.64-bit', name: 'Adobe Acrobat Reader', publisher: 'Adobe', category: 'Dokumente', note: 'Update-Zyklus beachten' },
+  { id: 'Adobe.Acrobat.Reader.64-bit', name: 'Adobe Acrobat Reader', publisher: 'Adobe', category: 'Dokumente', note: 'Update-Zyklus beachten', aliases: ['Adobe Acrobat (64-bit)', 'Adobe Acrobat Reader DC', 'acrobat_dc'] },
   { id: 'Foxit.FoxitReader', name: 'Foxit PDF Reader', publisher: 'Foxit', category: 'Dokumente', note: null },
   { id: 'Notepad++.Notepad++', name: 'Notepad++', publisher: 'Notepad++ Team', category: 'Werkzeuge', note: null },
   { id: 'Microsoft.VisualStudioCode', name: 'Visual Studio Code', publisher: 'Microsoft', category: 'Entwicklung', note: 'System-Setup' },
@@ -343,10 +366,10 @@ export const WINGET_BASE_SET: WingetCatalogEntry[] = [
   { id: 'Microsoft.WindowsTerminal', name: 'Windows Terminal', publisher: 'Microsoft', category: 'Werkzeuge', note: null },
   { id: 'Microsoft.Teams', name: 'Microsoft Teams', publisher: 'Microsoft', category: 'Kommunikation', note: 'Neues Teams, Bootstrapper' },
   { id: 'Microsoft.OneDrive', name: 'OneDrive', publisher: 'Microsoft', category: 'Cloud', note: null },
-  { id: 'Microsoft.VCRedist.2015+.x64', name: 'Visual C++ Redistributable 2015-2022 x64', publisher: 'Microsoft', category: 'Laufzeiten', note: null },
-  { id: 'Microsoft.VCRedist.2015+.x86', name: 'Visual C++ Redistributable 2015-2022 x86', publisher: 'Microsoft', category: 'Laufzeiten', note: null },
-  { id: 'Microsoft.DotNet.DesktopRuntime.8', name: '.NET Desktop Runtime 8', publisher: 'Microsoft', category: 'Laufzeiten', note: null },
-  { id: 'Microsoft.EdgeWebView2Runtime', name: 'Edge WebView2 Runtime', publisher: 'Microsoft', category: 'Laufzeiten', note: null },
+  { id: 'Microsoft.VCRedist.2015+.x64', name: 'Visual C++ Redistributable 2015-2022 x64', publisher: 'Microsoft', category: 'Laufzeiten', note: null, kind: 'runtime' },
+  { id: 'Microsoft.VCRedist.2015+.x86', name: 'Visual C++ Redistributable 2015-2022 x86', publisher: 'Microsoft', category: 'Laufzeiten', note: null, kind: 'runtime' },
+  { id: 'Microsoft.DotNet.DesktopRuntime.8', name: '.NET Desktop Runtime 8', publisher: 'Microsoft', category: 'Laufzeiten', note: null, kind: 'runtime' },
+  { id: 'Microsoft.EdgeWebView2Runtime', name: 'Edge WebView2 Runtime', publisher: 'Microsoft', category: 'Laufzeiten', note: null, kind: 'runtime' },
   { id: 'Oracle.JavaRuntimeEnvironment', name: 'Java Runtime Environment', publisher: 'Oracle', category: 'Laufzeiten', note: 'Lizenz pruefen' },
   { id: 'EclipseAdoptium.Temurin.17.JRE', name: 'Eclipse Temurin JRE 17', publisher: 'Eclipse Adoptium', category: 'Laufzeiten', note: 'freie Java-Alternative' },
   { id: 'VideoLAN.VLC', name: 'VLC media player', publisher: 'VideoLAN', category: 'Medien', note: null },
@@ -359,7 +382,7 @@ export const WINGET_BASE_SET: WingetCatalogEntry[] = [
   { id: 'DominikReichl.KeePass', name: 'KeePass', publisher: 'Dominik Reichl', category: 'Sicherheit', note: null },
   { id: 'WinSCP.WinSCP', name: 'WinSCP', publisher: 'Martin Prikryl', category: 'Werkzeuge', note: null },
   { id: 'PuTTY.PuTTY', name: 'PuTTY', publisher: 'Simon Tatham', category: 'Werkzeuge', note: null },
-  { id: 'Git.Git', name: 'Git', publisher: 'Git', category: 'Entwicklung', note: null },
+  { id: 'Git.Git', name: 'Git', publisher: 'Git', category: 'Entwicklung', note: null, aliases: ['Git version'] },
   { id: 'Citrix.Workspace', name: 'Citrix Workspace', publisher: 'Citrix', category: 'Remote', note: null },
   { id: 'Devolutions.RemoteDesktopManager', name: 'Remote Desktop Manager', publisher: 'Devolutions', category: 'Fernwartung', note: null },
   { id: 'Microsoft.RemoteDesktopClient', name: 'Remote Desktop (AVD-Client)', publisher: 'Microsoft', category: 'Remote', note: null },
@@ -369,6 +392,11 @@ export const WINGET_BASE_SET: WingetCatalogEntry[] = [
   { id: 'Lenovo.SystemUpdate', name: 'Lenovo System Update', publisher: 'Lenovo', category: 'Hardware', note: null },
   { id: 'HP.HPSupportAssistant', name: 'HP Support Assistant', publisher: 'HP', category: 'Hardware', note: null },
   { id: 'Logitech.Options', name: 'Logitech Options', publisher: 'Logitech', category: 'Hardware', note: null },
+  { id: 'Logitech.OptionsPlus', name: 'Logi Options+', publisher: 'Logitech', category: 'Hardware', note: null, aliases: ['Logitech Options+', 'Logi Options Plus'] },
+  { id: 'AgileBits.1Password', name: '1Password', publisher: 'AgileBits', category: 'Sicherheit', note: null },
+  { id: 'M2Team.NanaZip', name: 'NanaZip', publisher: 'M2-Team', category: 'Werkzeuge', note: 'Store-Variante 40174MouriNaruto.NanaZip', aliases: ['40174MouriNaruto.NanaZip'] },
+  { id: 'Famatech.AdvancedIPScanner', name: 'Advanced IP Scanner', publisher: 'Famatech', category: 'Netzwerk', note: null },
+  { id: 'WhatsApp.WhatsApp', name: 'WhatsApp', publisher: 'WhatsApp', category: 'Kommunikation', note: 'Store-Variante 5319275A.WhatsAppDesktop', aliases: ['5319275A.WhatsAppDesktop'] },
   { id: 'Fortinet.FortiClientVPN', name: 'FortiClient VPN', publisher: 'Fortinet', category: 'Netzwerk', note: null },
   { id: 'WireGuard.WireGuard', name: 'WireGuard', publisher: 'WireGuard', category: 'Netzwerk', note: null },
   { id: 'OpenVPNTechnologies.OpenVPNConnect', name: 'OpenVPN Connect', publisher: 'OpenVPN', category: 'Netzwerk', note: null },

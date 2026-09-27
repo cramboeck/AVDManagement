@@ -20,7 +20,8 @@ export interface CatalogPackageRef {
 }
 
 export function normaliseName(value: string): string {
-  return value.toLowerCase().replace(/[^a-z0-9]+/g, '');
+  // Das Pluszeichen bleibt: "Options+" und "Options" sind verschiedene Programme
+  return value.toLowerCase().replace(/[^a-z0-9+]+/g, '');
 }
 
 /** Namensteil einer winget-Id (alles nach dem Herausgeber). */
@@ -28,23 +29,49 @@ function idTail(id: string): string {
   return normaliseName(id.split('.').slice(1).join(' '));
 }
 
+/** Woerter eines Anzeigenamens (kleingeschrieben), fuer exakte Treffer kurzer Namen. */
+function tokens(value: string): string[] {
+  return value.toLowerCase().split(/[^a-z0-9+]+/).filter(Boolean);
+}
+
+/**
+ * Passt ein Katalogname zu einem Anzeigenamen? Lange Namen per Enthaltensein
+ * in beide Richtungen; kurze Namen (unter fuenf Zeichen wie "Git", "Zoom")
+ * nur als eigenes Wort, sonst traefe "Git" auch "Logitech".
+ */
+export function nameMatches(displayName: string, candidate: string): boolean {
+  const name = normaliseName(displayName);
+  const cand = normaliseName(candidate);
+  if (name.length < 3 || cand.length < 3) return false;
+  if (cand.length < 5) return tokens(displayName).includes(candidate.toLowerCase()) || name === cand;
+  return name.includes(cand) || cand.includes(name);
+}
+
 /**
  * Anzeigename einer Software einer winget-Id zuordnen: erst eigene Pakete,
- * dann Basis-Set. Kurze Namen werden nicht zugeordnet, um Fehltreffer zu vermeiden.
+ * dann Basis-Set (Name, Aliasse, Namensteil der Id). Kurze Namen werden nur
+ * als ganzes Wort zugeordnet, um Fehltreffer zu vermeiden.
  */
 export function matchWingetId(displayName: string, packages: CatalogPackageRef[], baseSet: WingetCatalogEntry[]): { wingetId: string; packageId: string | null } | null {
   const name = normaliseName(displayName);
   if (name.length < 3) return null;
   for (const p of packages) {
-    const pn = normaliseName(p.name);
-    if (pn.length >= 3 && (name.includes(pn) || pn.includes(name))) return { wingetId: p.wingetId, packageId: p.id };
+    if (nameMatches(displayName, p.name)) return { wingetId: p.wingetId, packageId: p.id };
   }
+  // Laengster passender Katalogname gewinnt: "Logitech Options+" gehoert zu
+  // Logi Options+, nicht zu Logitech Options
+  let best: { wingetId: string; score: number } | null = null;
   for (const e of baseSet) {
-    const en = normaliseName(e.name);
+    const candidates = [e.name, ...(e.aliases ?? [])];
+    let score = 0;
+    for (const c of candidates) {
+      if (nameMatches(displayName, c)) score = Math.max(score, normaliseName(c).length);
+    }
     const tail = idTail(e.id);
-    if ((en.length >= 3 && (name.includes(en) || en.includes(name))) || (tail.length >= 4 && name.includes(tail))) return { wingetId: e.id, packageId: null };
+    if (score === 0 && tail.length >= 4 && name.includes(tail)) score = tail.length;
+    if (score > 0 && (!best || score > best.score)) best = { wingetId: e.id, score };
   }
-  return null;
+  return best ? { wingetId: best.wingetId, packageId: null } : null;
 }
 
 /** Version des Inventars gegen die Katalogversion: nur numerische Praefixe vergleichen. */

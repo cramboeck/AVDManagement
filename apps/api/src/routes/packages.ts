@@ -6,7 +6,7 @@ import { randomUUID } from 'node:crypto';
 import { Readable } from 'node:stream';
 import { Hono } from 'hono';
 import { stream } from 'hono/streaming';
-import { ManifestError } from '@zerostress/core';
+import { ManifestError, WINGET_RUNTIME_PREFIXES } from '@zerostress/core';
 import { authMiddleware, requireRole } from '../middleware/auth.js';
 import { DrizzleAuditLogger } from '../services/audit-logger.js';
 import { createPackage, deletePackage, getPackage, listPackages, openFile, storeFile, updateManifest, detectionPrefix } from '../services/packages.js';
@@ -77,7 +77,7 @@ app.post('/', requireRole('engineer'), async (c) => {
 });
 
 // winget-Katalog: Basis-Set, Blaettern nach Herausgeber, Aufloesung einer Id
-app.get('/winget/base-set', (c) => c.json({ items: baseSet(), githubToken: !!process.env.GITHUB_TOKEN }));
+app.get('/winget/base-set', (c) => c.json({ items: baseSet(), runtimePrefixes: WINGET_RUNTIME_PREFIXES, githubToken: !!process.env.GITHUB_TOKEN }));
 
 app.get('/winget/browse', async (c) => {
   const publisher = c.req.query('publisher') ?? '';

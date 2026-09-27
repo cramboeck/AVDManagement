@@ -4,7 +4,7 @@
 
 import { describe, it, expect, vi } from 'vitest';
 import { buildSoftwareOverview, matchBlockRule, matchWingetId, versionStatus } from '../src/apps/software-catalog.js';
-import { WINGET_BASE_SET } from '../src/apps/winget.js';
+import { WINGET_BASE_SET, isRuntimeWingetId } from '../src/apps/winget.js';
 import { registerWingetBulkJob } from '../src/jobs/winget-job-handlers.js';
 import { getRegisteredJob } from '../src/jobs/job-types.js';
 import type { RemediationOperations, RemediationRunState_ } from '../src/providers/remediation-provider.js';
@@ -22,6 +22,17 @@ describe('software catalogue matching', () => {
     expect(matchWingetId('Google Chrome', [], WINGET_BASE_SET)).toEqual({ wingetId: 'Google.Chrome', packageId: null });
     expect(matchWingetId('7-Zip 24.08 (x64 edition)', [], WINGET_BASE_SET)).toEqual({ wingetId: '7zip.7zip', packageId: null });
     expect(matchWingetId('Ab', [], WINGET_BASE_SET)).toBeNull();
+  });
+
+  it('uses aliases and treats short names as whole words', () => {
+    expect(matchWingetId('Adobe Acrobat (64-bit)', [], WINGET_BASE_SET)?.wingetId).toBe('Adobe.Acrobat.Reader.64-bit');
+    expect(matchWingetId('Git version 2.47.0', [], WINGET_BASE_SET)?.wingetId).toBe('Git.Git');
+    // "Git" darf nicht in "Logitech" gefunden werden
+    expect(matchWingetId('Logitech Options+', [], WINGET_BASE_SET)?.wingetId).toBe('Logitech.OptionsPlus');
+    expect(matchWingetId('Logitech G HUB', [], WINGET_BASE_SET)).toBeNull();
+    expect(isRuntimeWingetId('Microsoft.VCRedist.2013.x64')).toBe(true);
+    expect(isRuntimeWingetId('Microsoft.DotNet.DesktopRuntime.8')).toBe(true);
+    expect(isRuntimeWingetId('Microsoft.PowerToys')).toBe(false);
   });
 
   it('compares versions and applies block rules', () => {

@@ -1225,6 +1225,10 @@ export interface WingetCatalogEntry {
   publisher: string;
   category: string;
   note: string | null;
+  // Weitere Anzeigenamen, unter denen Intune oder Defender das Programm melden
+  aliases?: string[];
+  // runtime: Laufzeitkomponente, die andere Programme brauchen; nicht zum Deinstallieren anbieten
+  kind?: 'app' | 'runtime';
 }
 
 /** Ergebnis der Katalogaufloesung fuer das Formular. */

@@ -16,7 +16,8 @@ import { WingetInstallDialog, type WingetTarget } from '@/components/devices/win
 import type { AppPackage, DetectedApp, Device, DeviceSoftwareInventory, Job, ScriptRunResult, WingetCatalogEntry } from '@zerostress/types';
 
 function normalise(value: string): string {
-  return value.toLowerCase().replace(/[^a-z0-9]+/g, '');
+  // Das Pluszeichen bleibt: "Options+" und "Options" sind verschiedene Programme
+  return value.toLowerCase().replace(/[^a-z0-9+]+/g, '');
 }
 
 // winget kennt Ids, Intune kennt Anzeigenamen; ein Treffer ueber den Namen reicht fuer die Markierung
@@ -44,24 +45,45 @@ export interface CatalogHit {
  * Erkennung gegen den winget-Katalog: Basis-Set und eigene Pakete ueber den
  * Anzeigenamen. Ein Treffer heisst: dafuer gibt es eine winget-Id.
  */
+// Gleiche Regel wie nameMatches in packages/core/src/apps/software-catalog.ts;
+// die Zusammenfuehrung in die API steht im Backlog (Fachlogik gehoert ins Backend)
+function nameMatches(displayName: string, candidate: string): boolean {
+  const name = normalise(displayName);
+  const cand = normalise(candidate);
+  if (name.length < 3 || cand.length < 3) return false;
+  if (cand.length < 5) {
+    const words = displayName.toLowerCase().split(/[^a-z0-9+]+/).filter(Boolean);
+    return words.includes(candidate.toLowerCase()) || name === cand;
+  }
+  return name.includes(cand) || cand.includes(name);
+}
+
 export function matchCatalog(app: DetectedApp, baseSet: WingetCatalogEntry[], packages: AppPackage[]): CatalogHit | null {
   const appName = normalise(app.displayName);
   if (appName.length < 3) return null;
   for (const p of packages) {
     if (p.manifest.installerType !== 'winget' || !p.manifest.wingetPackageIdentifier) continue;
-    const name = normalise(p.manifest.name);
-    if (name.length >= 3 && (appName.includes(name) || name.includes(appName))) {
+    if (nameMatches(app.displayName, p.manifest.name)) {
       return { id: p.manifest.wingetPackageIdentifier, name: p.manifest.name, packageId: p.id, packageVersion: p.manifest.version };
     }
   }
+  // Laengster passender Katalogname gewinnt (wie in core)
+  let best: { entry: WingetCatalogEntry; score: number } | null = null;
   for (const e of baseSet) {
-    const name = normalise(e.name);
-    const idTail = normalise(e.id.split('.').slice(1).join(' '));
-    if ((name.length >= 3 && (appName.includes(name) || name.includes(appName))) || (idTail.length >= 4 && appName.includes(idTail))) {
-      return { id: e.id, name: e.name, packageId: null, packageVersion: null };
+    let score = 0;
+    for (const c of [e.name, ...(e.aliases ?? [])]) {
+      if (nameMatches(app.displayName, c)) score = Math.max(score, normalise(c).length);
     }
+    const idTail = normalise(e.id.split('.').slice(1).join(' '));
+    if (score === 0 && idTail.length >= 4 && appName.includes(idTail)) score = idTail.length;
+    if (score > 0 && (!best || score > best.score)) best = { entry: e, score };
   }
-  return null;
+  return best ? { id: best.entry.id, name: best.entry.name, packageId: null, packageVersion: null } : null;
+}
+
+function isRuntimeId(id: string, prefixes: string[]): boolean {
+  const lower = id.toLowerCase();
+  return prefixes.some((p) => lower.startsWith(p.toLowerCase()));
 }
 
 /** Inventar-Id (aus winget list) ueber den Namensteil der Id dem Intune-Eintrag zuordnen. */
@@ -104,7 +126,7 @@ export function SoftwareTab({ base, tenantId, device }: { base: string; tenantId
     queryFn: () => api.get<DeviceSoftwareInventory>(`${base}/software`),
     staleTime: 10 * 60 * 1000,
   });
-  const baseSet = useQuery({ queryKey: ['winget-base-set'], queryFn: () => api.get<{ items: WingetCatalogEntry[] }>('/packages/winget/base-set'), staleTime: Infinity });
+  const baseSet = useQuery({ queryKey: ['winget-base-set'], queryFn: () => api.get<{ items: WingetCatalogEntry[]; runtimePrefixes: string[] }>('/packages/winget/base-set'), staleTime: Infinity });
   const packages = useQuery({ queryKey: ['packages'], queryFn: () => api.get<{ items: AppPackage[] }>('/packages'), staleTime: 60 * 1000 });
 
   const jobsQuery = useQuery({
@@ -236,7 +258,11 @@ export function SoftwareTab({ base, tenantId, device }: { base: string; tenantId
 
   const apps = inventory.data.items;
   const updateCount = rows.filter((r) => r.update).length;
-  const baseCandidates = (baseSet.data?.items ?? []).filter((e) => !installedNames.has(e.id));
+  const baseCandidates = (baseSet.data?.items ?? []).filter((e) => !installedNames.has(e.id) && e.kind !== 'runtime');
+  const runtimePrefixes = baseSet.data?.runtimePrefixes ?? [];
+  const unmatchedIds = inventory_.ids.filter((id) => !rows.some((r) => r.wingetId === id));
+  const unmatchedRuntimes = unmatchedIds.filter((id) => isRuntimeId(id, runtimePrefixes));
+  const unmatchedApps = unmatchedIds.filter((id) => !isRuntimeId(id, runtimePrefixes));
   const refreshJobs = () => queryClient.invalidateQueries({ queryKey: ['jobs', tenantId] });
 
   return (
@@ -313,14 +339,13 @@ export function SoftwareTab({ base, tenantId, device }: { base: string; tenantId
         </section>
       )}
 
-      {managedDeviceId && inventory_.ids.length > 0 && (
+      {managedDeviceId && unmatchedApps.length + unmatchedRuntimes.length > 0 && (
         <section className="rounded-lg border p-4">
           <h2 className="font-medium">Von winget erkannt, aber keiner Inventarzeile zugeordnet</h2>
           <p className="mt-0.5 text-sm text-muted-foreground">Diese Pakete kennt winget auf dem Geraet; im Intune-Inventar fehlen sie noch oder heissen anders. Deinstallieren geht direkt.</p>
-          <ul className="mt-2 flex flex-wrap gap-2">
-            {inventory_.ids
-              .filter((id) => !rows.some((r) => r.wingetId === id))
-              .map((id) => (
+          {unmatchedApps.length > 0 && (
+            <ul className="mt-2 flex flex-wrap gap-2">
+              {unmatchedApps.map((id) => (
                 <li key={id} className="flex items-center gap-1 rounded-md border px-2 py-1 text-xs">
                   <span className="font-mono">{id}</span>
                   <button onClick={() => setTarget({ packageId: id, mode: 'uninstall', displayName: null, installedVersion: null, availableVersion: null })} className="rounded px-1 text-destructive hover:bg-destructive/10" title="Deinstallieren">
@@ -328,7 +353,22 @@ export function SoftwareTab({ base, tenantId, device }: { base: string; tenantId
                   </button>
                 </li>
               ))}
-          </ul>
+            </ul>
+          )}
+          {unmatchedRuntimes.length > 0 && (
+            <details className="mt-2">
+              <summary className="cursor-pointer text-xs text-muted-foreground">
+                {unmatchedRuntimes.length} Laufzeitkomponenten (Visual C++, .NET, WebView2 und aehnliche) ausgeblendet; andere Programme brauchen sie, deshalb hier ohne Deinstallieren
+              </summary>
+              <ul className="mt-2 flex flex-wrap gap-2">
+                {unmatchedRuntimes.map((id) => (
+                  <li key={id} className="rounded-md border px-2 py-1 font-mono text-xs text-muted-foreground">
+                    {id}
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
         </section>
       )}
 

@@ -8,6 +8,19 @@ Alle nennenswerten Aenderungen an ZeroStress Cockpit. Format angelehnt an
 
 ### Hinzugefuegt
 
+- Weiterleitungs-Scan: nimmt die Postfachliste aus den Daten des
+  Exchange-Workers oder aus dem Verzeichnis (Mitglieder mit
+  Exchange-Plan), wenn der Nutzungsbericht Namen verbirgt; vorher
+  "0 Postfaecher geprueft". Quelle steht im Ergebnis, die Oberflaeche
+  nennt die Einstellung im Admin Center.
+- winget-Katalog: Aliasse fuer abweichende Anzeigenamen (Adobe Acrobat
+  (64-bit), Logi Options+, Store-Paketnamen), neue Eintraege 1Password,
+  NanaZip, Logi Options+, Advanced IP Scanner, WhatsApp; kurze Namen wie
+  "Git" treffen nur als ganzes Wort, der laengste passende Name gewinnt.
+- Software-Tab: Laufzeitkomponenten (Visual C++, .NET, WebView2 und
+  aehnliche) aus dem winget-Inventar stehen eingeklappt und ohne
+  Deinstallieren-Knopf; im Basis-Set werden sie nicht zum Installieren
+  angeboten.
 - Jobs im Hintergrund: laufende Jobs lassen sich aus dem Dialog mit "Im
   Hintergrund weiterlaufen" loslassen; eine Leiste oben rechts zeigt
   Laufzeit und Ergebnis mit Link auf den Job, Fehler bleiben stehen,
