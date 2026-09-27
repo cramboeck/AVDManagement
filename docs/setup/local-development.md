@@ -465,6 +465,18 @@ gibt es nicht. Beim ersten Lauf legt die Konsole das Remediation-Objekt
 Hash in der Beschreibung nicht mehr zur Bibliothek passt. Jeder Lauf ist ein
 Job mit Preview; Name, Version und Hash stehen im Audit.
 
+Im Intune Admin Center stehen die Objekte unter Geraete > Windows >
+Skripts und Wiederherstellungen > Wiederherstellungen mit Herausgeber
+"ZeroStress Cockpit" und Status "Not deployed" (keine Gruppenzuweisung,
+Start nur auf Abruf durch die Konsole). Die Spalten "Without issues" und
+"With issues" zaehlen die Laeufe je Geraet; beim Update-Scan ist "With
+issues" gewollt, weil die Erkennung ausstehende Updates als Befund
+meldet. Der blaue Hinweis "Use of remediations requires Windows license
+verification" verlangt eine einmalige Bestaetigung je Tenant
+(Mandantenverwaltung > Connectors und Token > Windows-Daten); ohne sie
+liefern Laeufe kein Ergebnis. Das gehoert in die Onboarding-Pruefung
+jedes Kundentenants.
+
 | Skript | Wirkung | Ergebnis |
 |---|---|---|
 | Update-Stand | nur lesend, Update-Cache des Geraets | ausstehende Updates, Neustartbedarf, letzte Suche/Installation |
