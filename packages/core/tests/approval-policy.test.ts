@@ -10,13 +10,13 @@ const change = { objectType: 'device', objectId: 'x', objectDisplayName: 'x', ac
 describe('normalizeMspSettings', () => {
   it('applies defaults and drops invalid values', () => {
     expect(normalizeMspSettings(null)).toEqual(DEFAULT_MSP_SETTINGS);
-    expect(normalizeMspSettings({ fourEyes: { enabled: true, minObjects: -1, jobTypes: ['vm.deploy', 'not valid!'] } })).toEqual({ fourEyes: { enabled: true, minObjects: 10, jobTypes: ['vm.deploy'] } });
+    expect(normalizeMspSettings({ fourEyes: { enabled: true, minObjects: -1, jobTypes: ['vm.deploy', 'not valid!'] } }).fourEyes).toEqual({ enabled: true, minObjects: 10, jobTypes: ['vm.deploy'] });
     expect(normalizeMspSettings({ fourEyes: { enabled: 'yes' } }).fourEyes.enabled).toBe(false);
   });
 });
 
 describe('evaluateFourEyes', () => {
-  const on = { fourEyes: { enabled: true, minObjects: 5, jobTypes: ['vm.deploy'] } };
+  const on = { ...DEFAULT_MSP_SETTINGS, fourEyes: { enabled: true, minObjects: 5, jobTypes: ['vm.deploy'] } };
 
   it('is off by default', () => {
     expect(evaluateFourEyes(DEFAULT_MSP_SETTINGS, { type: 'vm.deploy', payload: {} }, { changes: [] })).toEqual({ required: false, reason: null });

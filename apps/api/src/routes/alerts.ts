@@ -8,6 +8,7 @@ import { authMiddleware, requireRole } from '../middleware/auth.js';
 import { tenantContextMiddleware, requireConnectedTenant } from '../middleware/tenant-context.js';
 import { DrizzleAuditLogger } from '../services/audit-logger.js';
 import { evaluateTenant, getAlertStats, listAlerts, setAlertStatus } from '../services/alerting.js';
+import { evaluateOperationalAlerts } from '../services/operational-alerts.js';
 import type { AlertStatus, CorrelationId } from '@zerostress/types';
 
 const app = new Hono();
@@ -27,8 +28,10 @@ app.get('/', async (c) => {
 // Sofort auswerten statt auf den Takt zu warten
 app.post('/evaluate', requireRole('engineer'), requireConnectedTenant, async (c) => {
   const tenant = c.get('tenant');
-  const created = await evaluateTenant({ id: tenant.id, mspId: tenant.mspId, displayName: tenant.displayName });
-  return c.json({ created: created.length });
+  const target = { id: tenant.id, mspId: tenant.mspId, displayName: tenant.displayName };
+  const created = await evaluateTenant(target);
+  const operational = await evaluateOperationalAlerts(target, true);
+  return c.json({ created: created.length + operational.length });
 });
 
 async function transition(c: Context, status: AlertStatus) {

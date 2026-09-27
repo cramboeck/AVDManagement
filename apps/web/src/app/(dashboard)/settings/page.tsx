@@ -6,7 +6,7 @@ import { api } from '@/lib/api';
 import { useTenant } from '@/hooks/use-tenant';
 import { LoadingTable } from '@/components/ui/loading';
 import { ErrorState, ErrorBanner } from '@/components/ui/error-state';
-import type { MspSettings, UserRole } from '@zerostress/types';
+import type { MspAlertSettings, MspSettings, UserRole } from '@zerostress/types';
 
 interface SettingsResponse {
   settings: MspSettings;
@@ -120,19 +120,114 @@ export default function SettingsPage() {
             ))}
           </div>
         </div>
-        {isOwner && (
-          <div className="flex items-center gap-3">
-            <button onClick={() => save.mutate(draft)} disabled={save.isPending} className={primaryButton}>
-              Speichern
-            </button>
-            {saved && <span className="text-xs text-success">Gespeichert.</span>}
-          </div>
-        )}
       </section>
+
+      <AlertRulesSection value={draft.alerts} isOwner={isOwner} onChange={(alerts) => setDraft({ ...draft, alerts })} />
+
+      {isOwner && (
+        <div className="flex items-center gap-3">
+          <button onClick={() => save.mutate(draft)} disabled={save.isPending} className={primaryButton}>
+            Einstellungen speichern
+          </button>
+          {saved && <span className="text-xs text-success">Gespeichert.</span>}
+        </div>
+      )}
 
       <TeamSection meId={me?.id ?? ''} isOwner={isOwner} />
       <WorkerTokenSection isOwner={isOwner} />
     </div>
+  );
+}
+
+/**
+ * Betriebs-Alerts: Schwellen fuer Regeln ueber Bestandsdaten. Gespeichert
+ * wird zusammen mit dem Vier-Augen-Prinzip ueber denselben Knopf.
+ */
+function AlertRulesSection({ value, isOwner, onChange }: { value: MspAlertSettings; isOwner: boolean; onChange: (next: MspAlertSettings) => void }) {
+  const os = value.outdatedSoftware;
+  const mq = value.mailboxQuota;
+  const vm = value.vmOutsideHours;
+  const setOs = (patch: Partial<MspAlertSettings['outdatedSoftware']>) => onChange({ ...value, outdatedSoftware: { ...os, ...patch } });
+  const setMq = (patch: Partial<MspAlertSettings['mailboxQuota']>) => onChange({ ...value, mailboxQuota: { ...mq, ...patch } });
+  const setVm = (patch: Partial<MspAlertSettings['vmOutsideHours']>) => onChange({ ...value, vmOutsideHours: { ...vm, ...patch } });
+  const hours = Array.from({ length: 25 }, (_, i) => i);
+
+  return (
+    <section className="space-y-4 rounded-lg border p-4">
+      <div>
+        <h2 className="font-medium">Betriebs-Alerts</h2>
+        <p className="mt-0.5 max-w-3xl text-xs text-muted-foreground">
+          Regeln ueber Bestandsdaten, ausgewertet hoechstens einmal je Stunde und Tenant (sofort ueber &quot;Jetzt auswerten&quot; auf der Alert-Seite). Treffer erscheinen unter Alerts und gehen, falls eingerichtet, per Mail raus. Ein geschlossener Alert kommt erst bei einem neuen Zustand wieder: Software bei der naechsten Katalogversion, Postfach im naechsten Monat, VM am naechsten Tag.
+        </p>
+      </div>
+
+      <div className="space-y-2 rounded-md border p-3">
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={os.enabled} disabled={!isOwner} onChange={(e) => setOs({ enabled: e.target.checked })} />
+          Veraltete Software laut winget-Katalog
+        </label>
+        <label className="block text-sm">
+          <span className="mb-1 block text-xs text-muted-foreground">Ab wie vielen Geraeten mit veralteter Version je Programm</span>
+          <input type="number" min={1} max={10000} className={`${inputClass} w-32`} value={os.minDevices} disabled={!os.enabled || !isOwner} onChange={(e) => setOs({ minDevices: Number(e.target.value) })} />
+        </label>
+      </div>
+
+      <div className="space-y-2 rounded-md border p-3">
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={mq.enabled} disabled={!isOwner} onChange={(e) => setMq({ enabled: e.target.checked })} />
+          Postfach nahe der Sendesperre
+        </label>
+        <label className="block text-sm">
+          <span className="mb-1 block text-xs text-muted-foreground">Ab wie viel Prozent der Sendesperre (50 bis 100); bei 100 % wird der Alert als hoch eingestuft. Tenants mit verborgenen Namen in Berichten werden uebersprungen.</span>
+          <input type="number" min={50} max={100} className={`${inputClass} w-32`} value={mq.percent} disabled={!mq.enabled || !isOwner} onChange={(e) => setMq({ percent: Number(e.target.value) })} />
+        </label>
+      </div>
+
+      <div className="space-y-2 rounded-md border p-3">
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={vm.enabled} disabled={!isOwner} onChange={(e) => setVm({ enabled: e.target.checked })} />
+          Azure-VMs laufen ausserhalb der Arbeitszeit
+        </label>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <label className="block text-sm">
+            <span className="mb-1 block text-xs text-muted-foreground">Arbeitszeit von</span>
+            <select className={inputClass} value={vm.startHour} disabled={!vm.enabled || !isOwner} onChange={(e) => setVm({ startHour: Number(e.target.value) })}>
+              {hours.slice(0, 24).map((h) => (
+                <option key={h} value={h}>
+                  {h}:00
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="block text-sm">
+            <span className="mb-1 block text-xs text-muted-foreground">bis (exklusiv)</span>
+            <select className={inputClass} value={vm.endHour} disabled={!vm.enabled || !isOwner} onChange={(e) => setVm({ endHour: Number(e.target.value) })}>
+              {hours.slice(1).map((h) => (
+                <option key={h} value={h}>
+                  {h}:00
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="block text-sm">
+            <span className="mb-1 block text-xs text-muted-foreground">Zeitzone (IANA)</span>
+            <input className={`${inputClass} w-full`} value={vm.timeZone} maxLength={64} disabled={!vm.enabled || !isOwner} onChange={(e) => setVm({ timeZone: e.target.value })} placeholder="Europe/Berlin" />
+          </label>
+        </div>
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={vm.weekdaysOnly} disabled={!vm.enabled || !isOwner} onChange={(e) => setVm({ weekdaysOnly: e.target.checked })} />
+          Wochenende zaehlt komplett als ausserhalb
+        </label>
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={vm.excludeSessionHosts} disabled={!vm.enabled || !isOwner} onChange={(e) => setVm({ excludeSessionHosts: e.target.checked })} />
+          AVD-Sitzungshosts nicht melden (die regelt das Autoscaling)
+        </label>
+        <label className="block text-sm">
+          <span className="mb-1 block text-xs text-muted-foreground">VMs mit diesem Tag (Name, beliebiger Wert) nicht melden; leer = keine Ausnahme</span>
+          <input className={`${inputClass} w-64`} value={vm.excludeTag} maxLength={100} disabled={!vm.enabled || !isOwner} onChange={(e) => setVm({ excludeTag: e.target.value })} />
+        </label>
+      </div>
+    </section>
   );
 }
 

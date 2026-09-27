@@ -27,6 +27,9 @@ const ruleLabels: Record<AnomalyRuleId, string> = {
   'legacy-auth-success': 'Legacy-Authentifizierung',
   'risky-success': 'Riskante Anmeldung',
   'blocked-software': 'Gesperrte Software',
+  'outdated-software': 'Veraltete Software',
+  'mailbox-quota': 'Postfach fast voll',
+  'vm-outside-hours': 'VM ausserhalb der Arbeitszeit',
 };
 
 const statusLabels: Record<AlertStatus, string> = { open: 'Offen', acknowledged: 'In Bearbeitung', resolved: 'Geschlossen' };

@@ -7,7 +7,7 @@
  * Anzahl Geraete, bei Rollouts die Anzahl Tenants (payload.batchSize).
  */
 
-import type { Job, MspSettings } from '@zerostress/types';
+import type { Job, MspAlertSettings, MspSettings } from '@zerostress/types';
 import type { PreviewResult } from './job-types.js';
 
 export const DEFAULT_MSP_SETTINGS: MspSettings = {
@@ -16,18 +16,60 @@ export const DEFAULT_MSP_SETTINGS: MspSettings = {
     minObjects: 10,
     jobTypes: ['device.winget-bulk', 'mailbox.convert', 'mailbox.set-litigation-hold', 'mailbox.set-forwarding', 'vm.deploy', 'identity.disable-user', 'identity.reset-password'],
   },
+  alerts: {
+    outdatedSoftware: { enabled: false, minDevices: 5 },
+    mailboxQuota: { enabled: false, percent: 90 },
+    vmOutsideHours: { enabled: false, startHour: 7, endHour: 19, timeZone: 'Europe/Berlin', weekdaysOnly: true, excludeSessionHosts: true, excludeTag: 'zsc-always-on' },
+  },
 };
 
+function intInRange(value: unknown, min: number, max: number, fallback: number): number {
+  const n = Number(value);
+  return Number.isInteger(n) && n >= min && n <= max ? n : fallback;
+}
+
+export function isValidTimeZone(value: unknown): value is string {
+  if (typeof value !== 'string' || value.length === 0 || value.length > 64) return false;
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: value });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function normalizeAlerts(raw: unknown): MspAlertSettings {
+  const d = DEFAULT_MSP_SETTINGS.alerts;
+  const input = (raw && typeof raw === 'object' ? raw : {}) as { [K in keyof MspAlertSettings]?: Partial<MspAlertSettings[K]> };
+  const os = input.outdatedSoftware ?? {};
+  const mq = input.mailboxQuota ?? {};
+  const vm = input.vmOutsideHours ?? {};
+  const excludeTag = typeof vm.excludeTag === 'string' ? vm.excludeTag.trim().slice(0, 100) : d.vmOutsideHours.excludeTag;
+  return {
+    outdatedSoftware: { enabled: os.enabled === true, minDevices: intInRange(os.minDevices, 1, 10000, d.outdatedSoftware.minDevices) },
+    mailboxQuota: { enabled: mq.enabled === true, percent: intInRange(mq.percent, 50, 100, d.mailboxQuota.percent) },
+    vmOutsideHours: {
+      enabled: vm.enabled === true,
+      startHour: intInRange(vm.startHour, 0, 23, d.vmOutsideHours.startHour),
+      endHour: intInRange(vm.endHour, 1, 24, d.vmOutsideHours.endHour),
+      timeZone: isValidTimeZone(vm.timeZone) ? vm.timeZone : d.vmOutsideHours.timeZone,
+      weekdaysOnly: vm.weekdaysOnly !== false,
+      excludeSessionHosts: vm.excludeSessionHosts !== false,
+      excludeTag,
+    },
+  };
+}
+
 export function normalizeMspSettings(raw: unknown): MspSettings {
-  const input = (raw && typeof raw === 'object' ? raw : {}) as { fourEyes?: Partial<MspSettings['fourEyes']> };
+  const input = (raw && typeof raw === 'object' ? raw : {}) as { fourEyes?: Partial<MspSettings['fourEyes']>; alerts?: unknown };
   const fe: Partial<MspSettings['fourEyes']> = input.fourEyes ?? {};
-  const minObjects = Number(fe.minObjects);
   return {
     fourEyes: {
       enabled: fe.enabled === true,
-      minObjects: Number.isInteger(minObjects) && minObjects >= 0 && minObjects <= 10000 ? minObjects : DEFAULT_MSP_SETTINGS.fourEyes.minObjects,
+      minObjects: intInRange(fe.minObjects, 0, 10000, DEFAULT_MSP_SETTINGS.fourEyes.minObjects),
       jobTypes: Array.isArray(fe.jobTypes) ? fe.jobTypes.filter((t): t is string => typeof t === 'string' && /^[a-z0-9.-]{3,60}$/.test(t)).slice(0, 100) : DEFAULT_MSP_SETTINGS.fourEyes.jobTypes,
     },
+    alerts: normalizeAlerts(input.alerts),
   };
 }
 

@@ -8,6 +8,13 @@ Alle nennenswerten Aenderungen an ZeroStress Cockpit. Format angelehnt an
 
 ### Hinzugefuegt
 
+- Betriebs-Alerts (Einstellungen, nur Owner, Standard aus): veraltete
+  Software laut winget-Katalog ab N Geraeten, Postfach ab N Prozent der
+  Sendesperre (ab 100 Prozent hoch), laufende Azure-VMs ausserhalb der
+  Arbeitszeit (Zeitfenster, Zeitzone, Wochenende, Ausnahme fuer
+  Sitzungshosts und Tag). Auswertung im Alert-Takt hoechstens stuendlich
+  je Tenant, sofort ueber "Jetzt auswerten"; gleiche Liste und Mail wie
+  die Anmelde-Alerts.
 - Tenant-Sichtbarkeit je Konto: Owner sehen alle Tenants, Engineer und
   Nur-lesen nur zugewiesene (Einstellungen > Team, nur Owner, Audit
   `team.update`). Gilt fuer Tenantliste, Tenantwechsel (fremder Tenant:

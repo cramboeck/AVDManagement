@@ -176,6 +176,26 @@ export interface MspSettings {
     // Jobtypen, die immer eine zweite Freigabe brauchen
     jobTypes: string[];
   };
+  // Betriebs-Alerts: Schwellen fuer Regeln, die nicht Anmeldungen, sondern den Betrieb betreffen
+  alerts: MspAlertSettings;
+}
+
+export interface MspAlertSettings {
+  // Veraltete Software laut winget-Katalog ab so vielen Geraeten je Programm
+  outdatedSoftware: { enabled: boolean; minDevices: number };
+  // Postfach ueber so viel Prozent der Sendesperre
+  mailboxQuota: { enabled: boolean; percent: number };
+  // Azure-VMs, die ausserhalb der Arbeitszeit laufen (Stunden in der angegebenen Zeitzone)
+  vmOutsideHours: {
+    enabled: boolean;
+    startHour: number;
+    endHour: number;
+    timeZone: string;
+    weekdaysOnly: boolean;
+    excludeSessionHosts: boolean;
+    // VMs mit diesem Tag (Name, beliebiger Wert) werden nicht gemeldet
+    excludeTag: string;
+  };
 }
 
 // Audit-Ergebnis
@@ -1243,7 +1263,17 @@ export interface RemoteSupportMatch {
 export type AlertSeverity_ = 'high' | 'medium' | 'low';
 export type AlertStatus = 'open' | 'acknowledged' | 'resolved';
 
-export type AnomalyRuleId = 'failed-burst' | 'password-spray' | 'success-after-failures' | 'country-hop' | 'legacy-auth-success' | 'risky-success' | 'blocked-software';
+export type AnomalyRuleId =
+  | 'failed-burst'
+  | 'password-spray'
+  | 'success-after-failures'
+  | 'country-hop'
+  | 'legacy-auth-success'
+  | 'risky-success'
+  | 'blocked-software'
+  | 'outdated-software'
+  | 'mailbox-quota'
+  | 'vm-outside-hours';
 
 export interface AnomalyFinding {
   ruleId: AnomalyRuleId;

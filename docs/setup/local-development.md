@@ -345,6 +345,29 @@ Partnertenant `Mail.Send`; sinnvoll ist eine Exchange Application Access
 Policy, die den Versand auf dieses eine Postfach begrenzt. Die Mail enthaelt
 Kontonamen und geht deshalb nur an interne Adressen.
 
+## Betriebs-Alerts (Einstellungen)
+
+Drei Regeln ueber Bestandsdaten, alle standardmaessig aus, Schwellen unter
+**Einstellungen > Betriebs-Alerts** (nur Owner, Audit `settings.update`):
+
+- **Veraltete Software**: Programme mit Katalogstand "veraltet" auf
+  mindestens N Geraeten (Standard 5), Quelle ist der Software-Snapshot mit
+  winget-Abgleich. Fingerabdruck je Programm und Katalogversion, ein
+  geschlossener Alert kommt erst mit der naechsten Version wieder.
+- **Postfach nahe der Sendesperre**: Belegung ab N Prozent (Standard 90,
+  ab 100 Prozent Stufe hoch), Quelle ist der Mail-Snapshot aus den
+  Graph-Berichten (etwa 48 Stunden Verzug). Tenants mit verborgenen Namen
+  in Berichten werden uebersprungen. Fingerabdruck je Postfach und Monat.
+- **VM ausserhalb der Arbeitszeit**: laufende Azure-VMs ausserhalb des
+  Zeitfensters (Standard 7 bis 19 Uhr Europe/Berlin, Wochenende komplett
+  ausserhalb), Sitzungshosts und VMs mit dem Ausnahme-Tag (Standard
+  `zsc-always-on`) werden nicht gemeldet. ARM wird nur ausserhalb der
+  Arbeitszeit abgefragt. Fingerabdruck je VM und Tag.
+
+Ausgewertet wird im Alert-Takt, aber hoechstens einmal je Stunde und
+Tenant; "Jetzt auswerten" auf der Alert-Seite laeuft sofort. Treffer
+landen in derselben Liste und derselben Mail wie die Anmelde-Alerts.
+
 ## Best-Practice-Checks (Sicherheit > Best Practices)
 
 Ein eigener Katalog aus oeffentlichen Microsoft-Empfehlungen, keine

@@ -1,12 +1,12 @@
 /**
- * MSP-Einstellungen: Vier-Augen-Prinzip
+ * MSP-Einstellungen: Vier-Augen-Prinzip, Betriebs-Alerts, Team, Worker-Token
  */
 
 import { randomUUID } from 'node:crypto';
 import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
-import { getAllRegisteredJobs } from '@zerostress/core';
+import { getAllRegisteredJobs, isValidTimeZone } from '@zerostress/core';
 import { authMiddleware, requireRole } from '../middleware/auth.js';
 import { getMspSettings, updateMspSettings } from '../services/msp-settings.js';
 import { DrizzleAuditLogger } from '../services/audit-logger.js';
@@ -119,6 +119,19 @@ const schema = z.object({
     enabled: z.boolean(),
     minObjects: z.number().int().min(0).max(10000),
     jobTypes: z.array(z.string().regex(/^[a-z0-9.-]{3,60}$/)).max(100),
+  }),
+  alerts: z.object({
+    outdatedSoftware: z.object({ enabled: z.boolean(), minDevices: z.number().int().min(1).max(10000) }),
+    mailboxQuota: z.object({ enabled: z.boolean(), percent: z.number().int().min(50).max(100) }),
+    vmOutsideHours: z.object({
+      enabled: z.boolean(),
+      startHour: z.number().int().min(0).max(23),
+      endHour: z.number().int().min(1).max(24),
+      timeZone: z.string().min(1).max(64).refine(isValidTimeZone, 'Unbekannte Zeitzone'),
+      weekdaysOnly: z.boolean(),
+      excludeSessionHosts: z.boolean(),
+      excludeTag: z.string().max(100),
+    }),
   }),
 });
 

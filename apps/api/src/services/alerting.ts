@@ -206,6 +206,13 @@ export async function runAlertTick(): Promise<number> {
     } catch (error) {
       console.error(`Alert evaluation failed for tenant ${t.id}:`, error instanceof Error ? error.message : String(error));
     }
+    try {
+      // Spaet geladen, weil der Betriebsdienst selbst storeFindings/notify aus dieser Datei nutzt
+      const { evaluateOperationalAlerts } = await import('./operational-alerts.js');
+      created += (await evaluateOperationalAlerts(t)).length;
+    } catch (error) {
+      console.error(`Operational alert evaluation failed for tenant ${t.id}:`, error instanceof Error ? error.message : String(error));
+    }
   }
   return created;
 }

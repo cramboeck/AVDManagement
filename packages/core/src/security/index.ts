@@ -5,3 +5,4 @@
 export * from './checks.js';
 export * from './anomaly-rules.js';
 export * from './firewall.js';
+export * from './operational-rules.js';
