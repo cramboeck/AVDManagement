@@ -75,12 +75,15 @@ Konfiguration:
 ## Fehlersuche
 
 - "The term 'Get-FileHash' is not recognized" oder "module could not be
-  loaded" fuer `Microsoft.PowerShell.Security`: auf dieser Maschine laedt
-  PowerShell keine Skriptmodule. Der Worker kommt seit dieser Version ohne
-  sie aus, andere Werkzeuge nicht. Ursache pruefen mit
-  `Get-ExecutionPolicy -List` (sollte RemoteSigned oder Bypass sein) und
-  `$env:PSModulePath -split ';'` (muss
-  `C:\Windows\System32\WindowsPowerShell\v1.0\Modules` enthalten).
+  loaded" fuer `Microsoft.PowerShell.Security`: meist stehen die Modulpfade
+  von PowerShell 7 (`C:\Program Files\PowerShell\7\Modules`) vorn in
+  `PSModulePath` einer 5.1-Sitzung, etwa weil das Fenster aus pwsh oder
+  einem VS-Code-Terminal heraus gestartet wurde oder die Variable
+  systemweit so gesetzt ist. 5.1 findet dann die 7er-Module zuerst und kann
+  sie nicht laden. Die Worker-Skripte entfernen diese Pfade fuer ihren
+  eigenen Prozess; fuer alles andere ein frisches "Windows PowerShell" aus
+  dem Startmenue nehmen oder die Pfade aus der System-Umgebungsvariable
+  `PSModulePath` streichen (PowerShell 7 haengt sie zur Laufzeit selbst an).
 - "Unable to connect to the remote server" nach erfolgreichem Ping: die
   API ist nicht mehr erreichbar (Neustart nach Dateiaenderung oder
   Absturz). Der Worker versucht es mit wachsendem Abstand weiter.

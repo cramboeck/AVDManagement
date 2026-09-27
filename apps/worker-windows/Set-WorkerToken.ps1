@@ -16,6 +16,14 @@ param(
 Set-StrictMode -Version 2.0
 $ErrorActionPreference = 'Stop'
 
+# Modulpfade von PowerShell 7 aus einer 5.1-Sitzung entfernen: sonst findet 5.1
+# die 7er-Fassung von Microsoft.PowerShell.Security/Utility zuerst und kann sie
+# nicht laden (Get-ExecutionPolicy, Get-FileHash, ConvertFrom-SecureString fehlen)
+if ($PSVersionTable.PSVersion.Major -le 5) {
+    $cleanPaths = @($env:PSModulePath -split ';' | Where-Object { $_ -and ($_ -notlike '*\Program Files\PowerShell\*') })
+    $env:PSModulePath = ($cleanPaths -join ';')
+}
+
 # DPAPI direkt ueber .NET statt ConvertFrom-SecureString: das Modul
 # Microsoft.PowerShell.Security laesst sich auf manchen Systemen nicht laden
 # (Ausfuehrungsrichtlinie, beschaedigter PSModulePath), ProtectedData braucht kein Modul.
