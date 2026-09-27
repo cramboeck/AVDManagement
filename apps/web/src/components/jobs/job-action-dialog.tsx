@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import clsx from 'clsx';
-import { api } from '@/lib/api';
+import { api, ApiError } from '@/lib/api';
 import { useTenant } from '@/hooks/use-tenant';
 import { useJobTracker } from '@/hooks/use-job-tracker';
 import { ErrorBanner } from '@/components/ui/error-state';
@@ -126,6 +126,10 @@ export function JobActionDialog({
       queryClient.invalidateQueries({ queryKey: ['job', activeTenant?.id, jobId] });
     } catch (err) {
       setError(err as Error);
+      // Abgelaufene Vorschau: die API hat sie neu erzeugt, also den Job neu laden und erneut zeigen
+      if (err instanceof ApiError && err.problem.code === 'PREVIEW_EXPIRED') {
+        queryClient.invalidateQueries({ queryKey: ['job', activeTenant?.id, jobId] });
+      }
     } finally {
       setIsApproving(false);
     }

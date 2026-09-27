@@ -235,6 +235,8 @@ export interface ProblemDetails {
   detail?: string;
   instance?: string;
   correlationId?: string;
+  // Maschinenlesbarer Fehlercode (z. B. PREVIEW_EXPIRED), wenn die Oberflaeche darauf reagieren soll
+  code?: string;
 }
 
 // Session-Daten

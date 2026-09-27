@@ -33,6 +33,8 @@ export interface JobQueueConfig {
 
 // Eine zweite Person braucht Zeit; die Vorschau gilt dann laenger als fuenf Minuten
 export const SECOND_APPROVAL_WINDOW_MS = 4 * 60 * 60 * 1000;
+// Gueltigkeit einer Vorschau bis zur ersten Freigabe; danach wird sie neu erzeugt statt den Job zu verwerfen
+export const PREVIEW_TTL_MS = 15 * 60 * 1000;
 
 export interface JobStore {
   create(job: Job): Promise<void>;
@@ -133,7 +135,7 @@ export class JobQueue {
       await this.jobStore.update(id, {
         preview: {
           ...preview,
-          expiresAt: new Date(Date.now() + 5 * 60 * 1000),
+          expiresAt: new Date(Date.now() + PREVIEW_TTL_MS),
         },
         secondApproval,
       });
@@ -163,7 +165,12 @@ export class JobQueue {
     }
 
     if (job.preview?.expiresAt && new Date(job.preview.expiresAt) < new Date()) {
-      throw new JobError(jobId, 'PREVIEW_EXPIRED', 'Preview has expired', false);
+      if (job.status === 'pending_approval') {
+        // Vorschau frisch erzeugen, damit die Freigabe auf dem aktuellen Stand erfolgt
+        await this.refreshPreview(jobId);
+        throw new JobError(jobId, 'PREVIEW_EXPIRED', 'Die Vorschau war abgelaufen und wurde neu erstellt. Bitte pruefen und erneut freigeben.', false);
+      }
+      throw new JobError(jobId, 'PREVIEW_EXPIRED', 'Die Vorschau fuer die zweite Freigabe ist abgelaufen; der Job muss neu angelegt werden.', false);
     }
 
     const approvals = [...(job.approvals ?? []), { userId, email: userEmail, at: new Date().toISOString() }];
@@ -186,6 +193,23 @@ export class JobQueue {
     await this.jobStore.update(jobId, { status: 'queued', approvals });
     await this.enqueue({ ...job, status: 'queued', approvals });
 
+    return (await this.jobStore.findById(jobId))!;
+  }
+
+  /**
+   * Vorschau eines wartenden Jobs neu erzeugen (abgelaufen oder auf Wunsch).
+   */
+  async refreshPreview(jobId: JobId): Promise<Job> {
+    const job = await this.jobStore.findById(jobId);
+    if (!job) throw new JobError(jobId, 'NOT_FOUND', 'Job not found', false);
+    if (job.status !== 'pending_approval') {
+      throw new JobError(jobId, 'INVALID_STATE', `Cannot refresh preview in status '${job.status}'`, false);
+    }
+    const registered = getRegisteredJob(job.type);
+    if (!registered?.previewGenerator) return job;
+    const preview = await this.generatePreview(job, registered.previewGenerator);
+    const secondApproval = this.approvalPolicy ? await this.approvalPolicy(job, preview) : { required: false, reason: null };
+    await this.jobStore.update(jobId, { preview: { ...preview, expiresAt: new Date(Date.now() + PREVIEW_TTL_MS) }, secondApproval });
     return (await this.jobStore.findById(jobId))!;
   }
 

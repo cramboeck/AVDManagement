@@ -149,6 +149,11 @@ Alle nennenswerten Aenderungen an ZeroStress Cockpit. Format angelehnt an
 
 ### Geaendert
 
+- Vorschau gilt 15 statt 5 Minuten. Laeuft sie vor der Freigabe ab,
+  erzeugt die API sie neu und bittet um erneute Pruefung, statt den Job
+  mit "Preview has expired" liegen zu lassen; Dialog und Jobs-Seite
+  laden den Job dann automatisch nach.
+
 - Build- und Exchange-Protokolle: Zeilen, die der Worker waehrend des Laufs
   gemeldet hat, stehen nach dem Abschluss nicht mehr doppelt; die
   Groessenangabe beim Download entfaellt, wenn sie unbekannt ist.

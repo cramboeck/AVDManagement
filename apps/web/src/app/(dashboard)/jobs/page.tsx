@@ -87,8 +87,17 @@ export default function JobsPage() {
     },
     onError: (err: Error) => {
       setApproveError(err);
+      // Abgelaufene Vorschau wurde von der API neu erzeugt: Liste und Auswahl aktualisieren
+      queryClient.invalidateQueries({ queryKey: ['jobs', activeTenant?.id] });
     },
   });
+
+  // Ausgewaehlten Job mit der aktuellen Liste synchron halten (Status, Vorschau)
+  useEffect(() => {
+    if (!selectedJob || !data?.items) return;
+    const fresh = data.items.find((j) => j.id === selectedJob.id);
+    if (fresh && fresh !== selectedJob) setSelectedJob(fresh);
+  }, [data, selectedJob]);
 
   if (tenantLoading) {
     return <LoadingTable />;

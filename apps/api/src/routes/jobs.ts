@@ -254,6 +254,7 @@ app.post('/:jobId/approve', requireRole('engineer'), async (c) => {
           type: 'https://api.zerostress.io/problems/job-error',
           title: (error as Error).message,
           status: 409,
+          code: (error as { errorCode?: string }).errorCode,
         },
         409
       );
