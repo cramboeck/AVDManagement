@@ -2,6 +2,7 @@
  * Job-Queue mit BullMQ
  */
 
+import { logThrottled } from '../errors.js';
 import { Queue, Worker, Job as BullJob } from 'bullmq';
 import type { Redis } from 'ioredis';
 import type {
@@ -370,7 +371,7 @@ export class JobQueue {
 
     // Ohne Listener verschluckt BullMQ Verbindungsfehler; der Worker steht dann still
     this.worker.on('error', (error: Error) => {
-      console.error('Job worker error:', error.message);
+      logThrottled('Job worker error', error);
     });
     this.worker.on('failed', (bullJob, error: Error) => {
       console.error(`Job ${bullJob?.id ?? 'unknown'} failed:`, error.message);

@@ -6,7 +6,7 @@
  */
 
 import { Redis } from 'ioredis';
-import { JobQueue, registerIdentityJobs, registerAvdJobs, registerDeviceJobs, registerScriptJobs, registerAvdScriptJobs, registerAppJobs, registerTempAdminJobs, registerGroupJobs, registerAppPublishJobs, registerMailboxJobs, registerWingetJobs, registerWingetBulkJob, registerExchangeJobs, registerVmJobs, evaluateFourEyes, SECOND_APPROVAL_WINDOW_MS } from '@zerostress/core';
+import { JobQueue, registerIdentityJobs, registerAvdJobs, registerDeviceJobs, registerScriptJobs, registerAvdScriptJobs, registerAppJobs, registerTempAdminJobs, registerGroupJobs, registerAppPublishJobs, registerMailboxJobs, registerWingetJobs, registerWingetBulkJob, registerExchangeJobs, registerVmJobs, evaluateFourEyes, SECOND_APPROVAL_WINDOW_MS, logThrottled } from '@zerostress/core';
 import { mailboxOperations } from './mailboxes.js';
 import { exchangeOperations } from './exchange.js';
 import { DrizzleJobStore } from './job-store.js';
@@ -34,7 +34,7 @@ export function getJobQueue(): JobQueue {
       maxRetriesPerRequest: null,
     });
     redis.on('error', (error: Error) => {
-      console.error('Redis connection error:', error.message);
+      logThrottled('Redis connection error', error);
     });
 
     registerIdentityJobs(getIdentityProvider());

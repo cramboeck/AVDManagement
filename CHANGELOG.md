@@ -149,6 +149,10 @@ Alle nennenswerten Aenderungen an ZeroStress Cockpit. Format angelehnt an
 
 ### Geaendert
 
+- API-Protokoll: Verbindungsfehler zu Redis und Postgres nennen den Code
+  (ECONNREFUSED) statt einer leeren Meldung und erscheinen je Quelle
+  hoechstens einmal pro Minute statt alle paar Sekunden.
+
 - Vorschau gilt 15 statt 5 Minuten. Laeuft sie vor der Freigabe ab,
   erzeugt die API sie neu und bittet um erneute Pruefung, statt den Job
   mit "Preview has expired" liegen zu lassen; Dialog und Jobs-Seite

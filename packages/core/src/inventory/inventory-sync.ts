@@ -12,6 +12,7 @@
  * InventorySyncService haengt sie an BullMQ.
  */
 
+import { logThrottled } from '../errors.js';
 import { Queue, Worker, type Job as BullJob } from 'bullmq';
 import type { Redis } from 'ioredis';
 import type {
@@ -366,7 +367,7 @@ export class InventorySyncService {
       { connection: this.queue.opts.connection as Redis, concurrency: this.concurrency }
     );
     this.worker.on('error', (error: Error) => {
-      console.error('Inventory worker error:', error.message);
+      logThrottled('Inventory worker error', error);
     });
 
     await this.queue.upsertJobScheduler('inventory-tick', { every: this.tickEveryMs }, { name: 'tick', data: { type: 'tick' } });

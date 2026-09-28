@@ -8,7 +8,7 @@
 
 import { Redis } from 'ioredis';
 import { and, eq } from 'drizzle-orm';
-import { InventorySyncService, INVENTORY_KINDS, type SyncTarget } from '@zerostress/core';
+import { InventorySyncService, INVENTORY_KINDS, type SyncTarget, logThrottled } from '@zerostress/core';
 import type {
   AppInventory,
   Device,
@@ -48,7 +48,7 @@ export function getInventoryService(): InventorySyncService {
   if (!service) {
     const redis = new Redis(process.env.REDIS_URL ?? 'redis://localhost:6379', { maxRetriesPerRequest: null });
     redis.on('error', (error: Error) => {
-      console.error('Redis connection error (inventory):', error.message);
+      logThrottled('Redis connection error (inventory)', error);
     });
 
     service = new InventorySyncService({

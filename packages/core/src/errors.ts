@@ -171,3 +171,33 @@ export class JobError extends AppError {
     super(message, correlationId);
   }
 }
+
+
+/**
+ * Lesbarer Text fuer Verbindungsfehler: AggregateError von Node (ECONNREFUSED
+ * auf ::1 und 127.0.0.1) hat eine leere message, der Code steht daneben.
+ */
+export function describeError(error: unknown): string {
+  if (!(error instanceof Error)) return String(error);
+  const code = (error as { code?: string }).code;
+  const inner = (error as { errors?: unknown[] }).errors;
+  const innerText = Array.isArray(inner) && inner.length > 0 ? inner.map((e) => (e instanceof Error ? e.message : String(e))).join('; ') : '';
+  const text = error.message || innerText || error.name;
+  return code && !text.includes(code) ? `${code}: ${text}` : text;
+}
+
+const lastLogged = new Map<string, number>();
+
+/**
+ * Wiederholte Meldungen (z. B. Redis nicht erreichbar, alle paar Sekunden)
+ * hoechstens einmal je Minute und Quelle ausgeben.
+ */
+export function logThrottled(source: string, error: unknown, everyMs = 60 * 1000): void {
+  const text = describeError(error);
+  const key = `${source}|${text}`;
+  const now = Date.now();
+  const last = lastLogged.get(key) ?? 0;
+  if (now - last < everyMs) return;
+  lastLogged.set(key, now);
+  console.error(`${source}: ${text}`);
+}

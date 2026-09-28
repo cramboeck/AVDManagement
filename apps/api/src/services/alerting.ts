@@ -12,7 +12,7 @@ import { randomUUID } from 'node:crypto';
 import { Redis } from 'ioredis';
 import { Queue, Worker } from 'bullmq';
 import { and, desc, eq, inArray, sql } from 'drizzle-orm';
-import { evaluateSignIns, GraphClient } from '@zerostress/core';
+import { evaluateSignIns, GraphClient, logThrottled } from '@zerostress/core';
 import type { Alert, AlertStats, AlertStatus, AnomalyFinding, TenantId } from '@zerostress/types';
 import { db, alerts, managedTenants } from '../db/index.js';
 import { getIdentityProvider, getTokenProvider, rememberMicrosoftTenantId } from './microsoft-clients.js';
@@ -180,7 +180,7 @@ let worker: Worker | null = null;
 export async function startAlerting(): Promise<void> {
   if (worker) return;
   const redis = new Redis(process.env.REDIS_URL ?? 'redis://localhost:6379', { maxRetriesPerRequest: null });
-  redis.on('error', (error: Error) => console.error('Redis connection error (alerts):', error.message));
+  redis.on('error', (error: Error) => logThrottled('Redis connection error (alerts)', error));
   queue = new Queue('alerts', { connection: redis, defaultJobOptions: { attempts: 1, removeOnComplete: true, removeOnFail: true } });
   worker = new Worker(
     'alerts',
@@ -189,7 +189,7 @@ export async function startAlerting(): Promise<void> {
     },
     { connection: redis, concurrency: 1 }
   );
-  worker.on('error', (error: Error) => console.error('Alert worker error:', error.message));
+  worker.on('error', (error: Error) => logThrottled('Alert worker error', error));
   await queue.upsertJobScheduler('alert-tick', { every: TICK_MS }, { name: 'tick', data: {} });
 }
 
