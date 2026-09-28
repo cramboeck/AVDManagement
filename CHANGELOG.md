@@ -149,6 +149,12 @@ Alle nennenswerten Aenderungen an ZeroStress Cockpit. Format angelehnt an
 
 ### Geaendert
 
+- Login-Callback: im Dev-Modus lief der Abschluss durch React StrictMode
+  doppelt; der zweite Lauf fand den Code-Verifier nicht mehr und meldete
+  "Invalid state or missing code verifier", obwohl die Anmeldung
+  durchging. Der Callback laeuft jetzt genau einmal, die Konsolenmeldung
+  nennt Origin und Ursache.
+
 - API-Protokoll: Verbindungsfehler zu Redis und Postgres nennen den Code
   (ECONNREFUSED) statt einer leeren Meldung und erscheinen je Quelle
   hoechstens einmal pro Minute statt alle paar Sekunden.

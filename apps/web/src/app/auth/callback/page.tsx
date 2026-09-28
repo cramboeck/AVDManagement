@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { handleCallback } from '@/lib/auth';
 
@@ -10,12 +10,17 @@ function AuthCallback() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [error, setError] = useState<string | null>(null);
+  // StrictMode fuehrt den Effekt im Dev-Modus doppelt aus; der zweite Lauf faende
+  // den Code-Verifier nicht mehr und meldete faelschlich einen Fehler
+  const startedRef = useRef(false);
 
   useEffect(() => {
     if (DEV_AUTH_BYPASS) {
       router.replace('/');
       return;
     }
+    if (startedRef.current) return;
+    startedRef.current = true;
 
     const code = searchParams.get('code');
     const state = searchParams.get('state');

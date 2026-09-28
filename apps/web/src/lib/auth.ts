@@ -70,7 +70,9 @@ export async function handleCallback(code: string, state: string): Promise<boole
   const codeVerifier = sessionStorage.getItem('auth_code_verifier');
 
   if (state !== savedState || !codeVerifier) {
-    console.error('Invalid state or missing code verifier');
+    // sessionStorage gilt je Origin: Login auf localhost, Rueckkehr auf 127.0.0.1 oder
+    // die LAN-IP findet den Verifier nicht. Oder die Callback-Seite wurde neu geladen.
+    console.error(`Login callback rejected: state ${savedState ? (state === savedState ? 'matches' : 'differs') : 'missing'}, verifier ${codeVerifier ? 'present' : 'missing'} for origin ${window.location.origin}`);
     return false;
   }
 
