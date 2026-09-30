@@ -13,6 +13,7 @@ import { JobActionDialog } from '@/components/jobs/job-action-dialog';
 import { formatDateTime } from '@/components/identity/sign-in-table';
 import { ScriptResultView, wingetUpdatesFrom, wingetInventoryFrom, type WingetUpdate } from '@/components/devices/scripts-tab';
 import { WingetInstallDialog, type WingetTarget } from '@/components/devices/winget-install-dialog';
+import { AppUninstallDialog, type AppUninstallTarget } from '@/components/devices/app-uninstall-dialog';
 import type { AppPackage, DetectedApp, Device, DeviceSoftwareInventory, Job, ScriptRunResult, WingetCatalogEntry } from '@zerostress/types';
 
 function normalise(value: string): string {
@@ -81,6 +82,11 @@ export function matchCatalog(app: DetectedApp, baseSet: WingetCatalogEntry[], pa
   return best ? { id: best.entry.id, name: best.entry.name, packageId: null, packageVersion: null } : null;
 }
 
+// Store-/MSIX-Pakete melden Intune und Defender mit Paketnamen wie 5319275A.WhatsAppDesktop
+function isStorePackageName(name: string): boolean {
+  return /^[A-Za-z0-9]+\.[A-Za-z0-9.]+$/.test(name) && !name.includes(' ') && /^\d|^[A-Z0-9]{6,}\./.test(name);
+}
+
 function isRuntimeId(id: string, prefixes: string[]): boolean {
   const lower = id.toLowerCase();
   return prefixes.some((p) => lower.startsWith(p.toLowerCase()));
@@ -118,6 +124,7 @@ export function SoftwareTab({ base, tenantId, device }: { base: string; tenantId
   const queryClient = useQueryClient();
   const [checking, setChecking] = useState<'winget-updates' | 'winget-inventory' | null>(null);
   const [target, setTarget] = useState<WingetTarget | null>(null);
+  const [uninstall, setUninstall] = useState<AppUninstallTarget | null>(null);
   const [pickedBase, setPickedBase] = useState('');
   const managedDeviceId = device.intune?.managedDeviceId ?? null;
 
@@ -205,8 +212,17 @@ export function SoftwareTab({ base, tenantId, device }: { base: string; tenantId
         accessor: () => '',
         searchable: false,
         cell: (a) =>
-          managedDeviceId && (a.update || a.catalog || a.wingetId) ? (
+          managedDeviceId ? (
             <div className="flex flex-wrap gap-1">
+              {!a.wingetId && (
+                <button
+                  onClick={() => setUninstall({ displayName: a.displayName, version: a.version, publisher: a.publisher, kind: isStorePackageName(a.displayName) ? 'appx' : 'registry' })}
+                  className="rounded-md border border-destructive/40 px-2 py-0.5 text-xs text-destructive hover:bg-destructive/10"
+                  title={isStorePackageName(a.displayName) ? 'Store-/MSIX-Paket fuer alle Benutzer entfernen' : 'Ueber den Registry-Eintrag deinstallieren (ohne winget)'}
+                >
+                  Deinstallieren
+                </button>
+              )}
               {a.update && (
                 <button onClick={() => setTarget({ packageId: a.update!.id, mode: 'upgrade', displayName: a.displayName, installedVersion: a.update!.installed || a.version, availableVersion: a.update!.available })} className="rounded-md border px-2 py-0.5 text-xs hover:bg-accent">
                   Update installieren
@@ -396,6 +412,18 @@ export function SoftwareTab({ base, tenantId, device }: { base: string; tenantId
           renderResult={(job) => <ScriptResultView result={job.result as unknown as ScriptRunResult | null} error={job.error} />}
           onClose={() => setChecking(null)}
           onCompleted={refreshJobs}
+        />
+      )}
+      {uninstall && (
+        <AppUninstallDialog
+          tenantId={tenantId}
+          device={device}
+          target={uninstall}
+          onClose={() => setUninstall(null)}
+          onCompleted={() => {
+            refreshJobs();
+            queryClient.invalidateQueries({ queryKey: ['device-software', tenantId, device.id] });
+          }}
         />
       )}
       {target && (

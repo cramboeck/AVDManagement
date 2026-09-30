@@ -488,6 +488,21 @@ jedes Kundentenants.
 | Lokale Administratoren | nur lesend, **personenbezogen** | Mitglieder der Gruppe Administratoren mit Herkunft, Klasse, SID, Status; Entra-Konten verlinkt |
 | Akkuzustand | nur lesend | Gesundheit (Vollladung zu Auslegung), Zyklen, Ladestand, Status je Akku; Desktops und VMs melden "kein Akku" |
 
+**Deinstallieren ohne winget** (Tab Software, Zeilen ohne winget-Id): Job
+`device.app-uninstall` mit Vorschau und Audit. Das Einmalskript sucht den
+Eintrag unter den Uninstall-Schluesseln (64 Bit, 32 Bit, geladene
+Benutzerprofile) mit genau diesem Anzeigenamen, bei mehreren Treffern mit
+der Version, und deinstalliert still: MSI per `msiexec /x /qn`,
+`QuietUninstallString`, Inno Setup, NSIS und InstallShield mit ihren
+Schaltern (Engine wird an Dateinamen und Signatur im Deinstaller erkannt).
+Ein EXE-Deinstaller ohne bekannten stillen Schalter wird nicht gestartet;
+der Job meldet den gefundenen Befehl, und im Dialog lassen sich Argumente
+nachreichen. Zeitlimit 15 Minuten, danach wird der Deinstaller beendet.
+Store-/MSIX-Pakete (Paketnamen wie `5319275A.WhatsAppDesktop`) entfernt
+`Remove-AppxPackage -AllUsers` samt Bereitstellung. Exit-Codes 3010 und
+1641 gelten als Erfolg mit Neustartbedarf, 1605 als "war nicht
+installiert".
+
 ### Admin auf Zeit (Ersatz fuer Endpoint Privilege Management)
 
 Im Geraetekopf gewaehrt **Admin auf Zeit** einem Konto (Entra als

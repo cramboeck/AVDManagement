@@ -337,6 +337,33 @@ app.post('/winget-install', requireRole('engineer'), requireConnectedTenant, val
   return c.json(job, 202);
 });
 
+// Deinstallation ohne winget: Registry-Eintrag oder Appx-Paket
+const appUninstallSchema = z.object({
+  managedDeviceId: z.string().min(1),
+  deviceName: z.string().min(1),
+  displayName: z.string().trim().min(2).max(200),
+  version: z.string().max(60).nullable().default(null),
+  publisher: z.string().max(200).nullable().default(null),
+  kind: z.enum(['registry', 'appx']),
+  extraArgs: z.string().trim().max(200).nullable().default(null),
+  reason: z.string().trim().max(500).nullable().default(null),
+});
+
+app.post('/app-uninstall', requireRole('engineer'), requireConnectedTenant, validate('json', appUninstallSchema), async (c) => {
+  const auth = c.get('auth');
+  const tenant = c.get('tenant');
+  const body = c.req.valid('json');
+  const job = await getJobQueue().createJob({
+    type: 'device.app-uninstall',
+    tenantId: tenant.id,
+    mspId: auth.mspId,
+    userId: auth.user.id,
+    userEmail: auth.user.email,
+    payload: { ...body, targetType: 'device', targetId: body.managedDeviceId, targetDisplayName: `${body.deviceName}: deinstallieren ${body.displayName}` },
+  });
+  return c.json(job, 202);
+});
+
 // Sammelaktion: dasselbe winget-Kommando auf bis zu 25 Geraeten
 const wingetBulkSchema = z.object({
   packageId: z.string().min(3).max(128),

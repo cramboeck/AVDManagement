@@ -11,12 +11,13 @@ import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { isWingetId } from '../apps/winget.js';
 
-export type TemplateId = 'temp-admin-grant' | 'temp-admin-revoke' | 'winget-install';
+export type TemplateId = 'temp-admin-grant' | 'temp-admin-revoke' | 'winget-install' | 'app-uninstall';
 
 const files: Record<TemplateId, string> = {
   'temp-admin-grant': 'temp-admin.grant.ps1',
   'temp-admin-revoke': 'temp-admin.revoke.ps1',
   'winget-install': 'winget-install.ps1',
+  'app-uninstall': 'app-uninstall.ps1',
 };
 
 const WINGET_VERSION_PATTERN = /^[0-9A-Za-z][0-9A-Za-z.+-]{0,39}$/;
@@ -103,4 +104,42 @@ export function renderWingetInstall(input: WingetInstallInput): RenderedTemplate
   if (version && !WINGET_VERSION_PATTERN.test(version)) throw new Error(`Version ungueltig: '${version}'`);
   const content = readTemplate('winget-install').replace('__PACKAGE_ID__', packageId).replace('__MODE__', input.mode).replace('__VERSION__', version ?? '');
   return { id: 'winget-install', content, hash: createHash('sha256').update(content).digest('hex'), packageId, mode: input.mode, version };
+}
+
+export type AppUninstallKind = 'registry' | 'appx';
+
+// Anzeigename wie in Apps und Features: Buchstaben, Ziffern, Leerzeichen und uebliche Satzzeichen;
+// kein Backtick, kein Dollar, keine doppelten Anfuehrungszeichen, kein Zeilenumbruch
+const DISPLAY_NAME_PATTERN = /^[\p{L}\p{N} .,()+_&\/:'!#@\[\]-]{2,200}$/u;
+// Argumente fuer Deinstaller: Schalter, Pfade, Gleichheitszeichen; keine Shell-Operatoren
+const EXTRA_ARGS_PATTERN = /^[A-Za-z0-9 \/=:._\\"'-]{1,200}$/;
+
+export interface AppUninstallInput {
+  displayName: string;
+  version: string | null;
+  kind: AppUninstallKind;
+  extraArgs: string | null;
+}
+
+/**
+ * Deinstallation ohne winget: Anzeigename (exakt), optionale Version, Art
+ * (Registry oder Appx) und optionale Argumente werden geprueft und in das
+ * Einmalskript eingebettet. Einfache Anfuehrungszeichen werden fuer
+ * PowerShell verdoppelt.
+ */
+export function renderAppUninstall(input: AppUninstallInput): RenderedTemplate & { displayName: string; kind: AppUninstallKind; extraArgs: string | null } {
+  const displayName = input.displayName.trim();
+  if (!DISPLAY_NAME_PATTERN.test(displayName) || /[`$"\r\n]/.test(displayName)) throw new Error(`Anzeigename ungueltig oder zu kurz: '${displayName}'`);
+  if (input.kind !== 'registry' && input.kind !== 'appx') throw new Error('Art muss registry oder appx sein');
+  const version = input.version?.trim() || null;
+  if (version && !WINGET_VERSION_PATTERN.test(version)) throw new Error(`Version ungueltig: '${version}'`);
+  const extraArgs = input.extraArgs?.trim() || null;
+  if (extraArgs && (!EXTRA_ARGS_PATTERN.test(extraArgs) || /[|&;<>`$]/.test(extraArgs))) throw new Error('Argumente ungueltig: erlaubt sind Schalter, Pfade und Gleichheitszeichen, keine Shell-Operatoren');
+  const quote = (value: string) => value.replace(/'/g, "''");
+  const content = readTemplate('app-uninstall')
+    .replace('__DISPLAY_NAME__', quote(displayName))
+    .replace('__VERSION__', version ? quote(version) : '')
+    .replace('__KIND__', input.kind)
+    .replace('__EXTRA_ARGS__', extraArgs ? quote(extraArgs) : '');
+  return { id: 'app-uninstall', content, hash: createHash('sha256').update(content).digest('hex'), displayName, kind: input.kind, extraArgs };
 }

@@ -233,7 +233,7 @@ function LatestRun({ job, tenantId }: { job: Job; tenantId: string }) {
   );
 }
 
-const KNOWN_SCHEMAS = new Set(['zsc.update-status/1', 'zsc.update-scan/1', 'zsc.system-info/1', 'zsc.winget-updates/1', 'zsc.winget-inventory/1', 'zsc.winget-install/1', 'zsc.network-info/1', 'zsc.storage-info/1', 'zsc.local-admins/1', 'zsc.battery-info/1']);
+const KNOWN_SCHEMAS = new Set(['zsc.update-status/1', 'zsc.update-scan/1', 'zsc.system-info/1', 'zsc.winget-updates/1', 'zsc.winget-inventory/1', 'zsc.winget-install/1', 'zsc.app-uninstall/1', 'zsc.network-info/1', 'zsc.storage-info/1', 'zsc.local-admins/1', 'zsc.battery-info/1']);
 
 export interface WingetUpdate {
   name: string;
@@ -308,6 +308,7 @@ export function ScriptResultView({ result, error }: { result: ScriptRunResult | 
       {json && schema === 'zsc.winget-updates/1' && <WingetResult data={json} />}
       {json && schema === 'zsc.winget-install/1' && <WingetInstallResult data={json} />}
       {json && schema === 'zsc.winget-inventory/1' && <WingetInventoryResult data={json} />}
+      {json && schema === 'zsc.app-uninstall/1' && <AppUninstallResult data={json} />}
       {json && schema === 'zsc.network-info/1' && <NetworkInfoResult data={json} />}
       {json && schema === 'zsc.storage-info/1' && <StorageInfoResult data={json} />}
       {json && schema === 'zsc.local-admins/1' && <LocalAdminsResult data={json} />}
@@ -753,5 +754,28 @@ function TimingChain({ result }: { result: ScriptRunResult }) {
       Angestossen {dateText(result.requestedAt)} · Geraet hat nach {seconds(reported - requested)} gemeldet
       {Number.isFinite(observed) && <> · in Graph sichtbar nach weiteren {seconds(observed - reported)} (Verzug der Intune-Berichte)</>}
     </p>
+  );
+}
+
+/** Ergebnis der Deinstallation ohne winget: Fund, Methode, Befehl, Exit-Code. */
+function AppUninstallResult({ data }: { data: Record<string, unknown> }) {
+  const matched = (data.matched ?? null) as { name?: string; version?: string; publisher?: string; scope?: string } | null;
+  const method = String(data.method ?? 'none');
+  const methodLabel: Record<string, string> = { msi: 'msiexec /x (MSI)', quiet: 'QuietUninstallString', inno: 'Inno Setup /VERYSILENT', nsis: 'NSIS /S', installshield: 'InstallShield /s', custom: 'Deinstaller mit deinen Argumenten', appx: 'Remove-AppxPackage', none: 'nicht ausgefuehrt' };
+  return (
+    <div className="space-y-2 text-sm">
+      <div className="grid gap-2 sm:grid-cols-3">
+        <Stat label="Gefunden" value={data.found === true ? `${matched?.name ?? ''} ${matched?.version ?? ''}`.trim() || 'ja' : 'nein'} />
+        <Stat label="Methode" value={methodLabel[method] ?? method} />
+        <Stat label="Ergebnis" value={data.success === true ? (data.rebootRequired === true ? 'entfernt, Neustart noetig' : 'entfernt') : typeof data.note === 'string' ? data.note : 'fehlgeschlagen'} />
+      </div>
+      {typeof data.command === 'string' && data.command && (
+        <p className="text-xs text-muted-foreground">
+          Befehl: <span className="font-mono">{data.command}</span>
+          {data.exitCode !== null && data.exitCode !== undefined && <> · Exit-Code {String(data.exitCode)}</>}
+        </p>
+      )}
+      {matched?.scope === 'user' && <p className="text-xs text-warning">Der Eintrag lag in einem Benutzerprofil; Deinstallation im Maschinenkontext kann bei Benutzerinstallationen scheitern.</p>}
+    </div>
   );
 }

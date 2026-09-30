@@ -8,6 +8,14 @@ Alle nennenswerten Aenderungen an ZeroStress Cockpit. Format angelehnt an
 
 ### Hinzugefuegt
 
+- Geraete: Deinstallieren ohne winget (Job `device.app-uninstall`) fuer
+  Software ohne winget-Id: Registry-Eintrag mit exaktem Anzeigenamen,
+  stille Schalter fuer MSI, QuietUninstallString, Inno Setup, NSIS und
+  InstallShield, Store-/MSIX-Pakete per Remove-AppxPackage fuer alle
+  Benutzer; unbekannte Deinstaller werden nicht blind gestartet, Argumente
+  lassen sich im Dialog nachreichen. Vorschau, Audit, Ergebnis mit
+  Methode, Befehl und Exit-Code.
+
 - Anleitung `docs/setup/production-hardening.md`: getrennte
   App-Registrierungen fuer Login und Kundentenants, Zuweisung erforderlich,
   Conditional Access mit phishing-resistenter MFA, Caddy als Reverse Proxy
