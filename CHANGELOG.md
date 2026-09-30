@@ -8,6 +8,11 @@ Alle nennenswerten Aenderungen an ZeroStress Cockpit. Format angelehnt an
 
 ### Hinzugefuegt
 
+- Sicherheits-Header und CSP fuer API und Web (HSTS in Produktion),
+  Rate-Limits je Minute fuer Login, Worker, MCP, Freigaben und die
+  uebrige API mit 429 und Retry-After, Groessenlimits 1 MB fuer JSON und
+  4 GB fuer Uploads; `TRUST_PROXY` fuer die Client-IP hinter einem Proxy.
+
 - Weiterleitungs-Scan: nimmt die Postfachliste aus den Daten des
   Exchange-Workers oder aus dem Verzeichnis (Mitglieder mit
   Exchange-Plan), wenn der Nutzungsbericht Namen verbirgt; vorher

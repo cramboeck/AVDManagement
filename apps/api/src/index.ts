@@ -9,7 +9,9 @@ import { serve } from '@hono/node-server';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
+import { secureHeaders } from 'hono/secure-headers';
 import { errorHandler } from './middleware/error-handler.js';
+import { bodyLimits, createRateLimiter } from './middleware/security.js';
 import { tenantsRouter } from './routes/tenants.js';
 import { usersRouter } from './routes/users.js';
 import { jobsRouter } from './routes/jobs.js';
@@ -45,6 +47,16 @@ const app = new Hono();
 
 // Middleware
 app.use('*', logger());
+// Antworten sind JSON; kein Einbetten, kein Skript, HSTS nur hinter TLS in Produktion
+app.use(
+  '*',
+  secureHeaders({
+    contentSecurityPolicy: { defaultSrc: ["'none'"], frameAncestors: ["'none'"] },
+    strictTransportSecurity: process.env.NODE_ENV === 'production' && process.env.HSTS_DISABLED !== 'true' ? 'max-age=31536000; includeSubDomains' : false,
+    crossOriginResourcePolicy: false,
+    referrerPolicy: 'no-referrer',
+  })
+);
 app.use(
   '*',
   cors({
@@ -56,6 +68,26 @@ app.use(
     credentials: true,
   })
 );
+app.use('*', bodyLimits);
+
+// Rate-Limits: Login streng je IP, Worker je Token, Rest je Token oder IP (siehe middleware/security.ts)
+const authLimiter = createRateLimiter({ name: 'auth', limit: 20, windowMs: 60 * 1000 });
+const workerLimiter = createRateLimiter({ name: 'worker', limit: 300, windowMs: 60 * 1000 });
+const mcpLimiter = createRateLimiter({ name: 'mcp', limit: 120, windowMs: 60 * 1000 });
+const approveLimiter = createRateLimiter({ name: 'approve', limit: 30, windowMs: 60 * 1000 });
+const apiLimiter = createRateLimiter({ name: 'api', limit: 600, windowMs: 60 * 1000 });
+app.use('/auth/*', authLimiter.middleware);
+app.use('/worker/*', workerLimiter.middleware);
+app.use('/mcp', mcpLimiter.middleware);
+app.use('/mcp/*', mcpLimiter.middleware);
+app.post('/tenants/:tenantId/jobs/:jobId/approve', approveLimiter.middleware);
+app.use('/tenants/*', apiLimiter.middleware);
+app.use('/settings/*', apiLimiter.middleware);
+app.use('/settings', apiLimiter.middleware);
+app.use('/packages/*', apiLimiter.middleware);
+app.use('/packages', apiLimiter.middleware);
+app.use('/dashboard', apiLimiter.middleware);
+app.use('/dashboard/*', apiLimiter.middleware);
 
 // Error-Handler
 app.onError(errorHandler);

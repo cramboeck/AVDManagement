@@ -595,6 +595,40 @@ noch als Uebergang akzeptiert und nur, solange genau ein aktiver MSP
 existiert; die Einstellungsseite warnt, solange die Variable gesetzt ist.
 Braucht `npm run db:push` (Tabelle `worker_tokens`).
 
+## Sicherheits-Header, Rate-Limits, Groessenlimits
+
+Die API setzt auf jeder Antwort Security-Header (CSP `default-src 'none'`,
+`frame-ancestors 'none'`, `X-Content-Type-Options`, `Referrer-Policy:
+no-referrer`; HSTS nur mit `NODE_ENV=production`, abschaltbar per
+`HSTS_DISABLED=true`, solange TLS fehlt). Das Web setzt in
+`next.config.js` eine CSP (Skripte und Styles nur von sich selbst,
+Verbindungen nur zur API und zu login.microsoftonline.com, kein Einbetten),
+`X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy` und in
+Produktion HSTS. Im Dev-Modus erlaubt die CSP zusaetzlich `unsafe-eval`
+und WebSockets fuer Hot Reload.
+
+Rate-Limits je Minute, im Speicher der API-Instanz (bei mehreren Instanzen
+muss der Zaehler nach Redis, siehe Backlog):
+
+| Bereich | Limit | Schluessel |
+|---|---|---|
+| `/auth/*` | 20 | Client-IP |
+| `/worker/*` | 300 | Worker-Token (Hash) |
+| `/mcp` | 120 | Bearer-Token (Hash) |
+| Job-Freigabe | 30 | Bearer-Token (Hash) |
+| uebrige API | 600 | Bearer-Token (Hash), sonst Client-IP |
+
+Ueberschreitung antwortet mit 429, Problemtyp `rate-limited`,
+`Retry-After` und `RateLimit-*`-Headern; die Oberflaeche zeigt "Zu viele
+Anfragen". Die Client-IP kommt vom Socket; hinter einem Reverse Proxy
+`TRUST_PROXY=true` setzen, dann zaehlt `X-Forwarded-For`. Fuer Lasttests
+schaltet `RATE_LIMIT_DISABLED=true` alle Limits ab.
+
+Groessenlimits: JSON-Anfragen hoechstens 1 MB (413, Problemtyp
+`payload-too-large`); die Upload-Pfade fuer Installer und Artefakte
+(`PUT /packages/:id/installer|artifact`, `PUT /worker/builds/:id/artifact`)
+erlauben 4 GB.
+
 ## DEV_AUTH_BYPASS
 
 Mit `DEV_AUTH_BYPASS=true` und `NEXT_PUBLIC_DEV_AUTH_BYPASS=true` entfaellt

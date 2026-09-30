@@ -64,3 +64,8 @@ vor dem Bau klar sind.
 | Security-Baselines | Graph policies (CA, Auth-Methoden), Secure Score, DNS | Policy.Read.All | Umgesetzt als Best-Practice-Checks (18 Checks, Erfuellungsgrad, Belege). Offen: tenant-uebergreifende Sicht, Drift ueber Zeit, Checks als Job mit Behebung |
 | Monitoring AVD Ebene 2/3 | Azure Monitor Metrics, Log Analytics | Monitoring Reader | Siehe docs/design/avd-monitoring-concept.md |
 | MCP-Server | eigene API | Entra-Login, Job-Modell | Umgesetzt: `POST /mcp` mit 13 Werkzeugen, Preview und Freigabe als getrennte Schritte, Audit. Offen: Server-Streaming (SSE), Ressourcen statt nur Werkzeuge |
+
+## Betrieb und Sicherheit (Nachtrag)
+
+- Rate-Limit-Zaehler nach Redis, sobald mehr als eine API-Instanz laeuft (heute im Prozessspeicher).
+- Sitzung auf httpOnly-Cookies, Audit append-only, Key Vault: siehe docs/security/review-2026-09-26.md, Abschnitt Offen.
