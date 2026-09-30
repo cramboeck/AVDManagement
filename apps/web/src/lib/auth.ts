@@ -8,7 +8,8 @@
 
 import type { SessionUser } from '@zerostress/types';
 
-const CLIENT_ID = process.env.NEXT_PUBLIC_ENTRA_CLIENT_ID ?? '';
+// Eigene Login-Registrierung (single-tenant, Zuweisung erforderlich), sonst die Tenant-App
+const CLIENT_ID = process.env.NEXT_PUBLIC_ENTRA_LOGIN_CLIENT_ID || process.env.NEXT_PUBLIC_ENTRA_CLIENT_ID || '';
 const TENANT_ID = process.env.NEXT_PUBLIC_ENTRA_TENANT_ID ?? 'common';
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 const DEV_AUTH_BYPASS = process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS === 'true';

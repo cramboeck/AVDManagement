@@ -77,7 +77,8 @@ export const authMiddleware = createMiddleware(async (c, next) => {
   const token = authHeader.slice(7);
 
   try {
-    const claims = await verifyEntraToken(token, [process.env.ENTRA_CLIENT_ID!, 'https://management.azure.com']);
+    const audiences = Array.from(new Set([process.env.ENTRA_CLIENT_ID!, process.env.ENTRA_LOGIN_CLIENT_ID ?? '', 'https://management.azure.com'].filter(Boolean)));
+    const claims = await verifyEntraToken(token, audiences);
     const user = await findOrCreateUser(claims.oid, claims.email, claims.name);
     c.set('auth', { user, mspId: user.mspId, via: 'bearer', accessToken: token, sessionId: null });
     await next();

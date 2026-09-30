@@ -19,6 +19,7 @@ import { SignJWT } from 'jose';
 // Secrets, die aus dem Vault geladen werden, wenn sie in der Umgebung fehlen
 export const VAULT_SECRETS = [
   'ENTRA_CLIENT_SECRET',
+  'ENTRA_LOGIN_CLIENT_SECRET',
   'ENTRA_CLIENT_CERTIFICATE_PEM',
   'JWT_SECRET',
   'RESULT_ENCRYPTION_KEY',
@@ -150,4 +151,15 @@ export async function clientAuthParams(clientId: string, tokenEndpoint: string):
     client_assertion_type: 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer',
     client_assertion: await buildClientAssertion(clientId, tokenEndpoint, credential.certificate),
   };
+}
+
+/** Client-Id der Login-Registrierung; ohne eigene faellt sie auf die Tenant-App zurueck. */
+export function loginClientId(): string {
+  return process.env.ENTRA_LOGIN_CLIENT_ID || process.env.ENTRA_CLIENT_ID || '';
+}
+
+/** Formular-Parameter fuer den Login-Tausch: eigenes Secret der Login-App oder das geteilte Zertifikat/Secret. */
+export async function loginAuthParams(tokenEndpoint: string): Promise<Record<string, string>> {
+  if (process.env.ENTRA_LOGIN_CLIENT_SECRET) return { client_secret: process.env.ENTRA_LOGIN_CLIENT_SECRET };
+  return clientAuthParams(loginClientId(), tokenEndpoint);
 }

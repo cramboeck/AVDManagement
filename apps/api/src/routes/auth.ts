@@ -16,7 +16,7 @@ import { z } from 'zod';
 import { validate } from '../middleware/validate.js';
 import { verifyEntraToken } from '../middleware/auth.js';
 import { clientIp } from '../middleware/security.js';
-import { clientAuthParams, hasClientCredential } from '../services/secrets.js';
+import { hasClientCredential, loginAuthParams, loginClientId } from '../services/secrets.js';
 import { db, managedTenants } from '../db/index.js';
 import { DrizzleAuditLogger } from '../services/audit-logger.js';
 import { verifyConsentState, type ConsentStateClaims } from '../services/consent-state.js';
@@ -32,10 +32,10 @@ const audit = new DrizzleAuditLogger();
 
 // ENV-Variablen werden zur Laufzeit gelesen, nicht beim Import
 function getAuthConfig() {
-  const clientId = process.env.ENTRA_CLIENT_ID;
+  const clientId = loginClientId();
   const tenantId = process.env.ENTRA_TENANT_ID;
 
-  if (!clientId || !tenantId || !hasClientCredential()) {
+  if (!clientId || !tenantId || (!hasClientCredential() && !process.env.ENTRA_LOGIN_CLIENT_SECRET)) {
     throw new Error('ENTRA_CLIENT_ID, ENTRA_TENANT_ID and a client credential (certificate or secret) must be set');
   }
 
@@ -62,7 +62,7 @@ app.post('/token', validate('json', tokenSchema), async (c) => {
 
   const params = new URLSearchParams({
     client_id: config.clientId,
-    ...(await clientAuthParams(config.clientId, config.tokenEndpoint)),
+    ...(await loginAuthParams(config.tokenEndpoint)),
     grant_type: 'authorization_code',
     code,
     redirect_uri,

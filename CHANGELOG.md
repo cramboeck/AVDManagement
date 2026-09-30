@@ -8,6 +8,13 @@ Alle nennenswerten Aenderungen an ZeroStress Cockpit. Format angelehnt an
 
 ### Hinzugefuegt
 
+- Anleitung `docs/setup/production-hardening.md`: getrennte
+  App-Registrierungen fuer Login und Kundentenants, Zuweisung erforderlich,
+  Conditional Access mit phishing-resistenter MFA, Caddy als Reverse Proxy
+  unter einem Host, Datenbank und Secrets, Checkliste vor dem Freischalten.
+  Optionale eigene Login-Registrierung ueber `ENTRA_LOGIN_CLIENT_ID`,
+  `ENTRA_LOGIN_CLIENT_SECRET` und `NEXT_PUBLIC_ENTRA_LOGIN_CLIENT_ID`.
+
 - Audit-Log mit Hash-Kette je MSP (Vorgaenger- und Eintragshash, Sperre je
   MSP beim Schreiben), "Kette pruefen" auf der Audit-Seite fuer Owner;
   `npm run db:harden` legt Trigger gegen UPDATE, DELETE und TRUNCATE auf

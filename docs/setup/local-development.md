@@ -595,6 +595,12 @@ noch als Uebergang akzeptiert und nur, solange genau ein aktiver MSP
 existiert; die Einstellungsseite warnt, solange die Variable gesetzt ist.
 Braucht `npm run db:push` (Tabelle `worker_tokens`).
 
+## Produktivbetrieb
+
+Entra-Registrierungen trennen, Conditional Access mit phishing-resistenter
+MFA, Reverse Proxy mit TLS, Datenbank und Secrets: siehe
+`docs/setup/production-hardening.md` mit Checkliste vor dem Freischalten.
+
 ## Sicherheits-Header, Rate-Limits, Groessenlimits
 
 Die API setzt auf jeder Antwort Security-Header (CSP `default-src 'none'`,
