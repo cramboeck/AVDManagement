@@ -144,6 +144,9 @@ export const auditEntries = pgTable('audit_entries', {
   correlationId: uuid('correlation_id').notNull(),
   ipAddress: varchar('ip_address', { length: 45 }),
   userAgent: text('user_agent'),
+  // Hash-Kette je MSP: Vorgaenger und eigener Hash (null bei Eintraegen vor der Kette)
+  prevHash: varchar('prev_hash', { length: 64 }),
+  entryHash: varchar('entry_hash', { length: 64 }),
 });
 
 // Sync-State fuer Delta-Queries

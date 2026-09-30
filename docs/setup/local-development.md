@@ -654,6 +654,53 @@ Bearer-Tokens von Entra funktionieren weiterhin fuer MCP-Clients und
 Skripte (gleiche Pruefung, ohne Cookie). Braucht `npm run db:push`
 (Tabelle `user_sessions`).
 
+## Audit-Log unveraenderlich
+
+Jeder Audit-Eintrag traegt den SHA-256 seines Vorgaengers (je MSP) und
+seinen eigenen Hash ueber die fachlichen Felder; die API schreibt ihn in
+einer Transaktion mit Sperre je MSP. **Kette pruefen** auf der Audit-Seite
+(nur Owner, `GET /tenants/:id/audit/verify`) rechnet alle Eintraege nach
+und nennt die erste Stelle, an der etwas nicht passt. Eintraege aus der
+Zeit vor der Kette zaehlen als "aeltere ohne Hash". Braucht `npm run
+db:push` (Spalten `audit_entries.prev_hash`, `entry_hash`).
+
+Zusaetzlich schuetzt die Datenbank selbst: `npm run db:harden` legt
+Trigger an, die UPDATE, DELETE und TRUNCATE auf `audit_entries` ablehnen,
+unabhaengig von der Rolle (idempotent, nach jedem `db:push` unschaedlich).
+Fuer Produktion steht in `apps/api/db/harden.sql` das Muster fuer eine
+eigene API-Rolle ohne UPDATE/DELETE auf dem Audit-Log, damit ein
+kompromittierter API-Prozess den Trigger nicht entfernen kann.
+
+## Secrets aus Key Vault, Zertifikat statt Client-Secret
+
+Mit `KEY_VAULT_URL` laedt die API beim Start alle bekannten Secrets, die in
+der Umgebung fehlen, ueber Managed Identity (lokal: Azure CLI-Login) aus dem
+Vault: `ENTRA-CLIENT-SECRET`, `ENTRA-CLIENT-CERTIFICATE-PEM`, `JWT-SECRET`,
+`RESULT-ENCRYPTION-KEY`, `GITHUB-TOKEN`, `ANTHROPIC-API-KEY`, `NVD-API-KEY`,
+`TEAMVIEWER-API-TOKEN`, `WORKER-TOKEN` (Namen mit Bindestrich). Die
+Umgebung hat Vorrang; fehlt ein Secret in beiden, startet die API nicht
+(Anmeldedaten, `JWT_SECRET`) oder die Funktion bleibt aus (optionale).
+`DATABASE_URL` bleibt in der Umgebung, weil die Datenbank vor dem Vault
+gebraucht wird; in Azure ueber App-Service-Key-Vault-Referenz oder
+Managed-Identity-Login an Postgres.
+
+Anmeldung der App-Registrierung an Entra: Zertifikat vor Client-Secret.
+`ENTRA_CLIENT_CERTIFICATE_PEM` (Text) oder `_PATH` (Datei) mit Zertifikat
+und privatem Schluessel; die API bildet daraus `client_assertion` fuer den
+Login-Tausch und uebergibt MSAL Thumbprint und Schluessel fuer die
+app-only-Tokens. Selbstsigniertes Zertifikat erzeugen und in der
+App-Registrierung unter "Zertifikate & Geheimnisse" den oeffentlichen Teil
+hochladen:
+
+```powershell
+openssl req -x509 -newkey rsa:3072 -sha256 -days 730 -nodes -subj "/CN=zerostress-cockpit" -keyout zsc.key -out zsc.crt
+type zsc.crt zsc.key > zsc.pem      # Wert fuer ENTRA_CLIENT_CERTIFICATE_PEM / Key Vault
+```
+
+Der private Schluessel gehoert in den Key Vault, nie ins Repo. In
+Produktion warnt die API beim Start, wenn noch ein Client-Secret in
+Gebrauch ist.
+
 ## DEV_AUTH_BYPASS
 
 Mit `DEV_AUTH_BYPASS=true` und `NEXT_PUBLIC_DEV_AUTH_BYPASS=true` entfaellt

@@ -185,7 +185,7 @@
 | **Auswirkung** | Hoch |
 | **Risiko-Level** | Mittel |
 | **Fruehwarnindikator** | Ungewoehnliche Aktivitaeten im Audit-Log |
-| **Gegenmassnahme** | Vollstaendiges Audit-Log, 4-Augen-Prinzip fuer kritische Aktionen, regelmaessige Log-Review |
+| **Gegenmassnahme** | Vollstaendiges Audit-Log mit Hash-Kette je MSP und Trigger gegen Aendern/Loeschen (`db:harden`), Kettenpruefung durch Owner; Vier-Augen-Prinzip fuer kritische Aktionen; Tenant-Sichtbarkeit je Konto; regelmaessige Log-Review |
 
 ---
 

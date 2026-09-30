@@ -6,6 +6,7 @@
  * passiert ausschliesslich hier, damit keine Route sie vergessen kann.
  */
 
+import { clientCredential } from './secrets.js';
 import { eq } from 'drizzle-orm';
 import {
   TokenProvider,
@@ -59,10 +60,13 @@ let tokenProvider: TokenProvider | null = null;
 
 export function getTokenProvider(): TokenProvider {
   if (!tokenProvider) {
+    const credential = clientCredential();
     tokenProvider = new TokenProvider({
       clientId: process.env.ENTRA_CLIENT_ID!,
-      clientSecret: process.env.ENTRA_CLIENT_SECRET!,
       tenantId: process.env.ENTRA_TENANT_ID!,
+      ...(credential.kind === 'certificate'
+        ? { clientCertificate: { privateKeyPem: credential.certificate.privateKeyPem, thumbprintSha1: credential.certificate.thumbprintSha1, thumbprintSha256: credential.certificate.thumbprintSha256 } }
+        : { clientSecret: credential.clientSecret }),
     });
   }
   return tokenProvider;

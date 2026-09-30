@@ -8,6 +8,15 @@ Alle nennenswerten Aenderungen an ZeroStress Cockpit. Format angelehnt an
 
 ### Hinzugefuegt
 
+- Audit-Log mit Hash-Kette je MSP (Vorgaenger- und Eintragshash, Sperre je
+  MSP beim Schreiben), "Kette pruefen" auf der Audit-Seite fuer Owner;
+  `npm run db:harden` legt Trigger gegen UPDATE, DELETE und TRUNCATE auf
+  `audit_entries` an. Braucht `npm run db:push`.
+- Secrets aus Azure Key Vault ueber Managed Identity (`KEY_VAULT_URL`);
+  App-Anmeldung an Entra mit Zertifikat statt Client-Secret
+  (`ENTRA_CLIENT_CERTIFICATE_PEM` oder `_PATH`, client_assertion fuer den
+  Login, MSAL mit Zertifikat fuer app-only-Tokens).
+
 - Sicherheits-Header und CSP fuer API und Web (HSTS in Produktion),
   Rate-Limits je Minute fuer Login, Worker, MCP, Freigaben und die
   uebrige API mit 429 und Retry-After, Groessenlimits 1 MB fuer JSON und

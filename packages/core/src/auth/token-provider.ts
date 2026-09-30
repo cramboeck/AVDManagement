@@ -8,8 +8,10 @@ import { ConfidentialClientApplication } from '@azure/msal-node';
 
 export interface TokenProviderConfig {
   clientId: string;
-  clientSecret: string;
   tenantId: string;
+  // Entweder Client-Secret oder Zertifikat (PEM-Schluessel plus Thumbprints); Zertifikat bevorzugt
+  clientSecret?: string;
+  clientCertificate?: { privateKeyPem: string; thumbprintSha1: string; thumbprintSha256: string };
 }
 
 export interface TenantTokenConfig {
@@ -101,11 +103,13 @@ export class TokenProvider {
   private getMsalClient(tenantId: string): ConfidentialClientApplication {
     let client = this.msalClients.get(tenantId);
     if (!client) {
+      const cert = this.config.clientCertificate;
+      if (!cert && !this.config.clientSecret) throw new Error('TokenProvider needs a client certificate or a client secret');
       client = new ConfidentialClientApplication({
         auth: {
           clientId: this.config.clientId,
-          clientSecret: this.config.clientSecret,
           authority: `https://login.microsoftonline.com/${tenantId}`,
+          ...(cert ? { clientCertificate: { thumbprintSha256: cert.thumbprintSha256, privateKey: cert.privateKeyPem } } : { clientSecret: this.config.clientSecret }),
         },
       });
       this.msalClients.set(tenantId, client);

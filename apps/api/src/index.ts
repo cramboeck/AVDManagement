@@ -3,7 +3,15 @@
  */
 
 // Muss der erste Import bleiben, siehe env.ts
-import './env.js';
+import { assertSecretsPresent } from './env.js';
+import { loadSecrets } from './services/secrets.js';
+
+// Secrets aus dem Key Vault, bevor irgendetwas sie liest (Top-Level await, ESM)
+const secretReport = await loadSecrets();
+if (secretReport.source === 'key-vault') {
+  console.log(`Key Vault: loaded ${secretReport.loaded.join(', ') || 'nothing'}${secretReport.missing.length ? `; not present: ${secretReport.missing.join(', ')}` : ''}`);
+}
+assertSecretsPresent();
 
 import { serve } from '@hono/node-server';
 import { Hono } from 'hono';

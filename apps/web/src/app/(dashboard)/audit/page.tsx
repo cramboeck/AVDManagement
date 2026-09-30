@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { useTenant } from '@/hooks/use-tenant';
 import { api } from '@/lib/api';
 import { NoTenantSelected, EmptyState } from '@/components/ui/empty-state';
@@ -76,6 +76,7 @@ export default function AuditPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Audit-Log</h1>
+        <ChainCheck tenantId={activeTenant.id} />
       </div>
 
       <AuditFilters filters={filters} onChange={setFilters} />
@@ -345,5 +346,38 @@ function ChevronIcon({ className }: { className?: string }) {
     >
       <polyline points="9 18 15 12 9 6" />
     </svg>
+  );
+}
+
+
+interface ChainVerification {
+  ok: boolean;
+  checked: number;
+  legacy: number;
+  firstBroken: { id: string; timestamp: string; reason: string } | null;
+  verifiedAt: string;
+}
+
+/**
+ * Hash-Kette nachrechnen: jeder Eintrag traegt den Hash seines Vorgaengers.
+ * Nur Owner; die API lehnt andere Rollen ab.
+ */
+function ChainCheck({ tenantId }: { tenantId: string }) {
+  const check = useMutation({ mutationFn: () => api.get<ChainVerification>(`/tenants/${tenantId}/audit/verify`) });
+  const r = check.data;
+  return (
+    <div className="flex items-center gap-3 text-xs">
+      {r && (
+        <span className={r.ok ? 'text-success' : 'text-destructive'} role="status">
+          {r.ok
+            ? `Kette in Ordnung: ${r.checked} Eintraege geprueft${r.legacy ? `, ${r.legacy} aeltere ohne Hash` : ''}`
+            : `Kette gebrochen bei ${new Date(r.firstBroken?.timestamp ?? '').toLocaleString('de-DE')}: ${r.firstBroken?.reason ?? ''}`}
+        </span>
+      )}
+      {check.error && <span className="text-destructive">{(check.error as Error).message}</span>}
+      <button onClick={() => check.mutate()} disabled={check.isPending} className="rounded-md border px-3 py-1.5 hover:bg-accent disabled:opacity-50" title="Hash-Kette aller Eintraege des MSP nachrechnen">
+        {check.isPending ? 'Pruefe...' : 'Kette pruefen'}
+      </button>
+    </div>
   );
 }

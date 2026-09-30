@@ -4,13 +4,20 @@
 
 import { Hono } from 'hono';
 import { eq, and, desc, gte, lte, like } from 'drizzle-orm';
-import { authMiddleware } from '../middleware/auth.js';
+import { authMiddleware, requireRole } from '../middleware/auth.js';
+import { verifyAuditChain } from '../services/audit-verify.js';
 import { db, auditEntries, mspUsers } from '../db/index.js';
 import type { AuditEntry, MspId, TenantId, UserId, CorrelationId } from '@zerostress/types';
 
 const app = new Hono();
 
 app.use('*', authMiddleware);
+
+// Hash-Kette des ganzen MSP nachrechnen (nur Owner; kann bei grossen Logs einige Sekunden dauern)
+app.get('/verify', requireRole('owner'), async (c) => {
+  const auth = c.get('auth');
+  return c.json(await verifyAuditChain(auth.mspId));
+});
 
 // Audit-Eintraege auflisten
 app.get('/', async (c) => {

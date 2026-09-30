@@ -16,6 +16,7 @@ import { z } from 'zod';
 import { validate } from '../middleware/validate.js';
 import { verifyEntraToken } from '../middleware/auth.js';
 import { clientIp } from '../middleware/security.js';
+import { clientAuthParams, hasClientCredential } from '../services/secrets.js';
 import { db, managedTenants } from '../db/index.js';
 import { DrizzleAuditLogger } from '../services/audit-logger.js';
 import { verifyConsentState, type ConsentStateClaims } from '../services/consent-state.js';
@@ -32,16 +33,14 @@ const audit = new DrizzleAuditLogger();
 // ENV-Variablen werden zur Laufzeit gelesen, nicht beim Import
 function getAuthConfig() {
   const clientId = process.env.ENTRA_CLIENT_ID;
-  const clientSecret = process.env.ENTRA_CLIENT_SECRET;
   const tenantId = process.env.ENTRA_TENANT_ID;
 
-  if (!clientId || !clientSecret || !tenantId) {
-    throw new Error('ENTRA_CLIENT_ID, ENTRA_CLIENT_SECRET and ENTRA_TENANT_ID must be set');
+  if (!clientId || !tenantId || !hasClientCredential()) {
+    throw new Error('ENTRA_CLIENT_ID, ENTRA_TENANT_ID and a client credential (certificate or secret) must be set');
   }
 
   return {
     clientId,
-    clientSecret,
     tenantId,
     tokenEndpoint: `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`,
   };
@@ -63,7 +62,7 @@ app.post('/token', validate('json', tokenSchema), async (c) => {
 
   const params = new URLSearchParams({
     client_id: config.clientId,
-    client_secret: config.clientSecret,
+    ...(await clientAuthParams(config.clientId, config.tokenEndpoint)),
     grant_type: 'authorization_code',
     code,
     redirect_uri,
