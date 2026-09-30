@@ -8,6 +8,13 @@ Alle nennenswerten Aenderungen an ZeroStress Cockpit. Format angelehnt an
 
 ### Hinzugefuegt
 
+- Geraete-Monitor: Bibliotheksskript `ZSC-monitor` mit stuendlicher
+  Intune-Zuweisung auf alle Geraete (Alerts > Geraete-Monitor, Jobs
+  `tenant.monitor-enable/-disable`), Auswertung im Alert-Takt mit Regeln
+  fuer Lebenszeichen, Speicher, Dienste, Fehlerereignisse, Zertifikate,
+  Neustart faellig und Defender; Schwellen unter Einstellungen >
+  Betriebs-Alerts.
+
 - Geraete: Neustart mit Vorwarnung (`device.restart-prompt`) mit Frist,
   Verschiebungen und Benutzertext; Dialog auf dem Geraet mit "Jetzt neu
   starten" und "Spaeter", erzwungener Neustart zur Frist nur, wenn das

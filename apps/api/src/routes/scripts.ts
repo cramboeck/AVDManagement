@@ -4,7 +4,8 @@
 
 import { randomUUID } from 'node:crypto';
 import { Hono } from 'hono';
-import { authMiddleware } from '../middleware/auth.js';
+import { authMiddleware, requireRole } from '../middleware/auth.js';
+import { getJobQueue } from '../services/job-queue.js';
 import { tenantContextMiddleware, requireConnectedTenant } from '../middleware/tenant-context.js';
 import { getLibraryScript, loadScriptLibrary, toLibraryEntry } from '@zerostress/core';
 import { getRemediationProvider } from '../services/microsoft-clients.js';
@@ -27,6 +28,35 @@ app.get('/', requireConnectedTenant, async (c) => {
     correlationId: c.req.header('X-Correlation-ID') ?? randomUUID(),
   });
   return c.json(status);
+});
+
+// Geraete-Monitor: Stand der Zuweisung und der Meldungen je Geraet
+app.get('/monitor', requireConnectedTenant, async (c) => {
+  const tenant = c.get('tenant');
+  const ctx = { tenantId: tenant.id, correlationId: c.req.header('X-Correlation-ID') ?? randomUUID() };
+  const provider = getRemediationProvider();
+  const schedule = await provider.getScheduleStatus(ctx, 'monitor');
+  if (!schedule.tenantScriptId) return c.json({ enabled: false, tenantScriptId: null, devices: 0, reportedLast24h: 0, withIssues: 0 });
+  const states = await provider.listRunStates(ctx, schedule.tenantScriptId);
+  const dayAgo = Date.now() - 24 * 60 * 60 * 1000;
+  const reportedLast24h = states.filter((s) => (s.state.updatedAt ? Date.parse(s.state.updatedAt) : 0) >= dayAgo).length;
+  const withIssues = states.filter((s) => s.state.detectionState === 'fail').length;
+  return c.json({ enabled: schedule.hourly && schedule.allDevices, tenantScriptId: schedule.tenantScriptId, devices: states.length, reportedLast24h, withIssues });
+});
+
+app.post('/monitor/:action{enable|disable}', requireRole('engineer'), requireConnectedTenant, async (c) => {
+  const auth = c.get('auth');
+  const tenant = c.get('tenant');
+  const action = c.req.param('action');
+  const job = await getJobQueue().createJob({
+    type: action === 'enable' ? 'tenant.monitor-enable' : 'tenant.monitor-disable',
+    tenantId: tenant.id,
+    mspId: auth.mspId,
+    userId: auth.user.id,
+    userEmail: auth.user.email,
+    payload: { tenantDisplayName: tenant.displayName, reason: null, targetType: 'tenant', targetId: tenant.microsoftTenantId, targetDisplayName: `${tenant.displayName}: Geraete-Monitor ${action === 'enable' ? 'einschalten' : 'ausschalten'}` },
+  });
+  return c.json(job, 202);
 });
 
 // Diagnose: was Intune fuer dieses Skript auf diesem Geraet gerade kennt, ohne zu warten

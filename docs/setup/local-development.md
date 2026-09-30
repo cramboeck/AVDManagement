@@ -487,6 +487,7 @@ jedes Kundentenants.
 | Speicherinfo | nur lesend | alle festen Laufwerke mit Belegung und Zustand, physische Datentraeger mit SSD/HDD, Bus, Groesse, Zustand, Firmware |
 | Lokale Administratoren | nur lesend, **personenbezogen** | Mitglieder der Gruppe Administratoren mit Herkunft, Klasse, SID, Status; Entra-Konten verlinkt |
 | Akkuzustand | nur lesend | Gesundheit (Vollladung zu Auslegung), Zyklen, Ladestand, Status je Akku; Desktops und VMs melden "kein Akku" |
+| Geraete-Monitor | nur lesend, fuer den stuendlichen Zeitplan | Laufzeit, Neustartbedarf, freier Speicher je Laufwerk, gestoppte automatische Dienste, Datentraeger- und Hardwarefehler (24 h), ablaufende Geraetezertifikate, Defender-Signaturstand |
 
 **Deinstallieren ohne winget** (Tab Software, Zeilen ohne winget-Id): Job
 `device.app-uninstall` mit Vorschau und Audit. Das Einmalskript sucht den
@@ -502,6 +503,25 @@ Store-/MSIX-Pakete (Paketnamen wie `5319275A.WhatsAppDesktop`) entfernt
 `Remove-AppxPackage -AllUsers` samt Bereitstellung. Exit-Codes 3010 und
 1641 gelten als Erfolg mit Neustartbedarf, 1605 als "war nicht
 installiert".
+
+### Geraete-Monitor (Ersatz fuer das Client-Monitoring eines RMM)
+
+Unter **Alerts > Geraete-Monitor** schaltet ein Job (`tenant.monitor-enable`)
+das Bibliotheksskript `ZSC-monitor` im Tenant ein: Intune weist es allen
+Geraeten mit stuendlichem Zeitplan zu (Graph `assign` mit
+`allDevicesAssignmentTarget` und `deviceHealthScriptHourlySchedule`), das
+Skript liest nur und meldet Exit 1, wenn etwas auffaellt. Die Konsole
+liest im Alert-Takt (hoechstens stuendlich je Tenant) die Zustaende aller
+Geraete (`deviceRunStates`) und erzeugt Alerts nach den Schwellen unter
+**Einstellungen > Betriebs-Alerts > Geraete-Monitor**: kein Lebenszeichen
+seit N Stunden (Ersatz fuer den Agenten-Heartbeat), wenig Speicher je
+Laufwerk (unter 5 Prozent hoch), gestoppte automatische Dienste,
+Datentraeger- und Hardwarefehler aus dem Systemprotokoll, ablaufende
+Geraetezertifikate (30 Tage), Neustart faellig ab N Tagen Laufzeit,
+Defender-Echtzeitschutz aus oder Signaturen aelter als N Tage. Grenzen:
+Intune fuehrt Zeitplaene fruehestens stuendlich aus, Geraete ohne Intune
+bleiben aussen vor, Server gehoeren zu Azure Arc. `tenant.monitor-disable`
+entfernt die Zuweisung, das Objekt bleibt fuer Laeufe auf Abruf.
 
 ### Neustart mit Vorwarnung
 

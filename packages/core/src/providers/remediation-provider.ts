@@ -64,6 +64,18 @@ export interface EnsureScriptResult {
   action: 'created' | 'updated' | 'unchanged';
 }
 
+export interface DeviceRunState {
+  managedDeviceId: string;
+  deviceName: string;
+  state: RemediationRunState_;
+}
+
+export interface ScheduleStatus {
+  tenantScriptId: string | null;
+  hourly: boolean;
+  allDevices: boolean;
+}
+
 export interface RemediationRunState_ {
   detectionState: RemediationRunState;
   remediationState: RemediationRunState;
@@ -154,6 +166,10 @@ export interface RemediationOperations {
   runTransient(ctx: ProviderContext, managedDeviceId: string, name: string, detectionScript: string, options?: TransientRunOptions): Promise<RemediationRunState_ | null>;
   runOnDemand(ctx: ProviderContext, managedDeviceId: string, tenantScriptId: string): Promise<void>;
   getRunState(ctx: ProviderContext, managedDeviceId: string, tenantScriptId: string): Promise<RemediationRunState_ | null>;
+  // Zeitplan: allen Geraeten stuendlich zuweisen oder alle Zuweisungen entfernen
+  setHourlySchedule(ctx: ProviderContext, tenantScriptId: string, enabled: boolean): Promise<void>;
+  findTenantScriptId(ctx: ProviderContext, scriptId: string): Promise<string | null>;
+  listRunStates(ctx: ProviderContext, tenantScriptId: string): Promise<DeviceRunState[]>;
   waitForRunState(
     ctx: ProviderContext,
     managedDeviceId: string,
@@ -309,6 +325,71 @@ export class RemediationProvider extends BaseResourceProvider implements Remedia
       { '@odata.type': '#microsoft.graph.deviceHealthScript', ...body, roleScopeTagIds: ['0'] }
     );
     return { tenantScriptId: created.id, action: 'created' };
+  }
+
+  /** Tenant-Id des Remediation-Objekts zu einem Bibliotheksskript, sonst null. */
+  async findTenantScriptId(ctx: ProviderContext, scriptId: string): Promise<string | null> {
+    const status = await this.getLibraryStatus(ctx);
+    if (!status.available) return null;
+    return status.data.find((s) => s.id === scriptId)?.tenantScriptId ?? null;
+  }
+
+  /**
+   * Zuweisung mit Zeitplan: alle Geraete, stuendlich, ohne Behebung. Mit
+   * enabled=false werden alle Zuweisungen des Objekts entfernt.
+   */
+  async setHourlySchedule(ctx: ProviderContext, tenantScriptId: string, enabled: boolean): Promise<void> {
+    this.validateContext(ctx);
+    const assignments = enabled
+      ? [
+          {
+            '@odata.type': '#microsoft.graph.deviceHealthScriptAssignment',
+            target: { '@odata.type': '#microsoft.graph.allDevicesAssignmentTarget' },
+            runRemediationScript: false,
+            runSchedule: { '@odata.type': '#microsoft.graph.deviceHealthScriptHourlySchedule', interval: 1 },
+          },
+        ]
+      : [];
+    await this.graphClient.post(ctx.tenantId as string, `${GRAPH_BETA}/deviceManagement/deviceHealthScripts/${encodeURIComponent(tenantScriptId)}/assign`, this.requiredScopes, {
+      deviceHealthScriptAssignments: assignments,
+    });
+  }
+
+  /** Aktueller Zeitplan des Objekts (fuer die Statusanzeige). */
+  async getScheduleStatus(ctx: ProviderContext, scriptId: string): Promise<ScheduleStatus> {
+    const tenantScriptId = await this.findTenantScriptId(ctx, scriptId);
+    if (!tenantScriptId) return { tenantScriptId: null, hourly: false, allDevices: false };
+    const res = await this.graphClient.get<GraphResponse<Array<{ target?: { '@odata.type'?: string }; runSchedule?: { '@odata.type'?: string; interval?: number } }>>>(
+      ctx.tenantId as string,
+      `${GRAPH_BETA}/deviceManagement/deviceHealthScripts/${encodeURIComponent(tenantScriptId)}/assignments`,
+      this.requiredScopes
+    );
+    const items = res.value ?? [];
+    const hourly = items.some((a) => (a.runSchedule?.['@odata.type'] ?? '').endsWith('HourlySchedule'));
+    const allDevices = items.some((a) => (a.target?.['@odata.type'] ?? '').endsWith('allDevicesAssignmentTarget'));
+    return { tenantScriptId, hourly, allDevices };
+  }
+
+  /** Letzter Zustand je Geraet fuer ein Skript (Grundlage des Monitors). */
+  async listRunStates(ctx: ProviderContext, tenantScriptId: string): Promise<DeviceRunState[]> {
+    this.validateContext(ctx);
+    const tenantId = ctx.tenantId as string;
+    const out = new Map<string, DeviceRunState>();
+    let next: string | null = `${GRAPH_BETA}/deviceManagement/deviceHealthScripts/${encodeURIComponent(tenantScriptId)}/deviceRunStates?$expand=managedDevice($select=id,deviceName)&$top=200`;
+    while (next) {
+      const page: GraphResponse<Array<GraphDeviceHealthScriptDeviceState & { managedDevice?: { id: string; deviceName?: string | null } | null }>> = await this.graphClient.get(tenantId, next, this.requiredScopes);
+      for (const raw of page.value ?? []) {
+        const id = raw.managedDevice?.id;
+        if (!id) continue;
+        const state = toRunStateRecord(raw, 'script');
+        const existing = out.get(id);
+        if (!existing || (latestReportTime(state) ?? -1) > (latestReportTime(existing.state) ?? -1)) {
+          out.set(id, { managedDeviceId: id, deviceName: raw.managedDevice?.deviceName ?? id, state });
+        }
+      }
+      next = page['@odata.nextLink'] ?? null;
+    }
+    return Array.from(out.values());
   }
 
   /**

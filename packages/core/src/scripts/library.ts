@@ -131,6 +131,17 @@ const definitions: ScriptDefinition[] = [
     remediationSummary: null,
     expectedDurationSeconds: 90,
   },
+  {
+    id: 'monitor',
+    displayName: 'Geraete-Monitor',
+    description:
+      'Fuer den stuendlichen Zeitplan: Laufzeit, Neustartbedarf, freier Speicher je Laufwerk, gestoppte automatische Dienste, Datentraeger- und Hardwarefehler (24 h), ablaufende Geraetezertifikate, Defender-Signaturstand. Nur lesend; Schwellen und Alerts setzt die Konsole.',
+    version: '1.0.0',
+    detectionFile: 'monitor.detect.ps1',
+    remediationFile: null,
+    remediationSummary: null,
+    expectedDurationSeconds: 60,
+  },
 ];
 
 // Marker in der Beschreibung des Remediation-Objekts im Tenant

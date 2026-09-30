@@ -20,6 +20,7 @@ export const DEFAULT_MSP_SETTINGS: MspSettings = {
     outdatedSoftware: { enabled: false, minDevices: 5 },
     mailboxQuota: { enabled: false, percent: 90 },
     vmOutsideHours: { enabled: false, startHour: 7, endHour: 19, timeZone: 'Europe/Berlin', weekdaysOnly: true, excludeSessionHosts: true, excludeTag: 'zsc-always-on' },
+    monitor: { enabled: false, heartbeatHours: 26, diskFreePercent: 10, uptimeDays: 30, defenderSignatureDays: 3 },
   },
 };
 
@@ -44,6 +45,7 @@ function normalizeAlerts(raw: unknown): MspAlertSettings {
   const os = input.outdatedSoftware ?? {};
   const mq = input.mailboxQuota ?? {};
   const vm = input.vmOutsideHours ?? {};
+  const mon = input.monitor ?? {};
   const excludeTag = typeof vm.excludeTag === 'string' ? vm.excludeTag.trim().slice(0, 100) : d.vmOutsideHours.excludeTag;
   return {
     outdatedSoftware: { enabled: os.enabled === true, minDevices: intInRange(os.minDevices, 1, 10000, d.outdatedSoftware.minDevices) },
@@ -56,6 +58,13 @@ function normalizeAlerts(raw: unknown): MspAlertSettings {
       weekdaysOnly: vm.weekdaysOnly !== false,
       excludeSessionHosts: vm.excludeSessionHosts !== false,
       excludeTag,
+    },
+    monitor: {
+      enabled: mon.enabled === true,
+      heartbeatHours: intInRange(mon.heartbeatHours, 2, 168, d.monitor.heartbeatHours),
+      diskFreePercent: intInRange(mon.diskFreePercent, 1, 50, d.monitor.diskFreePercent),
+      uptimeDays: intInRange(mon.uptimeDays, 1, 365, d.monitor.uptimeDays),
+      defenderSignatureDays: intInRange(mon.defenderSignatureDays, 1, 30, d.monitor.defenderSignatureDays),
     },
   };
 }

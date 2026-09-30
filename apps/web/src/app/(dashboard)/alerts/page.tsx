@@ -11,7 +11,8 @@ import { ErrorState, ErrorBanner } from '@/components/ui/error-state';
 import { NoTenantSelected, EmptyState } from '@/components/ui/empty-state';
 import { formatDateTime } from '@/components/identity/sign-in-table';
 import { Collapsible } from '@/components/ui/collapsible';
-import type { Alert, AlertSeverity_, AlertStats, AlertStatus, AnomalyRuleId } from '@zerostress/types';
+import { JobActionDialog } from '@/components/jobs/job-action-dialog';
+import type { Alert, AlertSeverity_, AlertStats, AlertStatus, AnomalyRuleId, Job } from '@zerostress/types';
 
 const severityMeta: Record<AlertSeverity_, { label: string; className: string }> = {
   high: { label: 'Hoch', className: 'bg-destructive/10 text-destructive' },
@@ -30,6 +31,13 @@ const ruleLabels: Record<AnomalyRuleId, string> = {
   'outdated-software': 'Veraltete Software',
   'mailbox-quota': 'Postfach fast voll',
   'vm-outside-hours': 'VM ausserhalb der Arbeitszeit',
+  'device-heartbeat': 'Kein Lebenszeichen',
+  'disk-space': 'Wenig Speicher',
+  'service-stopped': 'Dienst gestoppt',
+  'system-events': 'Hardware-/Datentraegerfehler',
+  'certificate-expiry': 'Zertifikat laeuft ab',
+  'restart-due': 'Neustart faellig',
+  'defender-stale': 'Defender nicht in Ordnung',
 };
 
 const statusLabels: Record<AlertStatus, string> = { open: 'Offen', acknowledged: 'In Bearbeitung', resolved: 'Geschlossen' };
@@ -84,6 +92,8 @@ export default function AlertsPage() {
       </div>
 
       <ErrorBanner error={error} onDismiss={() => setError(null)} />
+
+      <MonitorCard tenantId={activeTenant.id} />
 
       {data && (
         <div className="grid gap-3 sm:grid-cols-4">
@@ -198,5 +208,55 @@ function Stat({ label, value, tone }: { label: string; value: number; tone?: 'wa
       <p className="text-xs text-muted-foreground">{label}</p>
       <p className={clsx('mt-1 text-2xl font-semibold tabular-nums', tone === 'warning' && 'text-warning', tone === 'destructive' && 'text-destructive')}>{value}</p>
     </div>
+  );
+}
+
+
+interface MonitorStatus {
+  enabled: boolean;
+  tenantScriptId: string | null;
+  devices: number;
+  reportedLast24h: number;
+  withIssues: number;
+}
+
+/**
+ * Geraete-Monitor: stuendliches Bibliotheksskript auf allen Geraeten; die
+ * Konsole macht aus den Meldungen Alerts nach den Schwellen der Einstellungen.
+ */
+function MonitorCard({ tenantId }: { tenantId: string }) {
+  const queryClient = useQueryClient();
+  const [toggle, setToggle] = useState<'enable' | 'disable' | null>(null);
+  const status = useQuery({ queryKey: ['monitor-status', tenantId], queryFn: () => api.get<MonitorStatus>(`/tenants/${tenantId}/scripts/monitor`), staleTime: 60 * 1000 });
+  const s = status.data;
+  return (
+    <section className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-4">
+      <div>
+        <h2 className="font-medium">Geraete-Monitor</h2>
+        <p className="text-xs text-muted-foreground">
+          {status.isLoading
+            ? 'Stand wird geladen...'
+            : status.error
+              ? `Stand nicht lesbar: ${(status.error as Error).message}`
+              : s?.enabled
+                ? `Aktiv: ${s.devices} Geraete bekannt, ${s.reportedLast24h} haben in 24 h gemeldet, ${s.withIssues} mit Befund. Alerts nach den Schwellen unter Einstellungen > Betriebs-Alerts.`
+                : s?.tenantScriptId
+                  ? 'Skript im Tenant, aber ohne stuendliche Zuweisung.'
+                  : 'Aus. Schaltet das Skript ZSC-monitor stuendlich auf allen Geraeten ein: Laufzeit, Speicher, Dienste, Fehlerereignisse, Zertifikate, Defender.'}
+        </p>
+      </div>
+      <button onClick={() => setToggle(s?.enabled ? 'disable' : 'enable')} disabled={status.isLoading} className="rounded-md border px-3 py-1.5 text-sm hover:bg-accent disabled:opacity-50">
+        {s?.enabled ? 'Monitor ausschalten' : 'Monitor einschalten'}
+      </button>
+      {toggle && (
+        <JobActionDialog
+          title={toggle === 'enable' ? 'Geraete-Monitor einschalten' : 'Geraete-Monitor ausschalten'}
+          confirmLabel={toggle === 'enable' ? 'Einschalten' : 'Ausschalten'}
+          createJob={() => api.post<Job>(`/tenants/${tenantId}/scripts/monitor/${toggle}`)}
+          onClose={() => setToggle(null)}
+          onCompleted={() => queryClient.invalidateQueries({ queryKey: ['monitor-status', tenantId] })}
+        />
+      )}
+    </section>
   );
 }

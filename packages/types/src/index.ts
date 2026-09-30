@@ -196,6 +196,18 @@ export interface MspAlertSettings {
     // VMs mit diesem Tag (Name, beliebiger Wert) werden nicht gemeldet
     excludeTag: string;
   };
+  // Geraete-Monitor (Skript ZSC-monitor, stuendlich per Intune-Zuweisung)
+  monitor: {
+    enabled: boolean;
+    // Ohne Meldung seit so vielen Stunden gilt ein Geraet als ohne Lebenszeichen
+    heartbeatHours: number;
+    // Freier Speicher je Laufwerk unter so vielen Prozent
+    diskFreePercent: number;
+    // Laufzeit ohne Neustart ab so vielen Tagen
+    uptimeDays: number;
+    // Defender-Signaturen aelter als so viele Tage
+    defenderSignatureDays: number;
+  };
 }
 
 // Audit-Ergebnis
@@ -1281,7 +1293,14 @@ export type AnomalyRuleId =
   | 'blocked-software'
   | 'outdated-software'
   | 'mailbox-quota'
-  | 'vm-outside-hours';
+  | 'vm-outside-hours'
+  | 'device-heartbeat'
+  | 'disk-space'
+  | 'service-stopped'
+  | 'system-events'
+  | 'certificate-expiry'
+  | 'restart-due'
+  | 'defender-stale';
 
 export interface AnomalyFinding {
   ruleId: AnomalyRuleId;
@@ -1453,7 +1472,7 @@ export type TenantVulnerabilityList = CapabilityResult<TenantVulnerabilitySet> &
 // Skriptbibliothek (Intune Remediations auf Abruf)
 // ============================================
 
-export type LibraryScriptId = 'update-status' | 'update-scan' | 'system-info' | 'winget-updates' | 'winget-inventory' | 'network-info' | 'storage-info' | 'local-admins' | 'battery-info';
+export type LibraryScriptId = 'update-status' | 'update-scan' | 'system-info' | 'winget-updates' | 'winget-inventory' | 'network-info' | 'storage-info' | 'local-admins' | 'battery-info' | 'monitor';
 
 // Vom Intune-Client erkannte Software (Inventar, wird woechentlich gemeldet)
 export interface DetectedApp {

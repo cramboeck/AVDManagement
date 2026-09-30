@@ -132,6 +132,13 @@ const schema = z.object({
       excludeSessionHosts: z.boolean(),
       excludeTag: z.string().max(100),
     }),
+    monitor: z.object({
+      enabled: z.boolean(),
+      heartbeatHours: z.number().int().min(2).max(168),
+      diskFreePercent: z.number().int().min(1).max(50),
+      uptimeDays: z.number().int().min(1).max(365),
+      defenderSignatureDays: z.number().int().min(1).max(30),
+    }),
   }),
 });
 

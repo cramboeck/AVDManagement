@@ -57,6 +57,7 @@ describe('RemediationProvider', () => {
       ['storage-info', 'missing'],
       ['local-admins', 'missing'],
       ['battery-info', 'missing'],
+      ['monitor', 'missing'],
     ]);
     expect(status.data[1].tenantHash).toBe('a'.repeat(64));
     expect(graph.get.mock.calls[0][1]).toContain(`${GRAPH_BETA}/deviceManagement/deviceHealthScripts`);

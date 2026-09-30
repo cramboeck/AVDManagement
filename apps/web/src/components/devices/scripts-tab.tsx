@@ -233,7 +233,7 @@ function LatestRun({ job, tenantId }: { job: Job; tenantId: string }) {
   );
 }
 
-const KNOWN_SCHEMAS = new Set(['zsc.update-status/1', 'zsc.update-scan/1', 'zsc.system-info/1', 'zsc.winget-updates/1', 'zsc.winget-inventory/1', 'zsc.winget-install/1', 'zsc.app-uninstall/1', 'zsc.restart-prompt/1', 'zsc.network-info/1', 'zsc.storage-info/1', 'zsc.local-admins/1', 'zsc.battery-info/1']);
+const KNOWN_SCHEMAS = new Set(['zsc.update-status/1', 'zsc.update-scan/1', 'zsc.system-info/1', 'zsc.winget-updates/1', 'zsc.winget-inventory/1', 'zsc.winget-install/1', 'zsc.app-uninstall/1', 'zsc.restart-prompt/1', 'zsc.monitor/1', 'zsc.network-info/1', 'zsc.storage-info/1', 'zsc.local-admins/1', 'zsc.battery-info/1']);
 
 export interface WingetUpdate {
   name: string;
@@ -309,6 +309,7 @@ export function ScriptResultView({ result, error }: { result: ScriptRunResult | 
       {json && schema === 'zsc.winget-install/1' && <WingetInstallResult data={json} />}
       {json && schema === 'zsc.winget-inventory/1' && <WingetInventoryResult data={json} />}
       {json && schema === 'zsc.app-uninstall/1' && <AppUninstallResult data={json} />}
+      {json && schema === 'zsc.monitor/1' && <pre className="overflow-x-auto rounded-md bg-muted p-3 text-xs">{JSON.stringify(json, null, 2)}</pre>}
       {json && schema === 'zsc.network-info/1' && <NetworkInfoResult data={json} />}
       {json && schema === 'zsc.storage-info/1' && <StorageInfoResult data={json} />}
       {json && schema === 'zsc.local-admins/1' && <LocalAdminsResult data={json} />}

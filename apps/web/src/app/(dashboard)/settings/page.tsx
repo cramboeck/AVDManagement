@@ -150,6 +150,8 @@ function AlertRulesSection({ value, isOwner, onChange }: { value: MspAlertSettin
   const setOs = (patch: Partial<MspAlertSettings['outdatedSoftware']>) => onChange({ ...value, outdatedSoftware: { ...os, ...patch } });
   const setMq = (patch: Partial<MspAlertSettings['mailboxQuota']>) => onChange({ ...value, mailboxQuota: { ...mq, ...patch } });
   const setVm = (patch: Partial<MspAlertSettings['vmOutsideHours']>) => onChange({ ...value, vmOutsideHours: { ...vm, ...patch } });
+  const mon = value.monitor;
+  const setMon = (patch: Partial<MspAlertSettings['monitor']>) => onChange({ ...value, monitor: { ...mon, ...patch } });
   const hours = Array.from({ length: 25 }, (_, i) => i);
 
   return (
@@ -181,6 +183,31 @@ function AlertRulesSection({ value, isOwner, onChange }: { value: MspAlertSettin
           <span className="mb-1 block text-xs text-muted-foreground">Ab wie viel Prozent der Sendesperre (50 bis 100); bei 100 % wird der Alert als hoch eingestuft. Tenants mit verborgenen Namen in Berichten werden uebersprungen.</span>
           <input type="number" min={50} max={100} className={`${inputClass} w-32`} value={mq.percent} disabled={!mq.enabled || !isOwner} onChange={(e) => setMq({ percent: Number(e.target.value) })} />
         </label>
+      </div>
+
+      <div className="space-y-2 rounded-md border p-3">
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={mon.enabled} disabled={!isOwner} onChange={(e) => setMon({ enabled: e.target.checked })} />
+          Geraete-Monitor auswerten (Skript ZSC-monitor, je Tenant unter Alerts einschalten)
+        </label>
+        <div className="grid gap-3 sm:grid-cols-4">
+          <label className="block text-sm">
+            <span className="mb-1 block text-xs text-muted-foreground">Kein Lebenszeichen ab Stunden</span>
+            <input type="number" min={2} max={168} className={`${inputClass} w-full`} value={mon.heartbeatHours} disabled={!mon.enabled || !isOwner} onChange={(e) => setMon({ heartbeatHours: Number(e.target.value) })} />
+          </label>
+          <label className="block text-sm">
+            <span className="mb-1 block text-xs text-muted-foreground">Wenig Speicher unter Prozent</span>
+            <input type="number" min={1} max={50} className={`${inputClass} w-full`} value={mon.diskFreePercent} disabled={!mon.enabled || !isOwner} onChange={(e) => setMon({ diskFreePercent: Number(e.target.value) })} />
+          </label>
+          <label className="block text-sm">
+            <span className="mb-1 block text-xs text-muted-foreground">Neustart faellig ab Tagen</span>
+            <input type="number" min={1} max={365} className={`${inputClass} w-full`} value={mon.uptimeDays} disabled={!mon.enabled || !isOwner} onChange={(e) => setMon({ uptimeDays: Number(e.target.value) })} />
+          </label>
+          <label className="block text-sm">
+            <span className="mb-1 block text-xs text-muted-foreground">Defender-Signaturen aelter als Tage</span>
+            <input type="number" min={1} max={30} className={`${inputClass} w-full`} value={mon.defenderSignatureDays} disabled={!mon.enabled || !isOwner} onChange={(e) => setMon({ defenderSignatureDays: Number(e.target.value) })} />
+          </label>
+        </div>
       </div>
 
       <div className="space-y-2 rounded-md border p-3">
