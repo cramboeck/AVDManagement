@@ -8,6 +8,12 @@ Alle nennenswerten Aenderungen an ZeroStress Cockpit. Format angelehnt an
 
 ### Hinzugefuegt
 
+- Geraete: Neustart mit Vorwarnung (`device.restart-prompt`) mit Frist,
+  Verschiebungen und Benutzertext; Dialog auf dem Geraet mit "Jetzt neu
+  starten" und "Spaeter", erzwungener Neustart zur Frist nur, wenn das
+  Geraet seitdem nicht neu gestartet wurde; `device.restart-cancel` nimmt
+  alles zurueck. Vorschau, Begruendung, Audit.
+
 - Geraete: Deinstallieren ohne winget (Job `device.app-uninstall`) fuer
   Software ohne winget-Id: Registry-Eintrag mit exaktem Anzeigenamen,
   stille Schalter fuer MSI, QuietUninstallString, Inno Setup, NSIS und

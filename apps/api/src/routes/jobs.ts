@@ -337,6 +337,53 @@ app.post('/winget-install', requireRole('engineer'), requireConnectedTenant, val
   return c.json(job, 202);
 });
 
+// Neustart mit Vorwarnung: Frist, Verschiebungen und Text; Abbruch als eigener Job
+const restartPromptSchema = z.object({
+  managedDeviceId: z.string().min(1),
+  deviceName: z.string().min(1),
+  deadlineMinutes: z.number().int().min(15).max(1440),
+  maxDeferrals: z.number().int().min(0).max(5),
+  deferMinutes: z.number().int().min(15).max(480),
+  message: z.string().trim().min(5).max(300),
+  reason: z.string().trim().min(10).max(500),
+});
+
+app.post('/restart-prompt', requireRole('engineer'), requireConnectedTenant, validate('json', restartPromptSchema), async (c) => {
+  const auth = c.get('auth');
+  const tenant = c.get('tenant');
+  const body = c.req.valid('json');
+  const job = await getJobQueue().createJob({
+    type: 'device.restart-prompt',
+    tenantId: tenant.id,
+    mspId: auth.mspId,
+    userId: auth.user.id,
+    userEmail: auth.user.email,
+    payload: { ...body, targetType: 'device', targetId: body.managedDeviceId, targetDisplayName: `${body.deviceName}: Neustart in ${body.deadlineMinutes} Min planen` },
+  });
+  return c.json(job, 202);
+});
+
+const restartCancelSchema = z.object({
+  managedDeviceId: z.string().min(1),
+  deviceName: z.string().min(1),
+  reason: z.string().trim().min(10).max(500),
+});
+
+app.post('/restart-cancel', requireRole('engineer'), requireConnectedTenant, validate('json', restartCancelSchema), async (c) => {
+  const auth = c.get('auth');
+  const tenant = c.get('tenant');
+  const body = c.req.valid('json');
+  const job = await getJobQueue().createJob({
+    type: 'device.restart-cancel',
+    tenantId: tenant.id,
+    mspId: auth.mspId,
+    userId: auth.user.id,
+    userEmail: auth.user.email,
+    payload: { ...body, targetType: 'device', targetId: body.managedDeviceId, targetDisplayName: `${body.deviceName}: geplanten Neustart abbrechen` },
+  });
+  return c.json(job, 202);
+});
+
 // Deinstallation ohne winget: Registry-Eintrag oder Appx-Paket
 const appUninstallSchema = z.object({
   managedDeviceId: z.string().min(1),

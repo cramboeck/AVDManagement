@@ -503,6 +503,25 @@ Store-/MSIX-Pakete (Paketnamen wie `5319275A.WhatsAppDesktop`) entfernt
 1641 gelten als Erfolg mit Neustartbedarf, 1605 als "war nicht
 installiert".
 
+### Neustart mit Vorwarnung
+
+Im Geraetekopf plant **Neustart planen** einen Neustart mit Frist (1 bis
+24 Stunden), Verschiebungen (0 bis 5, je 15 bis 480 Minuten) und einem
+Text fuer den Benutzer; **Neustart abbrechen** nimmt alles zurueck. Beides
+sind Jobs mit Vorschau, Begruendung und Audit (`device.restart-prompt`,
+`device.restart-cancel`). Das Einmalskript legt auf dem Geraet den Antrag
+unter `HKLM\SOFTWARE\ZeroStress\Restart` ab (Benutzer duerfen nur den
+Verschiebezaehler aendern), schreibt zwei Skripte nach
+`%ProgramData%\ZeroStress\restart` und registriert zwei Aufgaben:
+`ZSC-Restart-Prompt` laeuft interaktiv fuer die Gruppe Benutzer bei der
+Anmeldung und im Verschiebetakt und zeigt den Dialog mit "Jetzt neu
+starten" (`shutdown /r /t 30`) und "Spaeter"; `ZSC-Restart-Deadline`
+laeuft als SYSTEM zur Frist, prueft die Startzeit des Geraets und startet
+nur neu, wenn seit dem Planen kein Neustart war (`shutdown /r /f /t 120`),
+dann raeumt es Aufgaben und Eintrag auf. Ein Dialog, der fuenf Minuten
+ohne Antwort bleibt, schliesst sich und zaehlt nicht als Verschiebung. Der
+harte **Neu starten** ueber Intune bleibt fuer Faelle ohne Benutzer.
+
 ### Admin auf Zeit (Ersatz fuer Endpoint Privilege Management)
 
 Im Geraetekopf gewaehrt **Admin auf Zeit** einem Konto (Entra als

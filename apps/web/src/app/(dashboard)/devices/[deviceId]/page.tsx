@@ -18,6 +18,7 @@ import { SoftwareTab } from '@/components/devices/software-tab';
 import { ConnectionsTab } from '@/components/devices/connections-tab';
 import { RemoteSessionButton } from '@/components/devices/remote-session';
 import { TempAdminDialog } from '@/components/devices/temp-admin-dialog';
+import { RestartDialog } from '@/components/devices/restart-dialog';
 import {
   ComplianceBadge,
   ExposureBadge,
@@ -98,6 +99,7 @@ export default function DeviceDetailPage({ params }: { params: { deviceId: strin
   const [tab, setTab] = useState<Tab>('overview');
   const [action, setAction] = useState<DeviceAction | null>(null);
   const [tempAdmin, setTempAdmin] = useState<'grant' | 'revoke' | null>(null);
+  const [restart, setRestart] = useState<'schedule' | 'cancel' | null>(null);
 
   const base = activeTenant ? `/tenants/${activeTenant.id}/devices/${encodeURIComponent(deviceId)}` : '';
 
@@ -165,6 +167,8 @@ export default function DeviceDetailPage({ params }: { params: { deviceId: strin
             <ActionButton onClick={() => setAction('defender-scan')}>Defender-Scan</ActionButton>
             <ActionButton onClick={() => setTempAdmin('grant')}>Admin auf Zeit</ActionButton>
             <ActionButton onClick={() => setTempAdmin('revoke')} tone="destructive">Admin entziehen</ActionButton>
+            <ActionButton onClick={() => setRestart('schedule')}>Neustart planen</ActionButton>
+            <ActionButton onClick={() => setRestart('cancel')}>Neustart abbrechen</ActionButton>
             <ActionButton onClick={() => setAction('restart-device')} tone="destructive">Neu starten</ActionButton>
           </div>
         ) : (
@@ -199,6 +203,9 @@ export default function DeviceDetailPage({ params }: { params: { deviceId: strin
         {tab === 'jobs' && <JobsTab tenantId={activeTenant.id} managedDeviceId={device.intune?.managedDeviceId ?? null} />}
       </div>
 
+      {restart && (
+        <RestartDialog tenantId={activeTenant.id} device={device} mode={restart} onClose={() => setRestart(null)} onCompleted={refresh} />
+      )}
       {tempAdmin && (
         <TempAdminDialog tenantId={activeTenant.id} device={device} mode={tempAdmin} onClose={() => setTempAdmin(null)} onCompleted={refresh} />
       )}

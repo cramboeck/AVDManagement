@@ -233,7 +233,7 @@ function LatestRun({ job, tenantId }: { job: Job; tenantId: string }) {
   );
 }
 
-const KNOWN_SCHEMAS = new Set(['zsc.update-status/1', 'zsc.update-scan/1', 'zsc.system-info/1', 'zsc.winget-updates/1', 'zsc.winget-inventory/1', 'zsc.winget-install/1', 'zsc.app-uninstall/1', 'zsc.network-info/1', 'zsc.storage-info/1', 'zsc.local-admins/1', 'zsc.battery-info/1']);
+const KNOWN_SCHEMAS = new Set(['zsc.update-status/1', 'zsc.update-scan/1', 'zsc.system-info/1', 'zsc.winget-updates/1', 'zsc.winget-inventory/1', 'zsc.winget-install/1', 'zsc.app-uninstall/1', 'zsc.restart-prompt/1', 'zsc.network-info/1', 'zsc.storage-info/1', 'zsc.local-admins/1', 'zsc.battery-info/1']);
 
 export interface WingetUpdate {
   name: string;

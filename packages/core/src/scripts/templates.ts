@@ -11,13 +11,15 @@ import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { isWingetId } from '../apps/winget.js';
 
-export type TemplateId = 'temp-admin-grant' | 'temp-admin-revoke' | 'winget-install' | 'app-uninstall';
+export type TemplateId = 'temp-admin-grant' | 'temp-admin-revoke' | 'winget-install' | 'app-uninstall' | 'restart-prompt' | 'restart-cancel';
 
 const files: Record<TemplateId, string> = {
   'temp-admin-grant': 'temp-admin.grant.ps1',
   'temp-admin-revoke': 'temp-admin.revoke.ps1',
   'winget-install': 'winget-install.ps1',
   'app-uninstall': 'app-uninstall.ps1',
+  'restart-prompt': 'restart-prompt.ps1',
+  'restart-cancel': 'restart-cancel.ps1',
 };
 
 const WINGET_VERSION_PATTERN = /^[0-9A-Za-z][0-9A-Za-z.+-]{0,39}$/;
@@ -142,4 +144,42 @@ export function renderAppUninstall(input: AppUninstallInput): RenderedTemplate &
     .replace('__KIND__', input.kind)
     .replace('__EXTRA_ARGS__', extraArgs ? quote(extraArgs) : '');
   return { id: 'app-uninstall', content, hash: createHash('sha256').update(content).digest('hex'), displayName, kind: input.kind, extraArgs };
+}
+
+// Fester Aufgabenname je Geraet: ein zweiter Plan ersetzt den ersten
+export const RESTART_TASK_NAME = 'ZSC-Restart';
+export const RESTART_DEADLINE_MIN = 15;
+export const RESTART_DEADLINE_MAX = 1440;
+export const RESTART_DEFER_MIN = 15;
+export const RESTART_DEFER_MAX = 480;
+export const RESTART_MAX_DEFERRALS = 5;
+// Text im Dialog: Buchstaben, Ziffern, Satzzeichen; kein Backtick, kein Dollar, keine doppelten Anfuehrungszeichen
+const RESTART_MESSAGE_PATTERN = /^[\p{L}\p{N} .,;:()!?+&%\/'#-]{5,300}$/u;
+
+export interface RestartPromptInput {
+  deadlineMinutes: number;
+  maxDeferrals: number;
+  deferMinutes: number;
+  message: string;
+}
+
+export function renderRestartPrompt(input: RestartPromptInput): RenderedTemplate & { deadlineMinutes: number; maxDeferrals: number; deferMinutes: number; message: string } {
+  const { deadlineMinutes, maxDeferrals, deferMinutes } = input;
+  if (!Number.isInteger(deadlineMinutes) || deadlineMinutes < RESTART_DEADLINE_MIN || deadlineMinutes > RESTART_DEADLINE_MAX) throw new Error(`Frist muss zwischen ${RESTART_DEADLINE_MIN} und ${RESTART_DEADLINE_MAX} Minuten liegen`);
+  if (!Number.isInteger(maxDeferrals) || maxDeferrals < 0 || maxDeferrals > RESTART_MAX_DEFERRALS) throw new Error(`Verschiebungen muessen zwischen 0 und ${RESTART_MAX_DEFERRALS} liegen`);
+  if (!Number.isInteger(deferMinutes) || deferMinutes < RESTART_DEFER_MIN || deferMinutes > RESTART_DEFER_MAX) throw new Error(`Minuten je Verschiebung muessen zwischen ${RESTART_DEFER_MIN} und ${RESTART_DEFER_MAX} liegen`);
+  const message = input.message.trim().replace(/\s+/g, ' ');
+  if (!RESTART_MESSAGE_PATTERN.test(message) || /[`$"\\]/.test(message)) throw new Error('Text fuer den Benutzer ungueltig: 5 bis 300 Zeichen, keine Anfuehrungszeichen, Backticks oder Dollarzeichen');
+  const content = readTemplate('restart-prompt')
+    .replace('__DEADLINE_MINUTES__', String(deadlineMinutes))
+    .replace('__MAX_DEFERRALS__', String(maxDeferrals))
+    .replace('__DEFER_MINUTES__', String(deferMinutes))
+    .replace('__MESSAGE__', message.replace(/'/g, "''"))
+    .replace('__TASKNAME__', RESTART_TASK_NAME);
+  return { id: 'restart-prompt', content, hash: createHash('sha256').update(content).digest('hex'), deadlineMinutes, maxDeferrals, deferMinutes, message };
+}
+
+export function renderRestartCancel(): RenderedTemplate {
+  const content = readTemplate('restart-cancel').replace('__TASKNAME__', RESTART_TASK_NAME);
+  return { id: 'restart-cancel', content, hash: createHash('sha256').update(content).digest('hex') };
 }
