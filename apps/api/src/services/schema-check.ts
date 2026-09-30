@@ -14,6 +14,7 @@ const REQUIRED_COLUMNS: ReadonlyArray<readonly [table: string, column: string]> 
   ['jobs', 'approvals'],
   ['msp_user_tenants', 'user_id'],
   ['worker_tokens', 'id'],
+  ['user_sessions', 'id'],
   ['msp_organizations', 'settings'],
   ['alerts', 'id'],
   ['app_packages', 'id'],

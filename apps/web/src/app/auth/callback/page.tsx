@@ -37,11 +37,11 @@ function AuthCallback() {
       return;
     }
 
-    handleCallback(code, state).then((success) => {
-      if (success) {
+    handleCallback(code, state).then((result) => {
+      if (result.ok) {
         router.replace('/');
       } else {
-        setError('Authentifizierung fehlgeschlagen');
+        setError(result.message ?? 'Authentifizierung fehlgeschlagen');
       }
     });
   }, [searchParams, router]);

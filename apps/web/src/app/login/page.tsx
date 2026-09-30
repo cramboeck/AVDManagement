@@ -2,15 +2,15 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { startLogin, isAuthenticated } from '@/lib/auth';
+import { startLogin, fetchSession } from '@/lib/auth';
 
 export default function LoginPage() {
   const router = useRouter();
 
   useEffect(() => {
-    if (isAuthenticated()) {
-      router.replace('/');
-    }
+    fetchSession().then((session) => {
+      if (session.authenticated) router.replace('/');
+    });
   }, [router]);
 
   return (

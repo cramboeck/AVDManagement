@@ -56,6 +56,21 @@ export const workerTokens = pgTable('worker_tokens', {
   revokedAt: timestamp('revoked_at', { withTimezone: true }),
 });
 
+// Browser-Sitzungen: nur der Hash der Sitzungs-Id, keine Entra-Tokens
+export const userSessions = pgTable('user_sessions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tokenHash: varchar('token_hash', { length: 64 }).notNull().unique(),
+  userId: uuid('user_id').notNull().references(() => mspUsers.id),
+  mspId: uuid('msp_id').notNull().references(() => mspOrganizations.id),
+  ipHash: varchar('ip_hash', { length: 32 }),
+  userAgent: varchar('user_agent', { length: 200 }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  lastSeenAt: timestamp('last_seen_at', { withTimezone: true }).notNull().defaultNow(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  idleExpiresAt: timestamp('idle_expires_at', { withTimezone: true }).notNull(),
+  revokedAt: timestamp('revoked_at', { withTimezone: true }),
+});
+
 // Verwaltete Tenants
 export const managedTenants = pgTable('managed_tenants', {
   id: uuid('id').primaryKey().defaultRandom(),

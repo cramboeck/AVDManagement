@@ -629,6 +629,31 @@ Groessenlimits: JSON-Anfragen hoechstens 1 MB (413, Problemtyp
 (`PUT /packages/:id/installer|artifact`, `PUT /worker/builds/:id/artifact`)
 erlauben 4 GB.
 
+## Anmeldung und Sitzung
+
+Der Browser holt per Authorization Code mit PKCE nur den Code; die API
+tauscht ihn mit dem Client-Secret ein, prueft das ID-Token (Aussteller
+und Tenant muessen `ENTRA_TENANT_ID` entsprechen, Zielgruppe
+`ENTRA_CLIENT_ID`), legt den Benutzer an oder findet ihn und setzt das
+Cookie `zsc_session` (httpOnly, SameSite=Lax, Secure in Produktion). Im
+Browser liegen keine Tokens. Serverseitig steht in `user_sessions` nur
+der SHA-256 der Sitzungs-Id mit Benutzer, Laufzeiten, IP-Hash und
+gekuerztem User-Agent. Laufzeit `SESSION_TTL_HOURS` (12), Leerlauf
+`SESSION_IDLE_MINUTES` (120); Abmelden widerruft die Sitzung. Anmelden
+und Abmelden stehen im Audit (`auth.login`, `auth.logout`).
+
+Schreibende Anfragen mit Cookie brauchen den Header
+`X-Requested-With: ZeroStress` und einen Origin aus der erlaubten Liste
+(`NEXT_PUBLIC_APP_URL`, localhost); der API-Client des Web setzt den
+Header. Web und API muessen same-site laufen: gleicher Host (Reverse
+Proxy mit `/api`) oder Subdomains derselben Domain, sonst schickt der
+Browser das Cookie nicht mit. Deaktivierte Konten (Einstellungen > Team)
+werden bei jeder Anfrage abgewiesen.
+
+Bearer-Tokens von Entra funktionieren weiterhin fuer MCP-Clients und
+Skripte (gleiche Pruefung, ohne Cookie). Braucht `npm run db:push`
+(Tabelle `user_sessions`).
+
 ## DEV_AUTH_BYPASS
 
 Mit `DEV_AUTH_BYPASS=true` und `NEXT_PUBLIC_DEV_AUTH_BYPASS=true` entfaellt

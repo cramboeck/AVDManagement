@@ -12,6 +12,8 @@ import { logger } from 'hono/logger';
 import { secureHeaders } from 'hono/secure-headers';
 import { errorHandler } from './middleware/error-handler.js';
 import { bodyLimits, createRateLimiter } from './middleware/security.js';
+import { allowedOrigins } from './middleware/csrf.js';
+import { startSessionPruning } from './services/sessions.js';
 import { tenantsRouter } from './routes/tenants.js';
 import { usersRouter } from './routes/users.js';
 import { jobsRouter } from './routes/jobs.js';
@@ -57,17 +59,7 @@ app.use(
     referrerPolicy: 'no-referrer',
   })
 );
-app.use(
-  '*',
-  cors({
-    origin: [
-      process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3002',
-      'http://localhost:3000',
-      'http://localhost:3002',
-    ],
-    credentials: true,
-  })
-);
+app.use('*', cors({ origin: allowedOrigins(), credentials: true }));
 app.use('*', bodyLimits);
 
 // Rate-Limits: Login streng je IP, Worker je Token, Rest je Token oder IP (siehe middleware/security.ts)
@@ -159,20 +151,6 @@ app.route('/worker', workerRouter);
 // MCP: JSON-RPC ueber POST, gleiche Auth und Dienste wie die Web-Oberflaeche
 app.route('/mcp', mcpRouter);
 
-// Session-Info (fuer Frontend)
-app.get('/me', async (c) => {
-  const authHeader = c.req.header('Authorization');
-  if (!authHeader?.startsWith('Bearer ')) {
-    return c.json({ authenticated: false });
-  }
-
-  // Token validieren (vereinfacht)
-  return c.json({
-    authenticated: true,
-    // User-Daten werden vom authMiddleware gesetzt
-  });
-});
-
 // Server starten
 const port = parseInt(process.env.API_PORT ?? '3001', 10);
 
@@ -203,3 +181,6 @@ startAlerting().catch((error: Error) => {
 
 // winget-Katalog: Versionen der Quellpakete einmal am Tag pruefen
 startVersionSweep();
+
+// Abgelaufene Browser-Sitzungen stuendlich aufraeumen
+startSessionPruning();

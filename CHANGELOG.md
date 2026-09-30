@@ -154,6 +154,19 @@ Alle nennenswerten Aenderungen an ZeroStress Cockpit. Format angelehnt an
 
 ### Geaendert
 
+- Anmeldung: die API tauscht den Authorization Code, prueft das ID-Token
+  gegen den Partnertenant und setzt ein httpOnly-Sitzungscookie
+  (SameSite=Lax, Secure in Produktion); im Browser liegen keine
+  Entra-Tokens mehr. Sitzungen liegen serverseitig in `user_sessions`
+  (nur Hash, Laufzeit 12 h, Leerlauf 2 h, `npm run db:push`), Abmelden
+  widerruft sie, Anmelden und Abmelden stehen im Audit. Schreibende
+  Anfragen brauchen den Header `X-Requested-With` und einen erlaubten
+  Origin (CSRF-Schutz). Deaktivierte Konten werden auch mit gueltigem
+  Entra-Token abgewiesen. Bearer-Tokens bleiben fuer MCP und andere
+  Clients; `/auth/refresh` entfaellt, Sitzungsinfo unter `/auth/me`.
+  Web und API muessen same-site laufen (gleicher Host oder Subdomains
+  derselben Domain).
+
 - Login-Callback: im Dev-Modus lief der Abschluss durch React StrictMode
   doppelt; der zweite Lauf fand den Code-Verifier nicht mehr und meldete
   "Invalid state or missing code verifier", obwohl die Anmeldung

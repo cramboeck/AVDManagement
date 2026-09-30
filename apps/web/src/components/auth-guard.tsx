@@ -2,36 +2,33 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { isAuthenticated } from '@/lib/auth';
+import { fetchSession } from '@/lib/auth';
 
-const DEV_AUTH_BYPASS = process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS === 'true';
-
+/**
+ * Sitzung bei der API pruefen (httpOnly-Cookie, im Browser nicht lesbar).
+ * Ohne Sitzung geht es zur Login-Seite.
+ */
 export function AuthGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const [isChecking, setIsChecking] = useState(true);
-  const [isAuth, setIsAuth] = useState(false);
+  const [state, setState] = useState<'checking' | 'ok' | 'anonymous'>('checking');
 
   useEffect(() => {
-    const checkAuth = () => {
-      if (DEV_AUTH_BYPASS) {
-        setIsAuth(true);
-        setIsChecking(false);
-        return;
-      }
-
-      const authenticated = isAuthenticated();
-      setIsAuth(authenticated);
-      setIsChecking(false);
-
-      if (!authenticated) {
+    let cancelled = false;
+    fetchSession().then((session) => {
+      if (cancelled) return;
+      if (session.authenticated) {
+        setState('ok');
+      } else {
+        setState('anonymous');
         router.replace('/login');
       }
+    });
+    return () => {
+      cancelled = true;
     };
-
-    checkAuth();
   }, [router]);
 
-  if (isChecking) {
+  if (state === 'checking') {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
@@ -39,7 +36,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (!isAuth) {
+  if (state === 'anonymous') {
     return null;
   }
 
