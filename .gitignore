@@ -69,3 +69,6 @@ apps/worker-windows/worker.config.json
 # Exchange worker (DPAPI token, local config)
 apps/worker-exchange/worker.token
 apps/worker-exchange/worker.config.json
+
+# Lokaler Artefaktspeicher der API (Installer, .intunewin); nie ins Repository
+apps/api/data/
