@@ -10,7 +10,7 @@ import { tenantContextMiddleware, requireConnectedTenant } from '../middleware/t
 import { getDeviceProvider } from '../services/microsoft-clients.js';
 import { getTenantVulnerabilities } from '../services/inventory.js';
 import { enrichCve, CVE_PATTERN } from '../services/cve-enrichment.js';
-import { explainCve, getCachedExplanation, isExplainerConfigured } from '../services/cve-explainer.js';
+import { ExplainerError, explainCve, getCachedExplanation, isExplainerConfigured } from '../services/cve-explainer.js';
 import { DrizzleAuditLogger } from '../services/audit-logger.js';
 import type { CorrelationId, CveDetail, VulnerabilitySeverity } from '@zerostress/types';
 
@@ -133,6 +133,9 @@ app.post('/:cveId/explain', requireRole('engineer'), requireConnectedTenant, asy
       errorMessage: error instanceof Error ? error.message : String(error),
       correlationId,
     });
+    if (error instanceof ExplainerError) {
+      return c.json({ type: 'https://api.zerostress.io/problems/explainer-unavailable', title: 'KI-Erklaerung nicht moeglich', detail: error.message, status: error.status }, error.status);
+    }
     throw error;
   }
 });

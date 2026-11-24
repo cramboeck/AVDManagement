@@ -191,6 +191,11 @@ Alle nennenswerten Aenderungen an ZeroStress Cockpit. Format angelehnt an
 
 ### Geaendert
 
+- KI-Erklaerung zu CVEs: Modell `claude-opus-5-5` mit Aufwand `high` und
+  server-seitigem Fallback bei Ablehnung; ungueltiger oder widerrufener
+  `ANTHROPIC_API_KEY`, fehlende Rechte, Ratenlimit und Netzwerkfehler
+  erscheinen als verstaendliche Meldung statt als rohe API-Antwort.
+
 - Tenants: ein frueher entfernter Tenant wird beim erneuten Hinzufuegen
   reaktiviert (Verbindungstest sofort, Audit `tenant.reactivate`) statt
   mit "already onboarded" abgelehnt zu werden; ist er aktiv, aber dem
