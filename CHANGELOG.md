@@ -191,6 +191,11 @@ Alle nennenswerten Aenderungen an ZeroStress Cockpit. Format angelehnt an
 
 ### Geaendert
 
+- Abhaengigkeiten: Next.js 14.1.0 auf 14.2.35 (kritische SSRF-Luecke in
+  Server Actions), Hono und weitere Pakete per `npm audit fix` ohne
+  Versionsbruch. Offen bleiben Luecken, die nur mit Hauptversionen zu
+  schliessen sind (Next 15/16, drizzle-orm 0.45, zod 4, msal-node 7).
+
 - KI-Erklaerung zu CVEs: Modell `claude-opus-5-5` mit Aufwand `high` und
   server-seitigem Fallback bei Ablehnung; ungueltiger oder widerrufener
   `ANTHROPIC_API_KEY`, fehlende Rechte, Ratenlimit und Netzwerkfehler
