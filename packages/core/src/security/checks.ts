@@ -8,7 +8,7 @@
  * DNS-Aufloesung der API.
  */
 
-import type { CapabilityResult, CapabilityUnavailableReason, SecurityCheck, SecurityCheckReport, SecurityCheckStatus } from '@zerostress/types';
+import type { BaselineKind, BaselineOverview, CapabilityResult, CapabilityUnavailableReason, SecurityCheck, SecurityCheckReport, SecurityCheckStatus } from '@zerostress/types';
 import { RESTRICTED_GUEST_ROLE_IDS, type ConditionalAccessPolicy, type TenantPolicySnapshot } from '../providers/policy-provider.js';
 
 export interface MailAuthRecords {
@@ -26,6 +26,10 @@ export interface CheckInput {
   mailAuth: MailAuthRecords | null;
   // Aus dem MFA-Registrierungsreport (kann fehlen)
   adminsWithoutMfa: number | null;
+  // Intune-Baselines und Compliance-Richtlinien (fehlt bei aelteren Aufrufern)
+  baselines?: BaselineOverview | null;
+  // Outbound-Spam-Richtlinie laut Exchange-Worker: Off, On, Automatic; null = nicht gesammelt
+  exchangeAutoForwarding?: string | null;
 }
 
 const NO_EXPIRY_DAYS = 2147483647;
@@ -262,7 +266,76 @@ export function evaluateChecks(input: CheckInput): SecurityCheck[] {
     else checks.push(check('compliance-policy', 'devices', 'Compliance-Richtlinien in Intune', 2, src.data > 0 ? 'pass' : 'fail', src.data > 0 ? `${src.data} Compliance-Richtlinie(n) vorhanden.` : 'Keine Compliance-Richtlinie; Geraetezustand fliesst nicht in den Zugriff ein.', rec, { policies: src.data }));
   }
 
-  // 12. Mail-Authentifizierung per DNS
+  // 12. Anmeldehaeufigkeit fuer Administratoren
+  if (ca !== null) {
+    const hits = ca.filter((p) => (p.conditions.users?.includeRoles ?? []).length > 0 && p.sessionControls?.signInFrequency?.isEnabled === true);
+    checks.push(
+      check(
+        'admin-signin-frequency',
+        'access',
+        'Anmeldehaeufigkeit fuer Administratoren begrenzt',
+        1,
+        hits.length > 0 ? 'pass' : 'warn',
+        hits.length > 0 ? `${hits.length} Richtlinie(n) begrenzen die Sitzungsdauer von Administratorrollen.` : 'Keine Richtlinie begrenzt die Sitzungsdauer fuer Administratorrollen; Sitzungen bleiben bis zu 90 Tage gueltig.',
+        'Conditional Access fuer Administratorrollen mit Sitzungssteuerung "Anmeldehaeufigkeit" (z. B. 4 bis 12 Stunden) und ohne persistente Browsersitzung.',
+        { policies: hits.length }
+      )
+    );
+  }
+
+  // 13. Geraetecode-Fluss blockiert
+  if (ca !== null) {
+    const hits = ca.filter((p) => blocksAccess(p) && (p.conditions.authenticationFlows?.transferMethods ?? '').toLowerCase().includes('devicecodeflow'));
+    checks.push(
+      check(
+        'device-code-flow',
+        'access',
+        'Geraetecode-Anmeldung blockiert',
+        2,
+        hits.length > 0 ? 'pass' : 'warn',
+        hits.length > 0 ? `Blockiert durch ${hits.map((p) => `"${p.displayName}"`).join(', ')}.` : 'Der Geraetecode-Fluss ist nicht blockiert; er wird fuer Phishing von Anmeldungen genutzt.',
+        'Conditional-Access-Richtlinie mit Bedingung "Authentifizierungsfluesse: Geraetecodefluss" und Zugriff blockieren; Ausnahmen nur fuer Konferenzraumgeraete o. ae.',
+        { policies: hits.length }
+      )
+    );
+  }
+
+  // 14. Benutzer duerfen keine Tenants anlegen
+  if (policies.authorization.available && policies.authorization.data.allowedToCreateTenants !== null) {
+    const allowed = policies.authorization.data.allowedToCreateTenants;
+    checks.push(check('tenant-creation', 'governance', 'Benutzer duerfen keine Tenants anlegen', 1, allowed ? 'warn' : 'pass', allowed ? 'Jeder Benutzer darf eigene Entra-Tenants anlegen.' : 'Tenant-Erstellung ist Administratoren vorbehalten.', 'Entra ID > Benutzereinstellungen: "Einschraenken, dass Nicht-Administratoren Mandanten erstellen" auf Ja.', { allowedToCreateTenants: allowed }));
+  }
+
+  // 15. SharePoint-Freigabe nach aussen
+  {
+    const src = policies.sharePointSharing;
+    const rec = 'SharePoint Admin Center > Richtlinien > Freigabe: hoechstens "Neue und vorhandene Gaeste" (keine anonymen Links) oder enger; anonyme Links nur mit Ablaufdatum.';
+    if (!src.available) checks.push(unknownCheck('sharepoint-sharing', 'governance', 'SharePoint ohne anonyme Freigabelinks', 2, src, rec));
+    else {
+      const level = src.data;
+      const anonymous = level === 'externalUserAndGuestSharing';
+      const labels: Record<string, string> = { disabled: 'nur intern', existingExternalUserSharingOnly: 'nur vorhandene Gaeste', externalUserSharingOnly: 'neue und vorhandene Gaeste', externalUserAndGuestSharing: 'jeder mit dem Link (anonym)' };
+      checks.push(check('sharepoint-sharing', 'governance', 'SharePoint ohne anonyme Freigabelinks', 2, anonymous ? 'warn' : level === 'unknown' ? 'unknown' : 'pass', `Freigabe nach aussen: ${labels[level] ?? level}.`, rec, { sharingCapability: level }));
+    }
+  }
+
+  // 16. Automatische Weiterleitung nach extern (Exchange-Worker)
+  if (input.exchangeAutoForwarding !== undefined) {
+    const mode = input.exchangeAutoForwarding;
+    const rec = 'Defender-Portal > Richtlinien > Antispam > ausgehende Richtlinie: "Automatische Weiterleitung" auf Aus; Ausnahmen ueber eigene Richtlinie fuer einzelne Postfaecher.';
+    if (mode === null) checks.push(check('external-forwarding', 'mail', 'Automatische Weiterleitung nach extern gesperrt', 3, 'unknown', 'Nicht pruefbar: Postfachdaten des Exchange-Workers fehlen (Exchange > Postfachdaten sammeln).', rec));
+    else {
+      const on = mode.toLowerCase() === 'on';
+      checks.push(check('external-forwarding', 'mail', 'Automatische Weiterleitung nach extern gesperrt', 3, on ? 'fail' : 'pass', on ? 'Die ausgehende Spamrichtlinie erlaubt automatische Weiterleitung nach extern.' : `Einstellung "${mode}": automatische Weiterleitung nach extern ist gesperrt.`, rec, { autoForwardingMode: mode }));
+    }
+  }
+
+  // 17. Intune-Sicherheitsbaselines und Compliance
+  if (input.baselines !== undefined && input.baselines !== null) {
+    checks.push(...evaluateBaselineChecks(input.baselines));
+  }
+
+  // 18. Mail-Authentifizierung per DNS
   if (mailAuth) {
     const d = mailAuth.domain;
     if (mailAuth.error) {
@@ -291,6 +364,84 @@ export function evaluateChecks(input: CheckInput): SecurityCheck[] {
   return checks.sort((a, b) => order[a.status] - order[b.status] || b.weight - a.weight || a.title.localeCompare(b.title, 'de'));
 }
 
+const BASELINE_LABELS: Record<Exclude<BaselineKind, 'other' | 'windows365'>, { title: string; weight: SecurityCheck['weight']; rec: string }> = {
+  windows: { title: 'Windows-Sicherheitsbaseline zugewiesen', weight: 3, rec: 'Intune > Endpunktsicherheit > Sicherheitsbaselines: "Security Baseline for Windows" anlegen, Abweichungen begruendet dokumentieren und allen Windows-Geraeten zuweisen.' },
+  defender: { title: 'Defender-for-Endpoint-Baseline zugewiesen', weight: 2, rec: 'Sicherheitsbaseline "Microsoft Defender for Endpoint" anlegen und den Windows-Geraeten zuweisen.' },
+  edge: { title: 'Edge-Sicherheitsbaseline zugewiesen', weight: 1, rec: 'Sicherheitsbaseline "Microsoft Edge" anlegen und zuweisen.' },
+  'm365-apps': { title: 'Microsoft-365-Apps-Baseline zugewiesen', weight: 1, rec: 'Sicherheitsbaseline "Microsoft 365 Apps for Enterprise" anlegen und zuweisen.' },
+};
+
+/** Prueft Baselines und Compliance-Richtlinien; reine Funktion fuer Tests. */
+export function evaluateBaselineChecks(source: BaselineOverview): SecurityCheck[] {
+  const out: SecurityCheck[] = [];
+  if (!source.available) {
+    out.push(unknownCheck('baseline-windows', 'devices', BASELINE_LABELS.windows.title, 3, source, BASELINE_LABELS.windows.rec));
+    return out;
+  }
+  const { baselines, compliance } = source.data;
+  for (const kind of Object.keys(BASELINE_LABELS) as Array<keyof typeof BASELINE_LABELS>) {
+    const meta = BASELINE_LABELS[kind];
+    const all = baselines.filter((b) => b.kind === kind);
+    const assigned = all.filter((b) => b.assigned);
+    const status: SecurityCheckStatus = assigned.length > 0 ? 'pass' : all.length > 0 ? 'warn' : kind === 'windows' ? 'fail' : 'warn';
+    const summary = assigned.length > 0 ? `Zugewiesen: ${assigned.map((b) => `"${b.name}"${b.templateVersion ? ` (${b.templateVersion})` : ''}`).join(', ')}.` : all.length > 0 ? `Angelegt, aber nicht zugewiesen: ${all.map((b) => `"${b.name}"`).join(', ')}.` : 'Keine solche Baseline im Tenant.';
+    out.push(check(`baseline-${kind}`, 'devices', meta.title, meta.weight, status, summary, meta.rec, { assigned: assigned.length, total: all.length }));
+  }
+
+  const withStatus = baselines.filter((b) => b.assigned && b.status);
+  if (withStatus.length > 0) {
+    const errors = withStatus.reduce((sum, b) => sum + (b.status?.error ?? 0) + (b.status?.conflict ?? 0), 0);
+    const failed = withStatus.reduce((sum, b) => sum + (b.status?.failed ?? 0), 0);
+    out.push(
+      check(
+        'baseline-deviations',
+        'devices',
+        'Geraete ohne Abweichung von den Baselines',
+        2,
+        errors > 0 ? 'fail' : failed > 0 ? 'warn' : 'pass',
+        errors > 0 ? `${errors} Geraetezustand(e) mit Fehler oder Konflikt, ${failed} nicht konform.` : failed > 0 ? `${failed} Geraetezustand(e) nicht konform mit einer Baseline.` : 'Alle gemeldeten Geraete entsprechen den zugewiesenen Baselines.',
+        'Konflikte mit anderen Konfigurationsprofilen aufloesen (gleiche Einstellung doppelt), Fehler je Geraet im Intune-Portal pruefen.',
+        { errorsOrConflicts: errors, notCompliant: failed, baselines: withStatus.length }
+      )
+    );
+  }
+
+  const windowsCompliance = compliance.filter((p) => p.platform === 'windows' && p.assigned);
+  out.push(
+    check(
+      'compliance-windows',
+      'devices',
+      'Windows-Compliance-Richtlinie zugewiesen',
+      3,
+      windowsCompliance.length > 0 ? 'pass' : 'fail',
+      windowsCompliance.length > 0 ? `Zugewiesen: ${windowsCompliance.map((p) => `"${p.name}"`).join(', ')}.` : 'Keine zugewiesene Compliance-Richtlinie fuer Windows.',
+      'Compliance-Richtlinie Windows 10/11 mit BitLocker, Secure Boot, Defender, Firewall und Mindest-OS anlegen und allen Geraeten zuweisen.',
+      { policies: windowsCompliance.length }
+    )
+  );
+
+  const totals = compliance.filter((p) => p.assigned && p.status).reduce(
+    (acc, p) => ({ ok: acc.ok + (p.status?.success ?? 0), bad: acc.bad + (p.status?.failed ?? 0) + (p.status?.error ?? 0) }),
+    { ok: 0, bad: 0 }
+  );
+  if (totals.ok + totals.bad > 0) {
+    const share = Math.round((totals.bad / (totals.ok + totals.bad)) * 100);
+    out.push(
+      check(
+        'compliance-rate',
+        'devices',
+        'Geraete erfuellen die Compliance-Richtlinien',
+        2,
+        share === 0 ? 'pass' : share <= 10 ? 'warn' : 'fail',
+        `${totals.bad} von ${totals.ok + totals.bad} Geraetezustaenden nicht konform (${share} %).`,
+        'Nicht konforme Geraete im Intune-Portal pruefen; Conditional Access mit "konformes Geraet" sperrt sie sonst aus oder laesst sie durch.',
+        { notCompliant: totals.bad, compliant: totals.ok, percent: share }
+      )
+    );
+  }
+  return out;
+}
+
 export function buildCheckReport(input: CheckInput, generatedAt = new Date()): SecurityCheckReport {
   const checks = evaluateChecks(input);
   const counts: Record<SecurityCheckStatus, number> = { pass: 0, warn: 0, fail: 0, unknown: 0, 'not-applicable': 0 };
@@ -308,6 +459,8 @@ export function buildCheckReport(input: CheckInput, generatedAt = new Date()): S
     ['Verzeichnisrollen', input.policies.globalAdminCount],
     ['Domaenen', input.policies.domains],
     ['Intune-Compliance', input.policies.compliancePolicyCount],
+    ['SharePoint-Einstellungen', input.policies.sharePointSharing],
+    ...(input.baselines ? ([['Intune-Baselines', input.baselines]] as [string, CapabilityResult<unknown>][]) : []),
   ];
   for (const [source, result] of sources) {
     if (!result.available) {

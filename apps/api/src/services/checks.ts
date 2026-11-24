@@ -7,7 +7,8 @@ import { randomUUID } from 'node:crypto';
 import { promises as dns } from 'node:dns';
 import { buildCheckReport, type MailAuthRecords } from '@zerostress/core';
 import type { ManagedTenant, SecurityCheckReport } from '@zerostress/types';
-import { getPolicyProvider, getSecurityProvider } from './microsoft-clients.js';
+import { getBaselineProvider, getPolicyProvider, getSecurityProvider } from './microsoft-clients.js';
+import { getExchangeFacts } from './exchange.js';
 
 const DNS_TIMEOUT_MS = 5000;
 
@@ -57,13 +58,18 @@ export async function resolveMailAuth(domain: string): Promise<MailAuthRecords> 
 
 export async function buildSecurityChecks(tenant: ManagedTenant): Promise<SecurityCheckReport> {
   const ctx = { tenantId: tenant.id, correlationId: randomUUID() };
-  const [policies, mailAuth, mfa] = await Promise.all([
+  const [policies, mailAuth, mfa, baselines, exchange] = await Promise.all([
     getPolicyProvider().getSnapshot(ctx),
     resolveMailAuth(tenant.primaryDomain),
     getSecurityProvider()
       .getMfaRegistration(ctx)
       .catch(() => null),
+    getBaselineProvider()
+      .getOverview(ctx)
+      .catch(() => null),
+    getExchangeFacts(tenant.id).catch(() => null),
   ]);
   const adminsWithoutMfa = mfa && mfa.available ? mfa.data.adminsWithoutMfa : null;
-  return buildCheckReport({ policies, mailAuth, adminsWithoutMfa });
+  // Ohne gesammelte Exchange-Daten: Check als "nicht pruefbar" mit Hinweis auf den Worker
+  return buildCheckReport({ policies, mailAuth, adminsWithoutMfa, baselines, exchangeAutoForwarding: exchange?.autoForwardingMode ?? null });
 }

@@ -394,6 +394,35 @@ primaeren Domaene per DNS. Jeder Check hat Befund, Empfehlung und Belege;
 Quellen ohne Berechtigung werden als "nicht pruefbar" gefuehrt, nie als
 Fehler. Der Erfuellungsgrad gewichtet wesentliche Checks dreifach.
 
+## Baselines und Haertung (Sicherheit > Baselines, Best Practices)
+
+Der Tab **Baselines** listet die Intune-Sicherheitsbaselines des Tenants
+(neues Format ueber `configurationPolicies` mit `templateFamily baseline`,
+aeltere Vorlagen ueber `intents` mit Vorlagentyp `securityBaseline`) und
+die Compliance-Richtlinien (`deviceCompliancePolicies`) mit Zuweisung und
+Geraetestatus (erfolgreich, nicht konform, Fehler/Konflikt, ausstehend).
+Status je neuer Baseline kommt aus dem Intune-Bericht
+`getConfigurationPolicyDeviceSummaryReport`; liefert er ein unbekanntes
+Format, steht dort "nicht gemeldet". Nur lesend, braucht
+`DeviceManagementConfiguration.Read.All` (in ReadWrite enthalten).
+
+Die Best Practices bewerten daraus: Windows-, Defender-, Edge- und
+Microsoft-365-Apps-Baseline zugewiesen, Geraete mit Fehlern oder
+Konflikten gegen die Baselines, Windows-Compliance-Richtlinie zugewiesen,
+Anteil nicht konformer Geraete. Neu im M365-Teil: Anmeldehaeufigkeit fuer
+Administratoren, Geraetecode-Fluss blockiert, Tenant-Erstellung durch
+Benutzer, SharePoint ohne anonyme Freigabelinks
+(`SharePointTenantSettings.Read.All`) und automatische Weiterleitung nach
+extern (aus den Postfachdaten des Exchange-Workers; ohne gesammelte Daten
+"nicht pruefbar").
+
+**CIS:** Der Katalog ist aus oeffentlicher Microsoft-Dokumentation
+abgeleitet und deckt sich inhaltlich in weiten Teilen mit den CIS
+Benchmarks fuer Microsoft 365 und Windows, enthaelt aber bewusst keine
+CIS-Nummern oder -Texte. Die Nutzung der CIS Benchmarks in einem
+kommerziellen Produkt setzt eine CIS-Lizenz (SecureSuite) voraus; erst
+damit laesst sich eine formale Zuordnung je Kontrolle ergaenzen.
+
 ## Exchange Online
 
 Die Seite **Exchange** liest vier Nutzungsberichte aus Graph
@@ -807,6 +836,7 @@ Secret ab (`AADSTS700025`).
 | `Policy.Read.All` | Best-Practice-Checks: Conditional Access, Sicherheitsstandards, Authentifizierungsmethoden, Autorisierungsrichtlinie (Sicherheit > Best Practices) | Betroffene Checks "nicht pruefbar" |
 | Defender `AdvancedQuery.Read.All` | Netzwerkverbindungen aus Advanced Hunting (Geraet > Verbindungen, Netzwerk > Kommunikation der Clients); braucht Defender for Endpoint Plan 2, Defender for Business hat kein Advanced Hunting | Karte "Berechtigung fehlt" bzw. "nicht lizenziert" |
 | `MailboxSettings.ReadWrite` | Postfachdetail: Abwesenheit, Zeitzone, Posteingangsregeln lesen; Jobs Abwesenheit setzen, Weiterleitungsregel anlegen, Regel aktivieren/deaktivieren/loeschen; Weiterleitungs-Scan (Exchange > Postfach) | Karte "Berechtigung fehlt" im Postfachdetail, Jobs schlagen mit 403 fehl |
+| `SharePointTenantSettings.Read.All` | Best-Practice-Check "SharePoint ohne anonyme Freigabelinks" (`/admin/sharepoint/settings`) | Check "nicht pruefbar" |
 | `Organization.Read.All` (optional) | Verifizierte Domaenen des Tenants fuer die Einstufung "externe Weiterleitung"; fehlt sie, gelten die Domaenen der Postfaecher als intern | Einstufung etwas grober |
 
 Schluessel und Passwoerter werden nie gelistet oder exportiert: Anzeige nur

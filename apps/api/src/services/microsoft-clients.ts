@@ -23,6 +23,7 @@ import {
   HuntingProvider,
   VmProvider,
   PolicyProvider,
+  BaselineProvider,
   AppProvider,
   TeamViewerProvider,
   SharePointProvider,
@@ -155,6 +156,13 @@ export function getVmProvider(): VmProvider {
     vmProvider = new VmProvider(getArmClient());
   }
   return vmProvider;
+}
+
+let baselineProvider: BaselineProvider | null = null;
+
+export function getBaselineProvider(): BaselineProvider {
+  if (!baselineProvider) baselineProvider = new BaselineProvider(getGraphClient());
+  return baselineProvider;
 }
 
 let policyProvider: PolicyProvider | null = null;

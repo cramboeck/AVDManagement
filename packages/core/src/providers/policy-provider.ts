@@ -19,13 +19,15 @@ export interface ConditionalAccessPolicy {
     signInRiskLevels?: string[] | null;
     userRiskLevels?: string[] | null;
     platforms?: { includePlatforms?: string[] } | null;
+    // Authentifizierungsfluesse, z. B. Geraetecode-Fluss blockieren
+    authenticationFlows?: { transferMethods?: string | null } | null;
   };
   grantControls: {
     operator?: string | null;
     builtInControls?: string[] | null;
     authenticationStrength?: { id: string; displayName?: string } | null;
   } | null;
-  sessionControls?: unknown;
+  sessionControls?: { signInFrequency?: { isEnabled?: boolean | null; value?: number | null; type?: string | null; frequencyInterval?: string | null } | null; persistentBrowser?: { isEnabled?: boolean | null; mode?: string | null } | null } | null;
 }
 
 export interface AuthenticationMethodsSnapshot {
@@ -38,6 +40,8 @@ export interface AuthenticationMethodsSnapshot {
 export interface AuthorizationPolicySnapshot {
   allowedToCreateApps: boolean | null;
   allowedToCreateSecurityGroups: boolean | null;
+  // Benutzer duerfen eigene Entra-Tenants anlegen
+  allowedToCreateTenants: boolean | null;
   allowInvitesFrom: string | null;
   guestUserRoleId: string | null;
   // Benutzer duerfen Apps selbst zustimmen
@@ -59,6 +63,8 @@ export interface TenantPolicySnapshot {
   globalAdminCount: CapabilityResult<number>;
   domains: CapabilityResult<DomainPasswordPolicy[]>;
   compliancePolicyCount: CapabilityResult<number>;
+  // SharePoint-Freigabe nach aussen (sharingCapability)
+  sharePointSharing: CapabilityResult<string>;
 }
 
 // Rollenvorlage Global Administrator
@@ -84,6 +90,7 @@ export class PolicyProvider extends BaseResourceProvider {
   readonly requiredScopes = ['Policy.Read.All'];
   private readonly directoryScopes = ['Directory.Read.All'];
   private readonly intuneScopes = ['DeviceManagementConfiguration.ReadWrite.All'];
+  private readonly sharePointScopes = ['SharePointTenantSettings.Read.All'];
 
   constructor(private readonly graphClient: GraphClient) {
     super();
@@ -103,7 +110,7 @@ export class PolicyProvider extends BaseResourceProvider {
     this.validateContext(ctx);
     const tenantId = ctx.tenantId as string;
 
-    const [conditionalAccess, securityDefaultsEnabled, authenticationMethods, authorization, globalAdminCount, domains, compliancePolicyCount] = await Promise.all([
+    const [conditionalAccess, securityDefaultsEnabled, authenticationMethods, authorization, globalAdminCount, domains, compliancePolicyCount, sharePointSharing] = await Promise.all([
       this.guard('Policy.Read.All', async () => {
         const response = await this.graphClient.get<GraphResponse<ConditionalAccessPolicy[]>>(tenantId, '/identity/conditionalAccess/policies', this.requiredScopes);
         return response.value;
@@ -133,12 +140,13 @@ export class PolicyProvider extends BaseResourceProvider {
           guestUserRoleId?: string;
           allowEmailVerifiedUsersToJoinOrganization?: boolean;
           permissionGrantPolicyIdsAssignedToDefaultUserRole?: string[];
-          defaultUserRolePermissions?: { allowedToCreateApps?: boolean; allowedToCreateSecurityGroups?: boolean };
+          defaultUserRolePermissions?: { allowedToCreateApps?: boolean; allowedToCreateSecurityGroups?: boolean; allowedToCreateTenants?: boolean };
         }>(tenantId, '/policies/authorizationPolicy', this.requiredScopes);
         const grants = policy.permissionGrantPolicyIdsAssignedToDefaultUserRole ?? [];
         return {
           allowedToCreateApps: policy.defaultUserRolePermissions?.allowedToCreateApps ?? null,
           allowedToCreateSecurityGroups: policy.defaultUserRolePermissions?.allowedToCreateSecurityGroups ?? null,
+          allowedToCreateTenants: policy.defaultUserRolePermissions?.allowedToCreateTenants ?? null,
           allowInvitesFrom: policy.allowInvitesFrom ?? null,
           guestUserRoleId: policy.guestUserRoleId ?? null,
           userConsentAllowed: grants.some((g) => /ManagePermissionGrantsForSelf/i.test(g)),
@@ -168,8 +176,12 @@ export class PolicyProvider extends BaseResourceProvider {
         const response = await this.graphClient.get<GraphResponse<{ id: string }[]>>(tenantId, '/deviceManagement/deviceCompliancePolicies?$select=id', this.intuneScopes);
         return response.value.length;
       }),
+      this.guard('SharePointTenantSettings.Read.All', async () => {
+        const settings = await this.graphClient.get<{ sharingCapability?: string | null }>(tenantId, '/admin/sharepoint/settings', this.sharePointScopes);
+        return settings.sharingCapability ?? 'unknown';
+      }),
     ]);
 
-    return { conditionalAccess, securityDefaultsEnabled, authenticationMethods, authorization, globalAdminCount, domains, compliancePolicyCount };
+    return { conditionalAccess, securityDefaultsEnabled, authenticationMethods, authorization, globalAdminCount, domains, compliancePolicyCount, sharePointSharing };
   }
 }

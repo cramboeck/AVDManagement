@@ -1344,6 +1344,54 @@ export interface Alert {
 export type SecurityCheckStatus = 'pass' | 'warn' | 'fail' | 'unknown' | 'not-applicable';
 export type SecurityCheckCategory = 'identity' | 'access' | 'governance' | 'devices' | 'mail';
 
+// ============================================
+// Intune-Sicherheitsbaselines und Compliance-Richtlinien (nur lesend)
+// ============================================
+
+export type BaselineKind = 'windows' | 'defender' | 'edge' | 'm365-apps' | 'windows365' | 'other';
+
+// Geraetestatus einer Richtlinie; null-Werte heissen "nicht gemeldet"
+export interface PolicyDeviceStatus {
+  success: number;
+  failed: number;
+  error: number;
+  conflict: number;
+  notApplicable: number;
+  pending: number;
+}
+
+export interface SecurityBaselineInfo {
+  id: string;
+  name: string;
+  kind: BaselineKind;
+  // settings-catalog: neues Format (configurationPolicies), template: aeltere Baseline (intents)
+  source: 'settings-catalog' | 'template';
+  templateName: string | null;
+  templateVersion: string | null;
+  assigned: boolean;
+  lastModified: string | null;
+  status: PolicyDeviceStatus | null;
+}
+
+export type CompliancePlatform = 'windows' | 'macos' | 'ios' | 'android' | 'other';
+
+export interface CompliancePolicyInfo {
+  id: string;
+  name: string;
+  platform: CompliancePlatform;
+  assigned: boolean;
+  lastModified: string | null;
+  status: PolicyDeviceStatus | null;
+}
+
+export interface BaselineOverviewSet {
+  baselines: SecurityBaselineInfo[];
+  compliance: CompliancePolicyInfo[];
+  collectedAt: string;
+}
+
+export type BaselineOverview = CapabilityResult<BaselineOverviewSet>;
+
 export interface SecurityCheck {
   id: string;
   category: SecurityCheckCategory;

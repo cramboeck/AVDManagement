@@ -35,11 +35,12 @@ function policies(overrides: Partial<TenantPolicySnapshot> = {}): TenantPolicySn
     authenticationMethods: { available: true, data: { methods: { sms: false, voice: false, fido2: true, microsoftauthenticator: true }, numberMatching: true } },
     authorization: {
       available: true,
-      data: { allowedToCreateApps: false, allowedToCreateSecurityGroups: false, allowInvitesFrom: 'adminsAndGuestInviters', guestUserRoleId: '10dae51f-b6af-4016-8d66-8c2a99b929b3', userConsentAllowed: false, allowEmailVerifiedUsersToJoinOrganization: false },
+      data: { allowedToCreateApps: false, allowedToCreateSecurityGroups: false, allowedToCreateTenants: false, allowInvitesFrom: 'adminsAndGuestInviters', guestUserRoleId: '10dae51f-b6af-4016-8d66-8c2a99b929b3', userConsentAllowed: false, allowEmailVerifiedUsersToJoinOrganization: false },
     },
     globalAdminCount: { available: true, data: 2 },
     domains: { available: true, data: [{ domain: 'contoso.com', isDefault: true, passwordValidityPeriodInDays: 2147483647 }] },
     compliancePolicyCount: { available: true, data: 3 },
+    sharePointSharing: { available: true, data: 'externalUserSharingOnly' },
     ...overrides,
   };
 }

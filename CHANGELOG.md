@@ -8,6 +8,17 @@ Alle nennenswerten Aenderungen an ZeroStress Cockpit. Format angelehnt an
 
 ### Hinzugefuegt
 
+- Sicherheit > Baselines: Intune-Sicherheitsbaselines (neues und aelteres
+  Format) und Compliance-Richtlinien je Tenant mit Zuweisung und
+  Geraetestatus. Neue Best-Practice-Checks: Windows-, Defender-, Edge- und
+  M365-Apps-Baseline zugewiesen, Abweichungen von Baselines,
+  Windows-Compliance-Richtlinie, Anteil nicht konformer Geraete,
+  Anmeldehaeufigkeit fuer Administratoren, Geraetecode-Fluss blockiert,
+  Tenant-Erstellung durch Benutzer, SharePoint ohne anonyme Links (neue
+  Berechtigung `SharePointTenantSettings.Read.All`), automatische
+  Weiterleitung nach extern. Katalog aus Microsoft-Dokumentation, ohne
+  CIS-Texte (Lizenz).
+
 - Geraete-Monitor: Bibliotheksskript `ZSC-monitor` mit stuendlicher
   Intune-Zuweisung auf alle Geraete (Alerts > Geraete-Monitor, Jobs
   `tenant.monitor-enable/-disable`), Auswertung im Alert-Takt mit Regeln

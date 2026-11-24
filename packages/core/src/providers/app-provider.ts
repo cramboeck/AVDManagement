@@ -54,7 +54,7 @@ interface GraphAssignment {
 }
 
 // Intune-Berichte: Spalten und Werte getrennt
-interface IntuneReport {
+export interface IntuneReport {
   TotalRowCount?: number;
   Schema?: { Column: string; PropertyType: string }[];
   Values?: unknown[][];

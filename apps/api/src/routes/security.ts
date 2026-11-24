@@ -6,7 +6,7 @@ import { randomUUID } from 'node:crypto';
 import { Hono } from 'hono';
 import { authMiddleware } from '../middleware/auth.js';
 import { tenantContextMiddleware, requireConnectedTenant } from '../middleware/tenant-context.js';
-import { getIdentityProvider } from '../services/microsoft-clients.js';
+import { getBaselineProvider, getIdentityProvider } from '../services/microsoft-clients.js';
 import { DrizzleAuditLogger } from '../services/audit-logger.js';
 import { buildSecurityPosture } from '../services/posture.js';
 import { buildSecurityChecks } from '../services/checks.js';
@@ -33,6 +33,13 @@ app.get('/posture', requireConnectedTenant, async (c) => {
 app.get('/checks', requireConnectedTenant, async (c) => {
   const tenant = c.get('tenant');
   return c.json(await buildSecurityChecks(tenant));
+});
+
+// Intune-Sicherheitsbaselines und Compliance-Richtlinien mit Geraetestatus (nur lesend)
+app.get('/baselines', requireConnectedTenant, async (c) => {
+  const tenant = c.get('tenant');
+  const correlationId = c.req.header('X-Correlation-ID') ?? randomUUID();
+  return c.json(await getBaselineProvider().getOverview({ tenantId: tenant.id, correlationId }));
 });
 
 // Anmeldungen im Tenant (Sicherheitsmonitoring: woher, womit, mit welchem Ergebnis)
