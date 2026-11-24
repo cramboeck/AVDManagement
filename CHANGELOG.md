@@ -191,6 +191,11 @@ Alle nennenswerten Aenderungen an ZeroStress Cockpit. Format angelehnt an
 
 ### Geaendert
 
+- Tenants: ein frueher entfernter Tenant wird beim erneuten Hinzufuegen
+  reaktiviert (Verbindungstest sofort, Audit `tenant.reactivate`) statt
+  mit "already onboarded" abgelehnt zu werden; ist er aktiv, aber dem
+  eigenen Konto nicht zugewiesen, sagt die Meldung das.
+
 - Anmeldung: die API tauscht den Authorization Code, prueft das ID-Token
   gegen den Partnertenant und setzt ein httpOnly-Sitzungscookie
   (SameSite=Lax, Secure in Produktion); im Browser liegen keine

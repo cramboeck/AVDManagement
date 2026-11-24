@@ -84,7 +84,38 @@ app.post('/', requireRole('engineer'), validate('json', createTenantSchema), asy
     ),
   });
 
+  // Frueher entfernter Tenant: reaktivieren statt Konflikt. Jobs und Audit haengen an der
+  // bestehenden Zeile; der Consent im Kundentenant besteht oft noch, daher gleich testen.
+  if (existing && !existing.isActive) {
+    const before = { isActive: false, displayName: existing.displayName, primaryDomain: existing.primaryDomain, connectionStatus: existing.connectionStatus };
+    await db
+      .update(managedTenants)
+      .set({ isActive: true, displayName: body.displayName, primaryDomain: body.primaryDomain, authMethod: body.authMethod, connectionStatus: 'consent-required', missingScopes: [] })
+      .where(eq(managedTenants.id, existing.id));
+    getTokenProvider().invalidateTokens(existing.microsoftTenantId);
+    const result = await testTenantConnection(existing.microsoftTenantId).catch(() => null);
+    if (result) await persistConnectionTestResult(existing.id, result);
+    const reactivated = await db.query.managedTenants.findFirst({ where: eq(managedTenants.id, existing.id) });
+    await audit.log({
+      mspId: auth.mspId,
+      tenantId: existing.id as TenantId,
+      userId: auth.user.id,
+      action: 'tenant.reactivate',
+      targetType: 'tenant',
+      targetId: existing.microsoftTenantId,
+      targetDisplayName: body.displayName,
+      beforeState: before,
+      afterState: { isActive: true, displayName: body.displayName, primaryDomain: body.primaryDomain, connectionStatus: reactivated?.connectionStatus ?? 'consent-required' },
+      result: 'success',
+      correlationId,
+    });
+    return c.json(toManagedTenant(reactivated as TenantRow), 201);
+  }
+
   if (existing) {
+    // Aktiv, aber fuer dieses Konto evtl. nicht sichtbar (Tenant-Zuweisung unter Einstellungen > Team)
+    const visible = await tenantFilter(auth);
+    const hidden = visible !== null && !visible.includes(existing.id);
     await audit.log({
       mspId: auth.mspId,
       tenantId: existing.id as TenantId,
@@ -101,9 +132,11 @@ app.post('/', requireRole('engineer'), validate('json', createTenantSchema), asy
     return c.json(
       {
         type: 'https://api.zerostress.io/problems/conflict',
-        title: 'Tenant already exists',
+        title: 'Tenant existiert bereits',
         status: 409,
-        detail: `Tenant with Microsoft ID '${body.microsoftTenantId}' is already onboarded`,
+        detail: hidden
+          ? `Der Tenant ${body.microsoftTenantId} ist bereits angebunden, aber deinem Konto nicht zugewiesen. Ein Owner kann ihn unter Einstellungen > Team freigeben.`
+          : `Der Tenant ${body.microsoftTenantId} ist bereits angebunden (${existing.displayName}).`,
       },
       409
     );

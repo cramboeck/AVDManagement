@@ -874,9 +874,10 @@ Der Tenant wird deaktiviert, nicht geloescht: Jobs und Audit-Eintraege
 bleiben nachvollziehbar, der Bestands-Snapshot wird geloescht, der Vorgang
 steht im Audit. Der Admin-Consent im Kundentenant bleibt bestehen; um ihn
 zu widerrufen, dort unter Entra ID > Enterprise-Anwendungen die Anwendung
-der Konsole loeschen. Ein erneutes Anlegen desselben Microsoft-Tenants
-wird abgelehnt, solange der alte Eintrag existiert (Konflikt); in dem Fall
-den Eintrag in `managed_tenants` reaktivieren statt neu anlegen.
+der Konsole loeschen. Wird derselbe Microsoft-Tenant spaeter erneut
+hinzugefuegt, reaktiviert die Konsole den alten Eintrag (Name und Domain
+aus dem Formular, Verbindungstest sofort, Audit `tenant.reactivate`);
+Jobs und Audit-Historie bleiben verbunden.
 
 ### Zweiter Tenant: was pro Tenant noetig ist
 
