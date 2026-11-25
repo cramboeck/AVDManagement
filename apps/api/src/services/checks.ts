@@ -9,6 +9,7 @@ import { buildCheckReport, type MailAuthRecords } from '@zerostress/core';
 import type { ManagedTenant, SecurityCheckReport } from '@zerostress/types';
 import { getBaselineProvider, getPolicyProvider, getSecurityProvider } from './microsoft-clients.js';
 import { getExchangeFacts } from './exchange.js';
+import { getHardeningStatus } from './hardening.js';
 
 const DNS_TIMEOUT_MS = 5000;
 
@@ -58,7 +59,7 @@ export async function resolveMailAuth(domain: string): Promise<MailAuthRecords> 
 
 export async function buildSecurityChecks(tenant: ManagedTenant): Promise<SecurityCheckReport> {
   const ctx = { tenantId: tenant.id, correlationId: randomUUID() };
-  const [policies, mailAuth, mfa, baselines, exchange] = await Promise.all([
+  const [policies, mailAuth, mfa, baselines, exchange, hardening] = await Promise.all([
     getPolicyProvider().getSnapshot(ctx),
     resolveMailAuth(tenant.primaryDomain),
     getSecurityProvider()
@@ -68,8 +69,12 @@ export async function buildSecurityChecks(tenant: ManagedTenant): Promise<Securi
       .getOverview(ctx)
       .catch(() => null),
     getExchangeFacts(tenant.id).catch(() => null),
+    // Fehler (z. B. 403) lassen den Check weg, statt "nicht eingeschaltet" zu behaupten
+    getHardeningStatus(tenant.id, ctx.correlationId)
+      .then((h) => (h.enabled ? h.summary : null))
+      .catch(() => undefined),
   ]);
   const adminsWithoutMfa = mfa && mfa.available ? mfa.data.adminsWithoutMfa : null;
   // Ohne gesammelte Exchange-Daten: Check als "nicht pruefbar" mit Hinweis auf den Worker
-  return buildCheckReport({ policies, mailAuth, adminsWithoutMfa, baselines, exchangeAutoForwarding: exchange?.autoForwardingMode ?? null });
+  return buildCheckReport({ policies, mailAuth, adminsWithoutMfa, baselines, exchangeAutoForwarding: exchange?.autoForwardingMode ?? null, hardening });
 }

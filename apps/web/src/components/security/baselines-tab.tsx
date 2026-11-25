@@ -7,6 +7,7 @@ import { LoadingTable } from '@/components/ui/loading';
 import { ErrorState } from '@/components/ui/error-state';
 import { EmptyState } from '@/components/ui/empty-state';
 import { CapabilityNotice } from '@/components/identity/capability-notice';
+import { HardeningSection } from './hardening-section';
 import type { BaselineKind, BaselineOverview, CompliancePlatform, PolicyDeviceStatus } from '@zerostress/types';
 
 const kindLabels: Record<BaselineKind, string> = {
@@ -46,10 +47,23 @@ function AssignedBadge({ assigned }: { assigned: boolean }) {
 }
 
 /**
+ * Baselines-Tab: Intune-Baselines und Compliance oben, darunter die eigene
+ * Haertungspruefung der Geraete. Beide Teile laden und scheitern unabhaengig.
+ */
+export function BaselinesTab({ tenantId }: { tenantId: string }) {
+  return (
+    <div className="space-y-10">
+      <IntuneBaselines tenantId={tenantId} />
+      <HardeningSection tenantId={tenantId} />
+    </div>
+  );
+}
+
+/**
  * Intune-Sicherheitsbaselines und Compliance-Richtlinien des Tenants mit
  * Zuweisung und Geraetestatus. Nur lesend; die Bewertung steht unter Best Practices.
  */
-export function BaselinesTab({ tenantId }: { tenantId: string }) {
+function IntuneBaselines({ tenantId }: { tenantId: string }) {
   const query = useQuery({
     queryKey: ['security-baselines', tenantId],
     queryFn: () => api.get<BaselineOverview>(`/tenants/${tenantId}/security/baselines`),

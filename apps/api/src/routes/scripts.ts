@@ -59,6 +59,22 @@ app.post('/monitor/:action{enable|disable}', requireRole('engineer'), requireCon
   return c.json(job, 202);
 });
 
+// Geraete-Haertung: taegliche Pruefung ein- oder ausschalten (Auswertung unter /security/hardening)
+app.post('/hardening/:action{enable|disable}', requireRole('engineer'), requireConnectedTenant, async (c) => {
+  const auth = c.get('auth');
+  const tenant = c.get('tenant');
+  const action = c.req.param('action');
+  const job = await getJobQueue().createJob({
+    type: action === 'enable' ? 'tenant.hardening-enable' : 'tenant.hardening-disable',
+    tenantId: tenant.id,
+    mspId: auth.mspId,
+    userId: auth.user.id,
+    userEmail: auth.user.email,
+    payload: { tenantDisplayName: tenant.displayName, reason: null, targetType: 'tenant', targetId: tenant.microsoftTenantId, targetDisplayName: `${tenant.displayName}: Haertungspruefung ${action === 'enable' ? 'einschalten' : 'ausschalten'}` },
+  });
+  return c.json(job, 202);
+});
+
 // Diagnose: was Intune fuer dieses Skript auf diesem Geraet gerade kennt, ohne zu warten
 app.get('/:scriptId/state', requireConnectedTenant, async (c) => {
   const tenant = c.get('tenant');

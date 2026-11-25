@@ -58,6 +58,7 @@ describe('RemediationProvider', () => {
       ['local-admins', 'missing'],
       ['battery-info', 'missing'],
       ['monitor', 'missing'],
+      ['hardening', 'missing'],
     ]);
     expect(status.data[1].tenantHash).toBe('a'.repeat(64));
     expect(graph.get.mock.calls[0][1]).toContain(`${GRAPH_BETA}/deviceManagement/deviceHealthScripts`);
@@ -169,6 +170,29 @@ describe('RemediationProvider', () => {
     });
     const state = await provider.getRunState(ctx, 'md-1', 'remote-1');
     expect(state?.preOutput).toBe('{"new":1}');
+  });
+
+  it('assigns a daily schedule to all devices and clears it with none', async () => {
+    graph.post.mockResolvedValue(undefined);
+    await provider.setSchedule(ctx, 'remote-h', 'daily');
+    const [, path, , body] = graph.post.mock.calls[0];
+    expect(path).toBe(`${GRAPH_BETA}/deviceManagement/deviceHealthScripts/remote-h/assign`);
+    expect(body.deviceHealthScriptAssignments[0]).toMatchObject({
+      target: { '@odata.type': '#microsoft.graph.allDevicesAssignmentTarget' },
+      runRemediationScript: false,
+      runSchedule: { '@odata.type': '#microsoft.graph.deviceHealthScriptDailySchedule', interval: 1, time: '12:00:00.0000000', useUtc: false },
+    });
+    await provider.setSchedule(ctx, 'remote-h', 'none');
+    expect(graph.post.mock.calls[1][3]).toEqual({ deviceHealthScriptAssignments: [] });
+  });
+
+  it('reads daily schedules and surfaces 429 from assign', async () => {
+    graph.get
+      .mockResolvedValueOnce({ value: [tenantScript('hardening')] })
+      .mockResolvedValueOnce({ value: [{ target: { '@odata.type': '#microsoft.graph.allDevicesAssignmentTarget' }, runSchedule: { '@odata.type': '#microsoft.graph.deviceHealthScriptDailySchedule', interval: 1 } }] });
+    expect(await provider.getScheduleStatus(ctx, 'hardening')).toEqual({ tenantScriptId: 'remote-hardening', hourly: false, daily: true, allDevices: true });
+    graph.post.mockRejectedValue(new GraphApiError(429, 'TooManyRequests', 'Throttled'));
+    await expect(provider.setSchedule(ctx, 'remote-hardening', 'daily')).rejects.toMatchObject({ statusCode: 429 });
   });
 
   describe('isFreshRunState', () => {

@@ -8,7 +8,7 @@
  * DNS-Aufloesung der API.
  */
 
-import type { BaselineKind, BaselineOverview, CapabilityResult, CapabilityUnavailableReason, SecurityCheck, SecurityCheckReport, SecurityCheckStatus } from '@zerostress/types';
+import type { BaselineKind, BaselineOverview, CapabilityResult, HardeningSummary, CapabilityUnavailableReason, SecurityCheck, SecurityCheckReport, SecurityCheckStatus } from '@zerostress/types';
 import { RESTRICTED_GUEST_ROLE_IDS, type ConditionalAccessPolicy, type TenantPolicySnapshot } from '../providers/policy-provider.js';
 
 export interface MailAuthRecords {
@@ -30,6 +30,8 @@ export interface CheckInput {
   baselines?: BaselineOverview | null;
   // Outbound-Spam-Richtlinie laut Exchange-Worker: Off, On, Automatic; null = nicht gesammelt
   exchangeAutoForwarding?: string | null;
+  // Geraete-Haertung: undefined = nicht abgefragt, null = Pruefung nicht eingeschaltet
+  hardening?: HardeningSummary | null;
 }
 
 const NO_EXPIRY_DAYS = 2147483647;
@@ -335,7 +337,30 @@ export function evaluateChecks(input: CheckInput): SecurityCheck[] {
     checks.push(...evaluateBaselineChecks(input.baselines));
   }
 
-  // 18. Mail-Authentifizierung per DNS
+  // 18. Geraete-Haertung (Skript ZSC-hardening)
+  if (input.hardening !== undefined) {
+    const rec = 'Unter Sicherheit > Baselines die haeufigsten nicht erfuellten Kontrollen ueber Intune-Baselines oder den Einstellungskatalog schliessen.';
+    const h = input.hardening;
+    if (h === null) checks.push(check('device-hardening', 'devices', 'Geraete-Haertung', 2, 'unknown', 'Nicht pruefbar: die taegliche Haertungspruefung ist fuer diesen Tenant nicht eingeschaltet (Sicherheit > Baselines).', rec));
+    else if (h.scorePercent === null) checks.push(check('device-hardening', 'devices', 'Geraete-Haertung', 2, 'unknown', 'Eingeschaltet, aber noch kein Geraet hat gemeldet.', rec));
+    else {
+      const worst = h.controls.filter((c) => c.failing > 0).slice(0, 3);
+      checks.push(
+        check(
+          'device-hardening',
+          'devices',
+          'Geraete-Haertung',
+          2,
+          h.scorePercent >= 90 ? 'pass' : h.scorePercent >= 70 ? 'warn' : 'fail',
+          `Durchschnittlich ${h.scorePercent} % der Kontrollen erfuellt (${h.devicesReporting} Geraete).${worst.length ? ` Am haeufigsten offen: ${worst.map((c) => `${c.title} (${c.failing})`).join(', ')}.` : ''}`,
+          rec,
+          { scorePercent: h.scorePercent, devices: h.devicesReporting, staleDevices: h.staleDevices }
+        )
+      );
+    }
+  }
+
+  // 19. Mail-Authentifizierung per DNS
   if (mailAuth) {
     const d = mailAuth.domain;
     if (mailAuth.error) {

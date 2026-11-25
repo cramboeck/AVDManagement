@@ -1392,6 +1392,53 @@ export interface BaselineOverviewSet {
 
 export type BaselineOverview = CapabilityResult<BaselineOverviewSet>;
 
+// ============================================
+// Geraete-Haertung (Skript ZSC-hardening, taeglich per Intune-Zuweisung)
+// ============================================
+
+export type HardeningArea = 'network' | 'credentials' | 'system' | 'logging' | 'encryption' | 'defender' | 'accounts';
+
+export interface HardeningControl {
+  id: string;
+  area: HardeningArea;
+  title: string;
+  recommendation: string;
+  // 3 = wesentlich, 1 = Zusatz
+  weight: 1 | 2 | 3;
+}
+
+export interface HardeningControlResult extends HardeningControl {
+  failing: number;
+  passing: number;
+  notApplicable: number;
+  unreadable: number;
+}
+
+export interface HardeningDeviceResult {
+  managedDeviceId: string;
+  deviceName: string;
+  reportedAt: string | null;
+  failedIds: string[];
+  // Gewichteter Erfuellungsgrad dieses Geraets in Prozent
+  scorePercent: number;
+}
+
+export interface HardeningSummary {
+  devicesReporting: number;
+  // Geraete mit Meldung aelter als 3 Tage
+  staleDevices: number;
+  scorePercent: number | null;
+  controls: HardeningControlResult[];
+  devices: HardeningDeviceResult[];
+}
+
+export interface HardeningStatus {
+  enabled: boolean;
+  tenantScriptId: string | null;
+  summary: HardeningSummary | null;
+  catalog: HardeningControl[];
+}
+
 export interface SecurityCheck {
   id: string;
   category: SecurityCheckCategory;
@@ -1520,7 +1567,7 @@ export type TenantVulnerabilityList = CapabilityResult<TenantVulnerabilitySet> &
 // Skriptbibliothek (Intune Remediations auf Abruf)
 // ============================================
 
-export type LibraryScriptId = 'update-status' | 'update-scan' | 'system-info' | 'winget-updates' | 'winget-inventory' | 'network-info' | 'storage-info' | 'local-admins' | 'battery-info' | 'monitor';
+export type LibraryScriptId = 'update-status' | 'update-scan' | 'system-info' | 'winget-updates' | 'winget-inventory' | 'network-info' | 'storage-info' | 'local-admins' | 'battery-info' | 'monitor' | 'hardening';
 
 // Vom Intune-Client erkannte Software (Inventar, wird woechentlich gemeldet)
 export interface DetectedApp {

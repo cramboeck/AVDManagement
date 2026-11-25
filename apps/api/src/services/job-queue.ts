@@ -6,7 +6,7 @@
  */
 
 import { Redis } from 'ioredis';
-import { JobQueue, registerIdentityJobs, registerAvdJobs, registerDeviceJobs, registerScriptJobs, registerAvdScriptJobs, registerAppJobs, registerTempAdminJobs, registerGroupJobs, registerAppPublishJobs, registerMailboxJobs, registerWingetJobs, registerWingetBulkJob, registerAppUninstallJob, registerRestartJobs, registerMonitorJobs, registerExchangeJobs, registerVmJobs, evaluateFourEyes, SECOND_APPROVAL_WINDOW_MS, logThrottled } from '@zerostress/core';
+import { JobQueue, registerIdentityJobs, registerAvdJobs, registerDeviceJobs, registerScriptJobs, registerAvdScriptJobs, registerAppJobs, registerTempAdminJobs, registerGroupJobs, registerAppPublishJobs, registerMailboxJobs, registerWingetJobs, registerWingetBulkJob, registerAppUninstallJob, registerRestartJobs, registerMonitorJobs, registerHardeningJobs, registerExchangeJobs, registerVmJobs, evaluateFourEyes, SECOND_APPROVAL_WINDOW_MS, logThrottled } from '@zerostress/core';
 import { mailboxOperations } from './mailboxes.js';
 import { exchangeOperations } from './exchange.js';
 import { DrizzleJobStore } from './job-store.js';
@@ -50,6 +50,7 @@ export function getJobQueue(): JobQueue {
     registerAppUninstallJob(getRemediationProvider());
     registerRestartJobs(getRemediationProvider());
     registerMonitorJobs(getRemediationProvider());
+    registerHardeningJobs(getRemediationProvider());
     registerGroupJobs(getGroupProvider());
     registerAppPublishJobs(publishOperations);
     registerMailboxJobs(mailboxOperations);

@@ -233,7 +233,7 @@ function LatestRun({ job, tenantId }: { job: Job; tenantId: string }) {
   );
 }
 
-const KNOWN_SCHEMAS = new Set(['zsc.update-status/1', 'zsc.update-scan/1', 'zsc.system-info/1', 'zsc.winget-updates/1', 'zsc.winget-inventory/1', 'zsc.winget-install/1', 'zsc.app-uninstall/1', 'zsc.restart-prompt/1', 'zsc.monitor/1', 'zsc.network-info/1', 'zsc.storage-info/1', 'zsc.local-admins/1', 'zsc.battery-info/1']);
+const KNOWN_SCHEMAS = new Set(['zsc.update-status/1', 'zsc.update-scan/1', 'zsc.system-info/1', 'zsc.winget-updates/1', 'zsc.winget-inventory/1', 'zsc.winget-install/1', 'zsc.app-uninstall/1', 'zsc.restart-prompt/1', 'zsc.monitor/1', 'zsc.network-info/1', 'zsc.storage-info/1', 'zsc.local-admins/1', 'zsc.battery-info/1', 'zsc.hardening/1']);
 
 export interface WingetUpdate {
   name: string;
@@ -279,6 +279,45 @@ function dateText(value: unknown): string {
   return typeof value === 'string' && value ? formatDateTime(value) : '—';
 }
 
+// PowerShell 5.1 macht aus einem Ein-Element-Array einen String
+function idList(value: unknown): string[] {
+  if (Array.isArray(value)) return value.filter((x): x is string => typeof x === 'string');
+  return typeof value === 'string' && value ? [value] : [];
+}
+
+function HardeningResult({ data }: { data: Record<string, unknown> }) {
+  const failed = idList(data.failed);
+  const notApplicable = idList(data.notApplicable);
+  const unreadable = idList(data.unreadable);
+  const groups: Array<[string, string[], string]> = [
+    ['Nicht erfuellt', failed, 'text-destructive'],
+    ['Nicht zutreffend', notApplicable, 'text-muted-foreground'],
+    ['Nicht lesbar', unreadable, 'text-warning'],
+  ];
+  return (
+    <div className="space-y-2 text-sm">
+      <p>
+        {text(data.passed)} Kontrollen erfuellt, {failed.length} offen · Build {text(data.osBuild)}
+      </p>
+      {groups
+        .filter(([, ids]) => ids.length > 0)
+        .map(([label, ids, tone]) => (
+          <div key={label}>
+            <div className="text-xs text-muted-foreground">{label}</div>
+            <ul className={clsx('flex flex-wrap gap-1.5 font-mono text-xs', tone)}>
+              {ids.map((id) => (
+                <li key={id} className="rounded border px-1.5 py-0.5">
+                  {id}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      <p className="text-xs text-muted-foreground">Titel, Empfehlungen und der Vergleich ueber alle Geraete stehen unter Sicherheit &gt; Baselines.</p>
+    </div>
+  );
+}
+
 export function ScriptResultView({ result, error }: { result: ScriptRunResult | null; error: string | null }) {
   if (!result) {
     return error ? <p className="text-sm text-destructive">{error}</p> : <p className="text-sm text-muted-foreground">Kein Ergebnis.</p>;
@@ -314,6 +353,7 @@ export function ScriptResultView({ result, error }: { result: ScriptRunResult | 
       {json && schema === 'zsc.storage-info/1' && <StorageInfoResult data={json} />}
       {json && schema === 'zsc.local-admins/1' && <LocalAdminsResult data={json} />}
       {json && schema === 'zsc.battery-info/1' && <BatteryResult data={json} />}
+      {json && schema === 'zsc.hardening/1' && <HardeningResult data={json} />}
       {json && !KNOWN_SCHEMAS.has(schema ?? '') && <pre className="overflow-x-auto rounded-md bg-muted p-3 text-xs">{JSON.stringify(json, null, 2)}</pre>}
     </div>
   );

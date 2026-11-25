@@ -142,6 +142,17 @@ const definitions: ScriptDefinition[] = [
     remediationSummary: null,
     expectedDurationSeconds: 60,
   },
+  {
+    id: 'hardening',
+    displayName: 'Geraete-Haertung',
+    description:
+      'Fuer den taeglichen Zeitplan: 26 Haertungskontrollen aus der Microsoft-Sicherheitsbaseline (SMB, LLMNR, Anmeldeinformationsschutz, NTLM, UAC, Firewall, RDP, PowerShell-Protokollierung, BitLocker, Secure Boot, Defender, integrierte Konten). Nur lesend; meldet die Ids nicht erfuellter Kontrollen.',
+    version: '1.0.0',
+    detectionFile: 'hardening.detect.ps1',
+    remediationFile: null,
+    remediationSummary: null,
+    expectedDurationSeconds: 90,
+  },
 ];
 
 // Marker in der Beschreibung des Remediation-Objekts im Tenant

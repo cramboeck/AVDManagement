@@ -73,8 +73,11 @@ export interface DeviceRunState {
 export interface ScheduleStatus {
   tenantScriptId: string | null;
   hourly: boolean;
+  daily: boolean;
   allDevices: boolean;
 }
+
+export type ScriptSchedule = 'hourly' | 'daily' | 'none';
 
 export interface RemediationRunState_ {
   detectionState: RemediationRunState;
@@ -168,6 +171,7 @@ export interface RemediationOperations {
   getRunState(ctx: ProviderContext, managedDeviceId: string, tenantScriptId: string): Promise<RemediationRunState_ | null>;
   // Zeitplan: allen Geraeten stuendlich zuweisen oder alle Zuweisungen entfernen
   setHourlySchedule(ctx: ProviderContext, tenantScriptId: string, enabled: boolean): Promise<void>;
+  setSchedule(ctx: ProviderContext, tenantScriptId: string, schedule: ScriptSchedule): Promise<void>;
   findTenantScriptId(ctx: ProviderContext, scriptId: string): Promise<string | null>;
   listRunStates(ctx: ProviderContext, tenantScriptId: string): Promise<DeviceRunState[]>;
   waitForRunState(
@@ -339,17 +343,27 @@ export class RemediationProvider extends BaseResourceProvider implements Remedia
    * enabled=false werden alle Zuweisungen des Objekts entfernt.
    */
   async setHourlySchedule(ctx: ProviderContext, tenantScriptId: string, enabled: boolean): Promise<void> {
+    await this.setSchedule(ctx, tenantScriptId, enabled ? 'hourly' : 'none');
+  }
+
+  /** Zuweisung an alle Geraete mit Stunden- oder Tagesplan (12 Uhr Ortszeit), oder keine. */
+  async setSchedule(ctx: ProviderContext, tenantScriptId: string, schedule: ScriptSchedule): Promise<void> {
     this.validateContext(ctx);
-    const assignments = enabled
-      ? [
-          {
-            '@odata.type': '#microsoft.graph.deviceHealthScriptAssignment',
-            target: { '@odata.type': '#microsoft.graph.allDevicesAssignmentTarget' },
-            runRemediationScript: false,
-            runSchedule: { '@odata.type': '#microsoft.graph.deviceHealthScriptHourlySchedule', interval: 1 },
-          },
-        ]
-      : [];
+    const runSchedule =
+      schedule === 'hourly'
+        ? { '@odata.type': '#microsoft.graph.deviceHealthScriptHourlySchedule', interval: 1 }
+        : { '@odata.type': '#microsoft.graph.deviceHealthScriptDailySchedule', interval: 1, time: '12:00:00.0000000', useUtc: false };
+    const assignments =
+      schedule === 'none'
+        ? []
+        : [
+            {
+              '@odata.type': '#microsoft.graph.deviceHealthScriptAssignment',
+              target: { '@odata.type': '#microsoft.graph.allDevicesAssignmentTarget' },
+              runRemediationScript: false,
+              runSchedule,
+            },
+          ];
     await this.graphClient.post(ctx.tenantId as string, `${GRAPH_BETA}/deviceManagement/deviceHealthScripts/${encodeURIComponent(tenantScriptId)}/assign`, this.requiredScopes, {
       deviceHealthScriptAssignments: assignments,
     });
@@ -358,7 +372,7 @@ export class RemediationProvider extends BaseResourceProvider implements Remedia
   /** Aktueller Zeitplan des Objekts (fuer die Statusanzeige). */
   async getScheduleStatus(ctx: ProviderContext, scriptId: string): Promise<ScheduleStatus> {
     const tenantScriptId = await this.findTenantScriptId(ctx, scriptId);
-    if (!tenantScriptId) return { tenantScriptId: null, hourly: false, allDevices: false };
+    if (!tenantScriptId) return { tenantScriptId: null, hourly: false, daily: false, allDevices: false };
     const res = await this.graphClient.get<GraphResponse<Array<{ target?: { '@odata.type'?: string }; runSchedule?: { '@odata.type'?: string; interval?: number } }>>>(
       ctx.tenantId as string,
       `${GRAPH_BETA}/deviceManagement/deviceHealthScripts/${encodeURIComponent(tenantScriptId)}/assignments`,
@@ -366,8 +380,9 @@ export class RemediationProvider extends BaseResourceProvider implements Remedia
     );
     const items = res.value ?? [];
     const hourly = items.some((a) => (a.runSchedule?.['@odata.type'] ?? '').endsWith('HourlySchedule'));
+    const daily = items.some((a) => (a.runSchedule?.['@odata.type'] ?? '').endsWith('DailySchedule'));
     const allDevices = items.some((a) => (a.target?.['@odata.type'] ?? '').endsWith('allDevicesAssignmentTarget'));
-    return { tenantScriptId, hourly, allDevices };
+    return { tenantScriptId, hourly, daily, allDevices };
   }
 
   /** Letzter Zustand je Geraet fuer ein Skript (Grundlage des Monitors). */

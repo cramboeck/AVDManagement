@@ -8,6 +8,15 @@ Alle nennenswerten Aenderungen an ZeroStress Cockpit. Format angelehnt an
 
 ### Hinzugefuegt
 
+- Geraete-Haertung: Bibliotheksskript `ZSC-hardening` (26 nur lesende
+  Kontrollen aus der Microsoft-Sicherheitsbaseline-Dokumentation, ohne
+  CIS-Texte) mit taeglicher Intune-Zuweisung auf alle Geraete (Jobs
+  `tenant.hardening-enable/-disable` mit Vorschau). Auswertung unter
+  Sicherheit > Baselines mit gewichtetem Erfuellungsgrad, Kontrollen nach
+  offenen Geraeten und schwaechsten Geraeten; neuer Best-Practice-Check
+  `device-hardening`. Remediation-Provider kann jetzt auch taegliche
+  Zeitplaene setzen.
+
 - Sicherheit > Baselines: Intune-Sicherheitsbaselines (neues und aelteres
   Format) und Compliance-Richtlinien je Tenant mit Zuweisung und
   Geraetestatus. Neue Best-Practice-Checks: Windows-, Defender-, Edge- und

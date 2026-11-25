@@ -16,6 +16,7 @@ export * from './temp-admin-job-handlers.js';
 export * from './app-uninstall-job-handlers.js';
 export * from './restart-job-handlers.js';
 export * from './monitor-job-handlers.js';
+export * from './hardening-job-handlers.js';
 export * from './group-job-handlers.js';
 export * from './mailbox-job-handlers.js';
 export * from './winget-job-handlers.js';

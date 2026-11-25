@@ -10,6 +10,7 @@ import { getBaselineProvider, getIdentityProvider } from '../services/microsoft-
 import { DrizzleAuditLogger } from '../services/audit-logger.js';
 import { buildSecurityPosture } from '../services/posture.js';
 import { buildSecurityChecks } from '../services/checks.js';
+import { getHardeningStatus } from '../services/hardening.js';
 import type { CorrelationId } from '@zerostress/types';
 
 const app = new Hono();
@@ -40,6 +41,12 @@ app.get('/baselines', requireConnectedTenant, async (c) => {
   const tenant = c.get('tenant');
   const correlationId = c.req.header('X-Correlation-ID') ?? randomUUID();
   return c.json(await getBaselineProvider().getOverview({ tenantId: tenant.id, correlationId }));
+});
+
+// Geraete-Haertung: Zuweisung von ZSC-hardening und Auswertung der Meldungen
+app.get('/hardening', requireConnectedTenant, async (c) => {
+  const tenant = c.get('tenant');
+  return c.json(await getHardeningStatus(tenant.id, c.req.header('X-Correlation-ID') ?? randomUUID()));
 });
 
 // Anmeldungen im Tenant (Sicherheitsmonitoring: woher, womit, mit welchem Ergebnis)

@@ -7,3 +7,4 @@ export * from './anomaly-rules.js';
 export * from './firewall.js';
 export * from './operational-rules.js';
 export * from './monitor-rules.js';
+export * from './hardening.js';

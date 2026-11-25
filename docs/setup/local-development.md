@@ -416,6 +416,27 @@ Benutzer, SharePoint ohne anonyme Freigabelinks
 extern (aus den Postfachdaten des Exchange-Workers; ohne gesammelte Daten
 "nicht pruefbar").
 
+### Geraete-Haertung
+
+Unten im Tab **Baselines** schaltet ein Job (`tenant.hardening-enable`, mit
+Vorschau und Audit) das Bibliotheksskript `ZSC-hardening` ein: Intune legt
+es an und weist es allen Geraeten taeglich um 12 Uhr Ortszeit zu
+(`deviceHealthScriptDailySchedule`). Das Skript prueft lokale Einstellungen,
+die Intune-Baselines nicht direkt zurueckmelden, und aendert nichts. Exit 1
+bedeutet "mindestens eine Kontrolle offen"; Intune zeigt das als
+"Probleme erkannt", eine Behebung gibt es bewusst nicht.
+
+Die Konsole liest die letzten Meldungen ueber `deviceRunStates` und zeigt
+den gewichteten Erfuellungsgrad (Gewicht 1 bis 3 je Kontrolle, nicht
+zutreffende und unlesbare Kontrollen zaehlen nicht), die Kontrollen nach
+Anzahl offener Geraete mit Empfehlung und die Geraete mit dem niedrigsten
+Stand. Geraete ohne Meldung seit 3 Tagen werden als veraltet ausgewiesen.
+Der Best-Practice-Check "Geraete-Haertung" bewertet ab 90 % mit bestanden,
+ab 70 % mit Warnung, darunter als Luecke. `tenant.hardening-disable`
+entfernt die Zuweisung; das Skript und die letzten Ergebnisse bleiben
+sichtbar. Voraussetzung wie beim Monitor: Windows-Lizenzbestaetigung fuer
+Remediations und `DeviceManagementConfiguration.ReadWrite.All`.
+
 **CIS:** Der Katalog ist aus oeffentlicher Microsoft-Dokumentation
 abgeleitet und deckt sich inhaltlich in weiten Teilen mit den CIS
 Benchmarks fuer Microsoft 365 und Windows, enthaelt aber bewusst keine
@@ -517,6 +538,7 @@ jedes Kundentenants.
 | Lokale Administratoren | nur lesend, **personenbezogen** | Mitglieder der Gruppe Administratoren mit Herkunft, Klasse, SID, Status; Entra-Konten verlinkt |
 | Akkuzustand | nur lesend | Gesundheit (Vollladung zu Auslegung), Zyklen, Ladestand, Status je Akku; Desktops und VMs melden "kein Akku" |
 | Geraete-Monitor | nur lesend, fuer den stuendlichen Zeitplan | Laufzeit, Neustartbedarf, freier Speicher je Laufwerk, gestoppte automatische Dienste, Datentraeger- und Hardwarefehler (24 h), ablaufende Geraetezertifikate, Defender-Signaturstand |
+| Geraete-Haertung | nur lesend, fuer den taeglichen Zeitplan | 26 Haertungskontrollen (SMB, LLMNR, WDigest, LSA-Schutz, Credential Guard, NTLM, UAC, Autorun, Firewall, RDP-NLA, Remoteregistrierung, PowerShell-Protokollierung, Sicherheitsprotokoll, PowerShell 2.0, BitLocker, Secure Boot, Defender-Manipulationsschutz/PUA/ASR, integrierte Konten per SID); meldet nur Ids, keine Kontonamen |
 
 **Deinstallieren ohne winget** (Tab Software, Zeilen ohne winget-Id): Job
 `device.app-uninstall` mit Vorschau und Audit. Das Einmalskript sucht den
