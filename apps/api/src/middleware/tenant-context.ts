@@ -66,6 +66,7 @@ export const tenantContextMiddleware = createMiddleware(async (c, next) => {
     onboardedAt: tenant.onboardedAt,
     lastSyncAt: tenant.lastSyncAt,
     isActive: tenant.isActive,
+    accessMode: tenant.accessMode === 'full' ? 'full' : 'read-only',
   });
 
   await next();

@@ -8,6 +8,19 @@ Alle nennenswerten Aenderungen an ZeroStress Cockpit. Format angelehnt an
 
 ### Hinzugefuegt
 
+- Nur-Lese-Betrieb: je Tenant (Tenants > "Auf Nur-Lesen stellen", Owner,
+  Begruendung, Audit `tenant.access-mode`) und fuer die ganze Konsole
+  (`CONSOLE_READ_ONLY=true`). Die JobQueue sperrt schreibende Jobs beim
+  Anlegen, Freigeben und Ausfuehren; abgelehnte Versuche stehen im Audit.
+  Zuruecknehmen (Admin auf Zeit entziehen, Neustart abbrechen, Monitor und
+  Haertung ausschalten) und das Einsammeln von Exchange-Daten bleiben
+  erlaubt. Banner in der Oberflaeche. Anleitung mit Berechtigungen einer
+  Nur-Lese-App: `docs/setup/read-only-mode.md`.
+- Anleitung fuer den Betrieb auf eigenem Server nur ueber NetBird:
+  `docs/setup/netbird-server.md` (Zugriffsrichtlinien, ufw, Caddy mit
+  DNS-01 oder interner CA, systemd, Key Vault ueber Azure Arc, Sicherung,
+  Updates, Pruefliste). Neue Variable `API_HOST`.
+
 - Geraete-Haertung: Bibliotheksskript `ZSC-hardening` (26 nur lesende
   Kontrollen aus der Microsoft-Sicherheitsbaseline-Dokumentation, ohne
   CIS-Texte) mit taeglicher Intune-Zuweisung auf alle Geraete (Jobs
@@ -211,6 +224,8 @@ Alle nennenswerten Aenderungen an ZeroStress Cockpit. Format angelehnt an
 
 ### Geaendert
 
+- `docker-compose.yml`: Postgres und Redis nur noch auf 127.0.0.1
+  (Docker umgeht ufw), Postgres-Passwort ueber `POSTGRES_PASSWORD`.
 - Abhaengigkeiten: Next.js 14.1.0 auf 14.2.35 (kritische SSRF-Luecke in
   Server Actions), Hono und weitere Pakete per `npm audit fix` ohne
   Versionsbruch. Offen bleiben Luecken, die nur mit Hauptversionen zu

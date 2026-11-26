@@ -80,6 +80,8 @@ export function registerMonitorJobs(remediations: MonitorScheduleOperations): vo
       timeoutSeconds: 300,
       concurrencyPerTenant: 1,
       requiresPreview: true,
+      // Nimmt eine fruehere Aenderung der Konsole zurueck, daher auch im Nur-Lese-Betrieb
+      allowedInReadOnly: true,
     },
     async (ctx: JobContext): Promise<JobResult> => {
       const providerCtx = { tenantId: ctx.tenantId, correlationId: ctx.correlationId };

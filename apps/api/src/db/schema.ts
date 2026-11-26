@@ -84,6 +84,8 @@ export const managedTenants = pgTable('managed_tenants', {
   onboardedAt: timestamp('onboarded_at', { withTimezone: true }).notNull().defaultNow(),
   lastSyncAt: timestamp('last_sync_at', { withTimezone: true }),
   isActive: boolean('is_active').notNull().default(true),
+  // Nur-Lese-Betrieb je Tenant: 'full' oder 'read-only'
+  accessMode: varchar('access_mode', { length: 20 }).notNull().default('full'),
 });
 
 // Gespiegelte Benutzer

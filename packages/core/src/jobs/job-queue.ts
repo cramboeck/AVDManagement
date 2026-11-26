@@ -3,7 +3,7 @@
  */
 
 import { logThrottled } from '../errors.js';
-import { Queue, Worker, Job as BullJob } from 'bullmq';
+import { Queue, Worker, Job as BullJob, UnrecoverableError } from 'bullmq';
 import type { Redis } from 'ioredis';
 import type {
   JobId,
@@ -19,9 +19,11 @@ import {
   type CreateJobInput,
   type JobResult,
   type PreviewResult,
+  type JobDefinition,
   getRegisteredJob,
 } from './job-types.js';
-import { JobError } from '../errors.js';
+import { JobError, ReadOnlyModeError } from '../errors.js';
+import type { WriteGuard } from './write-guard.js';
 import { targetCountOf } from './approval-policy.js';
 
 export interface JobQueueConfig {
@@ -30,6 +32,8 @@ export interface JobQueueConfig {
   concurrency?: number;
   // Vier-Augen-Prinzip: entscheidet nach der Vorschau, ob eine zweite Freigabe noetig ist
   approvalPolicy?: (job: Job, preview: PreviewResult) => Promise<{ required: boolean; reason: string | null }>;
+  // Nur-Lese-Betrieb: wird beim Anlegen, Freigeben und Ausfuehren geprueft
+  writeGuard?: WriteGuard;
 }
 
 // Eine zweite Person braucht Zeit; die Vorschau gilt dann laenger als fuenf Minuten
@@ -87,9 +91,38 @@ export class JobQueue {
     this.jobStore = jobStore;
     this.auditLogger = auditLogger;
     this.approvalPolicy = config.approvalPolicy;
+    this.writeGuard = config.writeGuard;
   }
 
   private readonly approvalPolicy?: JobQueueConfig['approvalPolicy'];
+  private readonly writeGuard?: WriteGuard;
+
+  /**
+   * Nur-Lese-Sperre pruefen. Ein gesperrter Versuch landet als Fehlschlag im
+   * Audit (auch abgelehnte Versuche werden protokolliert) und wirft
+   * ReadOnlyModeError.
+   */
+  private async assertWritable(
+    input: { type: string; tenantId: TenantId; mspId: MspId; userId: UserId; payload: Record<string, unknown>; correlationId: CorrelationId },
+    definition: JobDefinition
+  ): Promise<void> {
+    if (!this.writeGuard) return;
+    const decision = await this.writeGuard({ type: input.type, tenantId: input.tenantId, mspId: input.mspId }, definition);
+    if (!decision) return;
+    await this.auditLogger.log({
+      mspId: input.mspId,
+      tenantId: input.tenantId,
+      userId: input.userId,
+      action: input.type,
+      targetType: this.extractTargetType(input.payload),
+      targetId: this.extractTargetId(input.payload),
+      targetDisplayName: this.extractTargetDisplayName(input.payload),
+      result: 'failure',
+      errorMessage: `read-only-mode (${decision.scope})`,
+      correlationId: input.correlationId,
+    });
+    throw new ReadOnlyModeError(decision.reason, decision.scope, input.correlationId);
+  }
 
   /**
    * Job erstellen und in Queue einreihen
@@ -103,6 +136,9 @@ export class JobQueue {
     const id = crypto.randomUUID() as JobId;
     const correlationId = crypto.randomUUID() as CorrelationId;
     const now = new Date();
+
+    // Vor dem Anlegen: ein gesperrter Job entsteht gar nicht erst
+    await this.assertWritable({ ...input, correlationId }, registered.definition);
 
     const job: Job = {
       id,
@@ -173,6 +209,10 @@ export class JobQueue {
       }
       throw new JobError(jobId, 'PREVIEW_EXPIRED', 'Die Vorschau fuer die zweite Freigabe ist abgelaufen; der Job muss neu angelegt werden.', false);
     }
+
+    // Zwischen Anlegen und Freigabe kann der Tenant auf Nur-Lesen gestellt worden sein
+    const definition = getRegisteredJob(job.type)?.definition;
+    if (definition) await this.assertWritable({ type: job.type, tenantId: job.tenantId, mspId: job.mspId, userId, payload: job.payload, correlationId: job.correlationId }, definition);
 
     const approvals = [...(job.approvals ?? []), { userId, email: userEmail, at: new Date().toISOString() }];
 
@@ -275,6 +315,28 @@ export class JobQueue {
         const registered = getRegisteredJob(job.type);
         if (!registered) {
           throw new Error(`Unknown job type: ${job.type}`);
+        }
+
+        // Bereits eingereihte Jobs laufen nach dem Umschalten nicht mehr
+        if (this.writeGuard) {
+          const decision = await this.writeGuard({ type: job.type, tenantId: job.tenantId, mspId: job.mspId }, registered.definition);
+          if (decision) {
+            await this.jobStore.update(job.id, { status: 'failed', completedAt: new Date().toISOString(), error: decision.reason });
+            await this.auditLogger.log({
+              mspId: job.mspId,
+              tenantId: job.tenantId,
+              userId: job.createdBy,
+              action: job.type,
+              targetType: this.extractTargetType(job.payload),
+              targetId: this.extractTargetId(job.payload),
+              targetDisplayName: this.extractTargetDisplayName(job.payload),
+              result: 'failure',
+              errorMessage: `read-only-mode (${decision.scope})`,
+              correlationId: job.correlationId,
+            });
+            // Kein Retry: UnrecoverableError beendet den BullMQ-Job sofort
+            throw new UnrecoverableError(decision.reason);
+          }
         }
 
         await this.jobStore.update(job.id, {

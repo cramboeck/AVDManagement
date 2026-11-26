@@ -66,6 +66,16 @@ export interface ManagedTenant {
   onboardedAt: Date;
   lastSyncAt: Date | null;
   isActive: boolean;
+  // Nur-Lese-Betrieb je Tenant: die Konsole legt fuer ihn keine schreibenden Jobs an
+  accessMode: TenantAccessMode;
+}
+
+export type TenantAccessMode = 'full' | 'read-only';
+
+// Betriebsart der Konsole fuer die Oberflaeche
+export interface ConsoleMode {
+  // CONSOLE_READ_ONLY=true: kein schreibender Job fuer irgendeinen Tenant
+  readOnly: boolean;
 }
 
 // Gespiegelter Benutzer aus Graph

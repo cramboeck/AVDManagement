@@ -46,6 +46,7 @@ jede Aenderung als nachvollziehbarer Job mit Audit-Eintrag.
 | **Baselines und Haertung** | Intune-Sicherheitsbaselines und Compliance-Richtlinien mit Geraetestatus; taegliche Haertungspruefung der Windows-Geraete (26 Kontrollen, nur lesend) mit Erfuellungsgrad je Tenant und Geraet |
 | **Alerts** | Anmelde-Anomalien und Betriebs-Alerts aus dem Geraete-Monitor (Lebenszeichen, Speicher, Dienste, Ereignisse, Zertifikate, Defender) mit einstellbaren Schwellen |
 | **Netzwerk** | Kommunikation der Clients aus Defender Advanced Hunting (setzt Defender for Endpoint P2 voraus) |
+| **Nur-Lese-Betrieb** | Je Tenant oder fuer die ganze Konsole: keine schreibenden Jobs, Zuruecknehmen bleibt moeglich, jeder abgelehnte Versuch im Audit |
 | **Jobs und Audit** | Jobliste mit Vorschau, Fortschritt, Ergebnis und Retry; Vier-Augen-Freigabe fuer kritische Aktionen; unveraenderliches Audit-Log mit Hash-Kette |
 | **MCP-Server** | Zugriff fuer KI-Assistenten mit derselben Anmeldung und Tenant-Isolation; Jobs koennen vorbereitet werden, die Freigabe bleibt beim Engineer |
 
@@ -190,6 +191,8 @@ sondern direkt an den Maintainer melden.
 |---|---|
 | [docs/setup/local-development.md](docs/setup/local-development.md) | Einrichtung, Funktionen im Detail, Berechtigungen, haeufige Fehler |
 | [docs/setup/production-hardening.md](docs/setup/production-hardening.md) | Entra-Trennung, Conditional Access, Reverse Proxy, Key Vault |
+| [docs/setup/netbird-server.md](docs/setup/netbird-server.md) | Betrieb auf eigenem Server, nur ueber NetBird erreichbar |
+| [docs/setup/read-only-mode.md](docs/setup/read-only-mode.md) | Nur-Lese-Betrieb je Tenant oder fuer die Konsole, Nur-Lese-App-Registrierung |
 | [docs/adr/](docs/adr/) | Architekturentscheidungen (Auth, Exchange, Modul-Contract, Queue, Caching, Secrets, Multi-MSP) |
 | [docs/domain/](docs/domain/) | Domaenenmodell |
 | [docs/implementation/](docs/implementation/) | Plaene je Modul (AVD, Apps, Exchange, Remote-Aktionen, Azure-VMs) |
@@ -209,8 +212,11 @@ Ehrlich festgehalten, damit niemand mehr erwartet, als da ist:
   als Intune-Geraete.
 - **Abhaengigkeiten:** `npm audit` meldet Hinweise, die nur mit
   Hauptversionen (Next.js, drizzle-orm, zod, msal-node) zu beheben sind.
-- **Betrieb:** Bisher lokaler Betrieb; ein Server-Betrieb nur ueber VPN ist
-  vorgesehen, ein externer Pentest steht aus.
+- **Betrieb:** Anleitung fuer den Server hinter NetBird liegt vor, ist aber
+  noch nicht auf dem Zielsystem durchgespielt; ein externer Pentest steht aus.
+- **Nur-Lese-App je Tenant:** Die Sperre wirkt in der Konsole. Eine
+  Nur-Lese-App-Registrierung laeuft heute als eigene Instanz; Umschalten
+  der App je Tenant ist nicht gebaut.
 - **CIS:** Die Pruefungen leiten sich aus Microsoft-Dokumentation ab und
   enthalten keine CIS-Nummern oder -Texte. Eine formale CIS-Zuordnung setzt
   eine CIS-SecureSuite-Lizenz voraus.

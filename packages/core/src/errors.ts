@@ -157,6 +157,20 @@ export class TenantConnectionError extends AppError {
   }
 }
 
+/** Schreibende Aktion im Nur-Lese-Betrieb (ganze Konsole oder einzelner Tenant). */
+export class ReadOnlyModeError extends AppError {
+  readonly statusCode = 403;
+  readonly type = 'read-only-mode';
+
+  constructor(
+    message: string,
+    readonly scope: 'console' | 'tenant',
+    correlationId?: string
+  ) {
+    super(message, correlationId);
+  }
+}
+
 export class JobError extends AppError {
   readonly statusCode = 500;
   readonly type = 'job-error';

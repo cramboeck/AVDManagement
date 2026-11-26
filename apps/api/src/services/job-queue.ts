@@ -16,6 +16,7 @@ import { estimateVmCost } from './azure-prices.js';
 import { getMspSettings } from './msp-settings.js';
 import { getResultSealer } from './result-crypto.js';
 import { publishOperations } from './publishing.js';
+import { getWriteGuard } from './access-mode.js';
 
 // Freigaben verfallen nach der Preview-Gueltigkeit (5 Min) plus Puffer
 const PENDING_APPROVAL_TTL_MS = 10 * 60 * 1000;
@@ -78,6 +79,8 @@ export function getJobQueue(): JobQueue {
         redis,
         // Vier-Augen-Prinzip nach den Einstellungen des MSP
         approvalPolicy: async (job, preview) => evaluateFourEyes(await getMspSettings(job.mspId), job, preview),
+        // Nur-Lese-Betrieb der Konsole oder des Tenants
+        writeGuard: getWriteGuard(),
       },
       jobStore,
       new DrizzleAuditLogger()

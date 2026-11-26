@@ -10,6 +10,7 @@ import { AddTenantDialog } from '@/components/add-tenant-dialog';
 import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingTable, LoadingSpinner } from '@/components/ui/loading';
 import { ErrorState, ErrorBanner } from '@/components/ui/error-state';
+import { AccessModeDialog } from '@/components/access/access-mode-dialog';
 import type { ManagedTenant, TenantConnectionStatus, MissingScope } from '@zerostress/types';
 
 interface ConnectionTestResult {
@@ -59,6 +60,7 @@ function TenantsView() {
   const [testResults, setTestResults] = useState<Record<string, ConnectionTestResult>>({});
   const [actionError, setActionError] = useState<Error | null>(null);
   const [removing, setRemoving] = useState<ManagedTenant | null>(null);
+  const [switchingMode, setSwitchingMode] = useState<ManagedTenant | null>(null);
 
   const consentParam = searchParams.get('consent');
   const consentReason = searchParams.get('reason');
@@ -142,9 +144,21 @@ function TenantsView() {
               onTest={() => testMutation.mutate(tenant)}
               onSelect={() => setActiveTenantId(tenant.id)}
               onRemove={() => setRemoving(tenant)}
+              onSwitchMode={() => setSwitchingMode(tenant)}
             />
           ))}
         </ul>
+      )}
+
+      {switchingMode && (
+        <AccessModeDialog
+          tenant={switchingMode}
+          onClose={() => setSwitchingMode(null)}
+          onChanged={() => {
+            setSwitchingMode(null);
+            queryClient.invalidateQueries({ queryKey: ['tenants'] });
+          }}
+        />
       )}
 
       {removing && (
@@ -181,6 +195,7 @@ function TenantRow({
   onTest,
   onSelect,
   onRemove,
+  onSwitchMode,
 }: {
   tenant: ManagedTenant;
   testResult?: ConnectionTestResult;
@@ -190,6 +205,7 @@ function TenantRow({
   onTest: () => void;
   onSelect: () => void;
   onRemove: () => void;
+  onSwitchMode: () => void;
 }) {
   const isConnected = tenant.connectionStatus === 'connected';
 
@@ -207,6 +223,7 @@ function TenantRow({
             >
               {statusLabels[tenant.connectionStatus]}
             </span>
+            {tenant.accessMode === 'read-only' && <span className="inline-flex rounded-full bg-muted px-2 py-0.5 text-xs font-medium">Nur lesen</span>}
           </div>
           <p className="text-sm text-muted-foreground">{tenant.primaryDomain}</p>
           <p className="mt-1 font-mono text-xs text-muted-foreground">{tenant.microsoftTenantId}</p>
@@ -223,6 +240,7 @@ function TenantRow({
           {tenant.connectionStatus === 'connected' && (
             <ActionButton onClick={onSelect}>Als aktiv setzen</ActionButton>
           )}
+          <ActionButton onClick={onSwitchMode}>{tenant.accessMode === 'read-only' ? 'Aenderungen erlauben' : 'Auf Nur-Lesen stellen'}</ActionButton>
           <button
             onClick={onRemove}
             className="rounded-md border border-destructive/40 px-3 py-1.5 text-sm text-destructive hover:bg-destructive/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-destructive"

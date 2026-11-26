@@ -12,6 +12,7 @@ import { getMspSettings, updateMspSettings } from '../services/msp-settings.js';
 import { DrizzleAuditLogger } from '../services/audit-logger.js';
 import { listTeam, updateTeamMember, TeamError } from '../services/access.js';
 import { createWorkerToken, listWorkerTokens, revokeWorkerToken } from '../services/worker-tokens.js';
+import { consoleMode } from '../services/access-mode.js';
 import type { CorrelationId } from '@zerostress/types';
 
 const app = new Hono();
@@ -29,6 +30,9 @@ app.get('/', async (c) => {
     .sort((a, b) => a.type.localeCompare(b.type));
   return c.json({ settings, jobTypes, me: { id: auth.user.id, email: auth.user.email, role: auth.user.role } });
 });
+
+// Betriebsart der Konsole (Nur-Lese-Betrieb), fuer Banner und Dialoge in der Oberflaeche
+app.get('/console-mode', (c) => c.json(consoleMode()));
 
 // ---- Team: Rollen und Tenant-Sichtbarkeit ----
 

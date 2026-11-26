@@ -223,6 +223,38 @@ app.delete('/:tenantId', requireRole('owner'), validate('json', removeTenantSche
   return c.json({ removed: true, tenantId: tenant.id });
 });
 
+const accessModeSchema = z.object({
+  mode: z.enum(['full', 'read-only']),
+  reason: z.string().trim().min(10).max(500),
+});
+
+// Nur-Lese-Betrieb je Tenant umschalten (lokale Einstellung, kein Zugriff auf den Tenant)
+app.patch('/:tenantId/access-mode', requireRole('owner'), validate('json', accessModeSchema), async (c) => {
+  const auth = c.get('auth');
+  const { mode, reason } = c.req.valid('json');
+  const tenant = await findOwnTenant(c.req.param('tenantId'), auth.mspId);
+  if (!tenant) return c.json(notFound(c.req.param('tenantId')), 404);
+  const before = tenant.accessMode;
+  const auditBase = {
+    mspId: auth.mspId,
+    tenantId: tenant.id as TenantId,
+    userId: auth.user.id,
+    action: 'tenant.access-mode',
+    targetType: 'tenant',
+    targetId: tenant.microsoftTenantId,
+    targetDisplayName: tenant.displayName,
+    correlationId: randomUUID() as CorrelationId,
+  };
+  try {
+    const [row] = await db.update(managedTenants).set({ accessMode: mode }).where(and(eq(managedTenants.id, tenant.id), eq(managedTenants.mspId, auth.mspId))).returning();
+    await audit.log({ ...auditBase, beforeState: { accessMode: before }, afterState: { accessMode: mode, reason }, result: 'success' });
+    return c.json(toManagedTenant(row));
+  } catch (error) {
+    await audit.log({ ...auditBase, beforeState: { accessMode: before }, afterState: { accessMode: mode, reason }, result: 'failure', errorMessage: error instanceof Error ? error.message : String(error) });
+    throw error;
+  }
+});
+
 // Consent-URL generieren
 app.get('/:tenantId/consent-url', requireRole('engineer'), async (c) => {
   const tenantId = c.req.param('tenantId');

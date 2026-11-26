@@ -20,6 +20,10 @@ export interface JobDefinition {
   timeoutSeconds: number;
   concurrencyPerTenant: number;
   requiresPreview: boolean;
+  // Darf auch im Nur-Lese-Betrieb laufen: nur Jobs, die nichts im Tenant
+  // anlegen oder aendern, oder die eine fruehere Aenderung der Konsole
+  // zuruecknehmen (z. B. Admin-Rechte entziehen). Standard: nein.
+  allowedInReadOnly?: boolean;
 }
 
 export interface CreateJobInput {

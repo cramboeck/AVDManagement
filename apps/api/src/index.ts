@@ -14,6 +14,7 @@ if (secretReport.source === 'key-vault') {
 assertSecretsPresent();
 
 import { serve } from '@hono/node-server';
+import { isConsoleReadOnly as isConsoleReadOnlyAtStart } from './services/access-mode.js';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
@@ -164,12 +165,15 @@ const port = parseInt(process.env.API_PORT ?? '3001', 10);
 
 console.log(`Starting ZeroStress API on port ${port}...`);
 
+// Auf dem Server API_HOST=127.0.0.1: erreichbar nur ueber den Reverse Proxy
+const hostname = process.env.API_HOST || undefined;
 serve({
   fetch: app.fetch,
   port,
+  hostname,
 });
 
-console.log(`ZeroStress API running at http://localhost:${port}`);
+console.log(`ZeroStress API running at http://${hostname ?? 'localhost'}:${port}${isConsoleReadOnlyAtStart() ? ' (CONSOLE_READ_ONLY: write jobs blocked)' : ''}`);
 
 // Schema-Stand pruefen: fehlende Spalten einmal deutlich melden (npm run db:push)
 void reportSchemaAtStartup();

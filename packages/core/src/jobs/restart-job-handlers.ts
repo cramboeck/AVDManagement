@@ -127,6 +127,8 @@ export function registerRestartJobs(remediations: RemediationOperations, options
       timeoutSeconds: 900,
       concurrencyPerTenant: 3,
       requiresPreview: true,
+      // Nimmt eine fruehere Aenderung der Konsole zurueck, daher auch im Nur-Lese-Betrieb
+      allowedInReadOnly: true,
     },
     async (ctx: JobContext): Promise<JobResult> => {
       const payload = ctx.payload as unknown as RestartCancelPayload;

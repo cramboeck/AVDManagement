@@ -7,6 +7,7 @@ import { TenantSwitcher } from './tenant-switcher';
 import { CommandPalette } from './command-palette';
 import { JobToaster } from './jobs/job-toaster';
 import { logout } from '@/lib/auth';
+import { ReadOnlyBanner } from './access/read-only-banner';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -73,6 +74,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           <header className="sticky top-0 z-20 flex h-14 items-center border-b bg-background/95 px-6 backdrop-blur">
             <BreadcrumbNav pathname={pathname} />
           </header>
+          <ReadOnlyBanner />
           <div className="p-6">{children}</div>
         </main>
       </div>

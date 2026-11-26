@@ -705,6 +705,18 @@ Braucht `npm run db:push` (Tabelle `worker_tokens`).
 Entra-Registrierungen trennen, Conditional Access mit phishing-resistenter
 MFA, Reverse Proxy mit TLS, Datenbank und Secrets: siehe
 `docs/setup/production-hardening.md` mit Checkliste vor dem Freischalten.
+Betrieb auf eigenem Server nur ueber NetBird: `docs/setup/netbird-server.md`.
+
+## Nur-Lese-Betrieb
+
+Je Tenant (Tenants > "Auf Nur-Lesen stellen", Owner, Begruendung, Audit
+`tenant.access-mode`) oder fuer die ganze Konsole (`CONSOLE_READ_ONLY=true`).
+Die JobQueue lehnt dann schreibende Jobs beim Anlegen, Freigeben und
+Ausfuehren ab (`ReadOnlyModeError`, Problemtyp `read-only-mode`, Audit als
+Fehlschlag). Erlaubt bleiben Jobs mit `allowedInReadOnly` in der
+Jobdefinition: nur Lesen oder Zuruecknehmen. Braucht `npm run db:push`
+(Spalte `managed_tenants.access_mode`). Details und die Berechtigungen einer
+Nur-Lese-App-Registrierung: `docs/setup/read-only-mode.md`.
 
 ## Sicherheits-Header, Rate-Limits, Groessenlimits
 

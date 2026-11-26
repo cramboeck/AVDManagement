@@ -6,10 +6,12 @@ services:
     container_name: zerostress-postgres
     environment:
       POSTGRES_USER: zerostress
-      POSTGRES_PASSWORD: dev_password_only
+      # Auf dem Server per Umgebung setzen (POSTGRES_PASSWORD), nicht den Entwicklungswert nutzen
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dev_password_only}
       POSTGRES_DB: zerostress
     ports:
-      - "5432:5432"
+      # Nur lokal: Docker umgeht ufw, daher nie auf alle Schnittstellen veroeffentlichen
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -22,7 +24,7 @@ services:
     image: redis:7-alpine
     container_name: zerostress-redis
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     volumes:
       - redis_data:/data
     healthcheck:

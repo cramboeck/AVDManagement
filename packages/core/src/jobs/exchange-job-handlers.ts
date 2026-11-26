@@ -252,7 +252,7 @@ export function registerExchangeJobs(ops: ExchangeOperations, options: ExchangeJ
   }
 
   registerJob(
-    { type: 'exchange.collect-facts', displayName: 'Exchange-Postfachdaten sammeln', maxRetries: 0, timeoutSeconds: 1800, concurrencyPerTenant: 1, requiresPreview: false },
+    { type: 'exchange.collect-facts', displayName: 'Exchange-Postfachdaten sammeln', maxRetries: 0, timeoutSeconds: 1800, concurrencyPerTenant: 1, requiresPreview: false, allowedInReadOnly: true },
     async (ctx: JobContext): Promise<JobResult> => {
       let exchangeJobId: string;
       try {

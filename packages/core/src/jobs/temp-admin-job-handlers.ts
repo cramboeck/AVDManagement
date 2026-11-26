@@ -131,6 +131,8 @@ export function registerTempAdminJobs(remediations: RemediationOperations, optio
       timeoutSeconds: 900,
       concurrencyPerTenant: 2,
       requiresPreview: true,
+      // Nimmt eine fruehere Aenderung der Konsole zurueck, daher auch im Nur-Lese-Betrieb
+      allowedInReadOnly: true,
     },
     async (ctx: JobContext): Promise<JobResult> => {
       const payload = ctx.payload as unknown as TempAdminRevokePayload;

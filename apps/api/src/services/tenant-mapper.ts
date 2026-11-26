@@ -7,6 +7,7 @@ import type {
   ManagedTenant,
   MissingScope,
   MspId,
+  TenantAccessMode,
   TenantAuthMethod,
   TenantConnectionStatus,
   TenantId,
@@ -27,5 +28,6 @@ export function toManagedTenant(row: TenantRow): ManagedTenant {
     onboardedAt: row.onboardedAt,
     lastSyncAt: row.lastSyncAt,
     isActive: row.isActive,
+    accessMode: row.accessMode === 'read-only' ? 'read-only' : ('full' as TenantAccessMode),
   };
 }
