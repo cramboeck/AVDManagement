@@ -9,11 +9,24 @@ import { GraphApiError } from '../src/errors.js';
 import { createResetPasswordHandler } from '../src/jobs/job-handlers.js';
 import type { CorrelationId, JobId, MspId, SealedCipher, TenantId, UserId } from '@zerostress/types';
 
+// Echte Paging- und Batch-Logik ueber die gemockten get/post
+function withClientHelpers<T extends object>(mock: T): T {
+  return Object.assign(mock, {
+    getAllPages(this: unknown, ...args: Parameters<GraphClient['getAllPages']>) {
+      return GraphClient.prototype.getAllPages.apply(this as GraphClient, args);
+    },
+    batch(this: unknown, ...args: Parameters<GraphClient['batch']>) {
+      return GraphClient.prototype.batch.apply(this as GraphClient, args);
+    },
+    delay: async () => undefined,
+  });
+}
+
 const ctx = { jobId: 'job-1' as JobId, tenantId: 'tenant-1' as TenantId, mspId: 'msp-1' as MspId, userId: 'u' as UserId, correlationId: 'c' as CorrelationId, attempt: 0, payload: { userId: 'user-1', userPrincipalName: 'x', displayName: 'x' } };
 
 function setup() {
   const graph = { patch: vi.fn(async () => undefined), get: vi.fn(), post: vi.fn() };
-  const provider = new IdentityProvider(graph as unknown as GraphClient);
+  const provider = new IdentityProvider(withClientHelpers(graph) as unknown as GraphClient);
   return { graph, provider };
 }
 

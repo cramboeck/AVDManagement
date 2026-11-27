@@ -299,12 +299,12 @@ export class DeviceProvider extends BaseResourceProvider {
     filter: string
   ): Promise<CapabilityResult<DefenderMachineVulnerability[]>> {
     try {
-      const response = await this.defenderClient.get<GraphResponse<DefenderMachineVulnerability[]>>(
+      const { items } = await this.defenderClient.getAllPages<DefenderMachineVulnerability>(
         ctx.tenantId as string,
         `/api/vulnerabilities/machinesVulnerabilities?$filter=${encodeURIComponent(filter)}&$top=${MACHINE_VULNERABILITY_PAGE_SIZE}`,
         DEFENDER_SCOPES
       );
-      return { available: true, data: response.value };
+      return { available: true, data: items };
     } catch (error) {
       const unavailable = asUnavailable(error, 'Vulnerability.Read.All');
       if (unavailable) return unavailable;
@@ -659,14 +659,14 @@ export class DeviceProvider extends BaseResourceProvider {
   async listDefenderSoftware(ctx: ProviderContext, machineId: string): Promise<CapabilityResult<DetectedApp[]>> {
     this.validateContext(ctx);
     try {
-      const response = await this.defenderClient.get<GraphResponse<{ id: string; name: string | null; vendor: string | null }[]>>(
+      const { items } = await this.defenderClient.getAllPages<{ id: string; name: string | null; vendor: string | null }>(
         ctx.tenantId as string,
         `/api/machines/${encodeURIComponent(machineId)}/software`,
         DEFENDER_SCOPES
       );
       return {
         available: true,
-        data: response.value.map((s) => ({
+        data: items.map((s) => ({
           id: `mde:${s.id}`,
           displayName: s.name ?? s.id,
           version: null,
@@ -805,12 +805,9 @@ export class DeviceProvider extends BaseResourceProvider {
 
   private async loadDefenderMachines(ctx: ProviderContext): Promise<CapabilityResult<DefenderMachine[]>> {
     try {
-      const response = await this.defenderClient.get<GraphResponse<DefenderMachine[]>>(
-        ctx.tenantId as string,
-        '/api/machines',
-        DEFENDER_SCOPES
-      );
-      return { available: true, data: response.value };
+      // Defender liefert hoechstens 10.000 je Seite; groessere Tenants haben Folgeseiten
+      const { items } = await this.defenderClient.getAllPages<DefenderMachine>(ctx.tenantId as string, '/api/machines', DEFENDER_SCOPES);
+      return { available: true, data: items };
     } catch (error) {
       const unavailable = asUnavailable(error, 'Machine.Read.All');
       if (unavailable) return unavailable;
@@ -916,6 +913,9 @@ export function mergeDevices(intune: GraphManagedDevice[], defender: DefenderMac
     byHostname.set(shortHostname(device.name), device);
   }
 
+  // Neu aufgesetzte Geraete haben mehrere Defender-Eintraege; der aktive und zuletzt gesehene gewinnt
+  const chosen = new Map<Device, DefenderMachine>();
+
   for (const machine of defender) {
     const aadKey = machine.aadDeviceId?.toLowerCase() ?? null;
     const hostname = shortHostname(machine.computerDnsName ?? '');
@@ -923,6 +923,9 @@ export function mergeDevices(intune: GraphManagedDevice[], defender: DefenderMac
     const info = mapDefender(machine);
 
     if (existing) {
+      const previous = chosen.get(existing);
+      if (previous && !isPreferredMachine(machine, previous)) continue;
+      chosen.set(existing, machine);
       existing.defender = info;
       existing.azureAdDeviceId = existing.azureAdDeviceId ?? aadKey;
       existing.osVersion = existing.osVersion ?? machine.osVersion;
@@ -944,10 +947,19 @@ export function mergeDevices(intune: GraphManagedDevice[], defender: DefenderMac
       defender: info,
     };
     byKey.set(key, device);
+    chosen.set(device, machine);
     if (hostname) byHostname.set(hostname, device);
   }
 
   return Array.from(byKey.values()).sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/** Aktiv vor inaktiv, dann der zuletzt gesehene Eintrag. */
+export function isPreferredMachine(candidate: Pick<DefenderMachine, 'healthStatus' | 'lastSeen'>, current: Pick<DefenderMachine, 'healthStatus' | 'lastSeen'>): boolean {
+  const active = (m: Pick<DefenderMachine, 'healthStatus'>) => (m.healthStatus === 'Active' ? 1 : 0);
+  if (active(candidate) !== active(current)) return active(candidate) > active(current);
+  const seen = (m: Pick<DefenderMachine, 'lastSeen'>) => (m.lastSeen ? Date.parse(m.lastSeen) || 0 : 0);
+  return seen(candidate) > seen(current);
 }
 
 function mapIntune(md: GraphManagedDevice): DeviceIntuneInfo {

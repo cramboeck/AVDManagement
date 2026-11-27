@@ -251,6 +251,8 @@ export default function UserDetailPage({ params }: { params: { userId: string } 
 }
 
 function OverviewTab({ user, base, tenantId }: { user: UserDetail; base: string; tenantId: string }) {
+  const queryClient = useQueryClient();
+  const [removing, setRemoving] = useState<UserLicense | null>(null);
   const licensesQuery = useQuery({
     queryKey: ['user-licenses', tenantId, user.microsoftId],
     queryFn: () => api.get<{ items: UserLicense[] }>(`${base}/licenses`),
@@ -305,13 +307,41 @@ function OverviewTab({ user, base, tenantId }: { user: UserDetail; base: string;
         ) : (
           <ul className="space-y-1 text-sm">
             {licensesQuery.data.items.map((license) => (
-              <li key={license.skuId} className="flex items-center justify-between rounded border px-2 py-1">
-                <span className="font-mono text-xs">{license.skuPartNumber}</span>
+              <li key={license.skuId} className="flex items-center justify-between gap-2 rounded border px-2 py-1">
+                <span>
+                  {license.displayName}
+                  <span className="ml-2 font-mono text-[11px] text-muted-foreground">{license.skuPartNumber}</span>
+                  {license.inheritedFromGroupIds.length > 0 && <span className="ml-2 rounded-full bg-muted px-2 py-0.5 text-[11px]">ueber Gruppe</span>}
+                </span>
+                {license.assignedDirectly ? (
+                  <button
+                    onClick={() => setRemoving(license)}
+                    className="rounded-md border border-destructive/40 px-2 py-0.5 text-xs text-destructive hover:bg-destructive/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-destructive"
+                  >
+                    Entfernen
+                  </button>
+                ) : (
+                  <span className="text-xs text-muted-foreground" title="Nur ueber die Gruppenmitgliedschaft entfernbar">
+                    geerbt
+                  </span>
+                )}
               </li>
             ))}
           </ul>
         )}
       </section>
+      {removing && (
+        <JobActionDialog
+          title={`Lizenz entfernen: ${removing.displayName}`}
+          confirmLabel="Entfernen"
+          tone="destructive"
+          createJob={() =>
+            api.post<Job>(`/tenants/${tenantId}/jobs/remove-license`, { userId: user.microsoftId, userDisplayName: user.displayName, skuId: removing.skuId, skuDisplayName: removing.displayName })
+          }
+          onClose={() => setRemoving(null)}
+          onCompleted={() => queryClient.invalidateQueries({ queryKey: ['user-licenses', tenantId, user.microsoftId] })}
+        />
+      )}
     </div>
   );
 }

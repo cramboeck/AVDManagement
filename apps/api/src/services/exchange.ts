@@ -153,7 +153,14 @@ function str(value: unknown): string | null {
 }
 
 function list(value: unknown): string[] {
-  return Array.isArray(value) ? value.filter((x): x is string => typeof x === 'string' && x.trim() !== '').map((x) => x.trim().toLowerCase()) : [];
+  // ConvertTo-Json in PowerShell 5.1 macht aus einer Ein-Element-Liste einen String
+  const items = Array.isArray(value) ? value : typeof value === 'string' ? [value] : [];
+  return items.filter((x): x is string => typeof x === 'string' && x.trim() !== '').map((x) => x.trim().toLowerCase());
+}
+
+/** Wie list, aber null bleibt null: der Worker hat die Rechte nicht gelesen. */
+function listOrUnknown(value: unknown): string[] | null {
+  return value === null || value === undefined ? null : list(value);
 }
 
 export function normalizeFacts(raw: Record<string, unknown> | null, workerId: string, now: Date): ExchangeFacts | null {
@@ -179,8 +186,8 @@ export function normalizeFacts(raw: Record<string, unknown> | null, workerId: st
       retentionPolicy: str(m.retentionPolicy),
       hiddenFromAddressLists: m.hiddenFromAddressLists === true,
       auditEnabled: typeof m.auditEnabled === 'boolean' ? m.auditEnabled : null,
-      fullAccess: list(m.fullAccess),
-      sendAs: list(m.sendAs),
+      fullAccess: listOrUnknown(m.fullAccess),
+      sendAs: listOrUnknown(m.sendAs),
       sendOnBehalf: list(m.sendOnBehalf),
     });
   }

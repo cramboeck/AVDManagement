@@ -325,12 +325,9 @@ export class AppProvider extends BaseResourceProvider {
 
   async getAssignments(ctx: ProviderContext, appId: string): Promise<AppAssignment[]> {
     this.validateContext(ctx);
-    const response = await this.graphClient.get<GraphResponse<GraphAssignment[]>>(
-      ctx.tenantId as string,
-      `${GRAPH_BETA}/deviceAppManagement/mobileApps/${encodeURIComponent(appId)}/assignments`,
-      this.requiredScopes
-    );
-    return response.value.map(mapAssignment);
+    // Vollstaendig lesen: /assign ersetzt die ganze Liste, eine fehlende Seite wuerde Zuweisungen loeschen
+    const { items } = await this.graphClient.getAllPages<GraphAssignment>(ctx.tenantId as string, `${GRAPH_BETA}/deviceAppManagement/mobileApps/${encodeURIComponent(appId)}/assignments`, this.requiredScopes);
+    return items.map(mapAssignment);
   }
 
   /**

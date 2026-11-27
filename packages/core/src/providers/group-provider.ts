@@ -19,7 +19,7 @@ import type {
   GroupVisibility,
 } from '@zerostress/types';
 import { BaseResourceProvider, type ProviderContext } from './resource-provider.js';
-import { GraphClient, type GraphResponse } from './graph-client.js';
+import { GraphClient, type GraphResponse, type GraphBatchRequest, type GraphBatchResult } from './graph-client.js';
 import { GraphApiError } from '../errors.js';
 
 interface GraphGroupRow {
@@ -48,10 +48,6 @@ interface GraphDirectoryObject {
   accountEnabled?: boolean | null;
 }
 
-interface BatchResponse {
-  responses: { id: string; status: number; body?: unknown }[];
-}
-
 const GROUP_SELECT = [
   'id',
   'displayName',
@@ -68,8 +64,6 @@ const GROUP_SELECT = [
   'onPremisesSyncEnabled',
 ].join(',');
 
-// Graph erlaubt 20 Anfragen je $batch; zwei je Gruppe (Mitglieder, Gaeste)
-const BATCH_GROUPS = 10;
 // Obergrenze fuer Zaehlungen je Sync, damit ein Riesen-Tenant den Worker nicht blockiert
 export const COUNT_LIMIT = 1500;
 const MEMBER_PAGE = 999;
@@ -187,8 +181,9 @@ export class GroupProvider extends BaseResourceProvider {
 
   async countOwners(ctx: ProviderContext, groupId: string): Promise<number> {
     this.validateContext(ctx);
-    const response = await this.graphClient.get<GraphResponse<{ id: string }[]>>(ctx.tenantId as string, `/groups/${encodeURIComponent(groupId)}/owners?$select=id&$top=100`, this.requiredScopes);
-    return response.value.length;
+    // Steuert die Sperre "letzter Besitzer": muss vollstaendig zaehlen
+    const { items } = await this.graphClient.getAllPages<{ id: string }>(ctx.tenantId as string, `/groups/${encodeURIComponent(groupId)}/owners?$select=id&$top=999`, this.requiredScopes);
+    return items.length;
   }
 
   async listGroups(ctx: ProviderContext): Promise<CapabilityResult<GroupInventorySet>> {
@@ -241,27 +236,25 @@ export class GroupProvider extends BaseResourceProvider {
    */
   private async countMembers(tenantId: string, groupIds: string[]): Promise<Map<string, { members: number | null; guests: number | null }>> {
     const result = new Map<string, { members: number | null; guests: number | null }>();
-    for (let i = 0; i < groupIds.length; i += BATCH_GROUPS) {
-      const chunk = groupIds.slice(i, i + BATCH_GROUPS);
-      const requests = chunk.flatMap((id) => [
-        { id: `m:${id}`, method: 'GET', url: `/groups/${id}/members/$count`, headers: { ConsistencyLevel: 'eventual' } },
-        { id: `g:${id}`, method: 'GET', url: `/groups/${id}/members/microsoft.graph.user/$count?$filter=userType eq 'Guest'`, headers: { ConsistencyLevel: 'eventual' } },
-      ]);
-      let batch: BatchResponse;
-      try {
-        batch = await this.graphClient.post<BatchResponse>(tenantId, '/$batch', this.requiredScopes, { requests });
-      } catch {
-        for (const id of chunk) result.set(id, { members: null, guests: null });
-        continue;
-      }
-      for (const id of chunk) {
-        const members = batch.responses.find((r) => r.id === `m:${id}`);
-        const guests = batch.responses.find((r) => r.id === `g:${id}`);
-        result.set(id, {
-          members: members && members.status < 300 ? parseCount(members.body) : null,
-          guests: guests && guests.status < 300 ? parseCount(guests.body) : null,
-        });
-      }
+    const requests: GraphBatchRequest[] = groupIds.flatMap((id) => [
+      { id: `m:${id}`, method: 'GET' as const, url: `/groups/${id}/members/$count`, headers: { ConsistencyLevel: 'eventual' } },
+      { id: `g:${id}`, method: 'GET' as const, url: `/groups/${id}/members/microsoft.graph.user/$count?$filter=userType eq 'Guest'`, headers: { ConsistencyLevel: 'eventual' } },
+    ]);
+    let responses: Map<string, GraphBatchResult>;
+    try {
+      // Gedrosselte Teilanfragen wiederholt der Client; nur was dann noch fehlt, bleibt null
+      responses = await this.graphClient.batch(tenantId, this.requiredScopes, requests);
+    } catch {
+      for (const id of groupIds) result.set(id, { members: null, guests: null });
+      return result;
+    }
+    for (const id of groupIds) {
+      const members = responses.get(`m:${id}`);
+      const guests = responses.get(`g:${id}`);
+      result.set(id, {
+        members: members && members.status >= 200 && members.status < 300 ? parseCount(members.body) : null,
+        guests: guests && guests.status >= 200 && guests.status < 300 ? parseCount(guests.body) : null,
+      });
     }
     return result;
   }

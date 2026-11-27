@@ -28,7 +28,7 @@ import {
   BaseResourceProvider,
   type ProviderContext,
 } from './resource-provider.js';
-import { ArmClient, type ArmResponse, type ArmAsyncOperation } from './arm-client.js';
+import { ArmClient, USABLE_SUBSCRIPTION_STATES, mapWithLimit, type ArmAsyncOperation } from './arm-client.js';
 import { ValidationError } from '../errors.js';
 
 // Run Command: Ausgabe der Compute-API je Kanal
@@ -167,13 +167,9 @@ export class AvdProvider extends BaseResourceProvider {
     this.validateContext(ctx);
     const tenantId = ctx.tenantId as string;
 
-    const response = await this.armClient.get<ArmResponse<AzureSubscription[]>>(
-      tenantId,
-      '/subscriptions',
-      { apiVersion: SUBSCRIPTIONS_API_VERSION }
-    );
-
-    return response.value.filter((s) => s.state === 'Enabled');
+    // Alle Seiten; Abos mit Zahlungswarnung laufen weiter und gehoeren dazu
+    const subscriptions = await this.armClient.getAllPages<AzureSubscription>(tenantId, '/subscriptions', { apiVersion: SUBSCRIPTIONS_API_VERSION });
+    return subscriptions.filter((s) => USABLE_SUBSCRIPTION_STATES.has(s.state));
   }
 
   /**
@@ -264,24 +260,23 @@ export class AvdProvider extends BaseResourceProvider {
     const warnings: string[] = [];
     const failures: unknown[] = [];
 
-    for (const subscriptionId of subscriptions) {
+    // Abos und Pools parallel mit Obergrenze statt strikt nacheinander
+    await mapWithLimit(subscriptions, 4, async (subscriptionId) => {
       try {
         const subscriptionPools = await this.armClient.getAllPages<AzureHostPool>(
           tenantId,
           `/subscriptions/${subscriptionId}/providers/Microsoft.DesktopVirtualization/hostPools`,
           { apiVersion: AVD_API_VERSION }
         );
-
-        for (const pool of subscriptionPools) {
-          const hosts = await this.listSessionHostsForPool(ctx, pool.id);
-          pools.push({ pool, hosts });
-        }
+        const loaded = await mapWithLimit(subscriptionPools, 4, async (pool) => ({ pool, hosts: await this.listSessionHostsForPool(ctx, pool.id) }));
+        pools.push(...loaded);
       } catch (error) {
         failures.push(error);
         const message = error instanceof Error ? error.message : String(error);
         warnings.push(`Subscription ${subscriptionId}: ${message}`);
       }
-    }
+    });
+    pools.sort((a, b) => a.pool.name.localeCompare(b.pool.name));
 
     if (failures.length === subscriptions.length) {
       throw failures[0];

@@ -48,7 +48,6 @@ export function createAssignLicenseHandler(
         data: {
           userId: payload.userId,
           skuId: payload.skuId,
-          assignedAt: new Date().toISOString(),
         },
       };
     } catch (error) {
@@ -75,14 +74,24 @@ export function createAssignLicensePreviewGenerator(
     const payload = ctx.payload as unknown as AssignLicensePayload;
     const warnings: string[] = [];
 
-    const currentLicenses = await identityProvider.getUserLicenses(
-      { tenantId: ctx.tenantId, correlationId: crypto.randomUUID() },
-      payload.userId
-    );
+    const providerCtx = { tenantId: ctx.tenantId, correlationId: crypto.randomUUID() };
+    const [currentLicenses, usageLocation, skus] = await Promise.all([
+      identityProvider.getUserLicenses(providerCtx, payload.userId),
+      identityProvider.getUsageLocation(providerCtx, payload.userId),
+      identityProvider.getAvailableSkus(providerCtx).catch(() => []),
+    ]);
 
     const alreadyAssigned = currentLicenses.some((l) => l.skuId === payload.skuId);
     if (alreadyAssigned) {
       warnings.push(`Benutzer hat die Lizenz "${payload.skuDisplayName}" bereits zugewiesen.`);
+    }
+    // Graph lehnt Lizenzen ohne Nutzungsort ab; vorher sagen statt im Job scheitern
+    if (!usageLocation) {
+      warnings.push('Beim Benutzer ist kein Nutzungsort (usageLocation) gesetzt; Microsoft lehnt die Zuweisung dann ab. Erst im Profil das Land setzen.');
+    }
+    const sku = skus.find((s) => s.skuId === payload.skuId);
+    if (sku && sku.availableUnits <= 0 && !alreadyAssigned) {
+      warnings.push(`Keine freie Lizenz "${payload.skuDisplayName}" (${sku.consumedUnits} von ${sku.totalUnits} vergeben). Erst nachkaufen oder eine Lizenz freigeben.`);
     }
 
     return {
@@ -116,6 +125,11 @@ export function createRemoveLicenseHandler(
     const payload = ctx.payload as unknown as RemoveLicensePayload;
 
     try {
+      const current = (await identityProvider.getUserLicenses({ tenantId: ctx.tenantId, correlationId: ctx.correlationId }, payload.userId)).find((l) => l.skuId === payload.skuId);
+      if (!current) return { success: true, data: { userId: payload.userId, skuId: payload.skuId, changed: false, note: 'war nicht zugewiesen' } };
+      if (!current.assignedDirectly) {
+        return { success: false, error: { code: 'LICENSE_INHERITED', message: 'Die Lizenz kommt ueber eine Gruppe und laesst sich nur ueber die Gruppenmitgliedschaft entfernen.', retryable: false } };
+      }
       await identityProvider.removeLicense(
         { tenantId: ctx.tenantId, correlationId: ctx.correlationId },
         payload.userId,
@@ -450,6 +464,12 @@ export function registerIdentityJobs(identityProvider: IdentityProvider, options
     // Preview-Generator fuer Remove analog zu Assign
     async (ctx: PreviewContext): Promise<PreviewResult> => {
       const payload = ctx.payload as unknown as RemoveLicensePayload;
+      const current = (await identityProvider.getUserLicenses({ tenantId: ctx.tenantId, correlationId: crypto.randomUUID() }, payload.userId)).find((l) => l.skuId === payload.skuId);
+      const warnings: string[] = [];
+      if (!current) warnings.push('Die Lizenz ist nicht (mehr) zugewiesen; der Job aendert nichts.');
+      else if (!current.assignedDirectly) warnings.push('Die Lizenz kommt ueber eine Gruppe; der Job wird abgelehnt. Stattdessen den Benutzer aus der lizenzierenden Gruppe entfernen.');
+      else if (current.inheritedFromGroupIds.length > 0) warnings.push('Die Lizenz ist zusaetzlich ueber eine Gruppe zugewiesen und bleibt deshalb erhalten.');
+      warnings.push('Mit der Lizenz verliert der Benutzer den Zugriff auf die enthaltenen Dienste; Postfachdaten bleiben 30 Tage erhalten.');
       return {
         changes: [
           {
@@ -461,7 +481,7 @@ export function registerIdentityJobs(identityProvider: IdentityProvider, options
             after: { license: null },
           },
         ],
-        warnings: [],
+        warnings,
         estimatedDurationSeconds: 5,
       };
     }

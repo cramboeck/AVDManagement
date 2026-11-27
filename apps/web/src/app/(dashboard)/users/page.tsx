@@ -17,6 +17,8 @@ import type { SyncedUser, Job } from '@zerostress/types';
 interface UsersResponse {
   items: SyncedUser[];
   nextPageToken: string | null;
+  // Nur bei der vollstaendigen Liste: Obergrenze erreicht
+  truncated?: boolean;
 }
 
 export default function UsersPage() {
@@ -30,7 +32,8 @@ export default function UsersPage() {
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['users', activeTenant?.id, search, pageToken],
     queryFn: () => {
-      const params = new URLSearchParams({ pageSize: '100' });
+      // Ohne Suche alle Benutzer laden, damit Filter, Sortierung und Export vollstaendig sind
+      const params = new URLSearchParams(search ? { pageSize: '100' } : { all: 'true' });
       if (search) params.set('search', search);
       if (pageToken) params.set('pageToken', pageToken);
       return api.get<UsersResponse>(`/tenants/${activeTenant!.id}/users?${params}`);
@@ -135,6 +138,11 @@ export default function UsersPage() {
         <NoResults query={search} />
       ) : (
         <>
+          {data.truncated && (
+            <div className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-sm" role="status">
+              Der Tenant hat mehr als {data.items.length} Benutzer; angezeigt werden die ersten {data.items.length}. Fuer weitere die Suche nutzen.
+            </div>
+          )}
           <DataTable
             rows={data.items}
             columns={columns}

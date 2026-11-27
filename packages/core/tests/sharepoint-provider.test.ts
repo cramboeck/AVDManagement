@@ -42,4 +42,13 @@ describe('SharePointProvider', () => {
     expect(result.data.totals).toMatchObject({ sites: 2, teamSites: 1, sitesWithAnonymousLinks: 1, sitesWithGuestLinks: 1, usersSharingExternally: 2, filesSharedExternally: 8 });
     expect(result.data.anonymised).toBe(false);
   });
+
+  it('does not claim hidden names when nobody shared anything', async () => {
+    const header = spUsersCsv.split('\n')[0];
+    const odHeader = odUsersCsv.split('\n')[0];
+    const graph = { get: vi.fn(async (_t: string, path: string) => (path.includes('SiteUsage') ? sitesCsv : path.includes('OneDrive') ? odHeader : header)) };
+    const result = await new SharePointProvider(graph as unknown as GraphClient).getOverview(ctx);
+    expect(result.available && result.data.sharingUsers).toEqual([]);
+    expect(result.available && result.data.anonymised).toBe(false);
+  });
 });

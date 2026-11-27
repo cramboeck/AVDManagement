@@ -92,7 +92,7 @@ export async function buildTenantDashboard(tenant: ManagedTenant): Promise<Tenan
 async function loadSecurity(ctx: { tenantId: TenantId; correlationId: string }): Promise<DashboardTile<SecurityOverview>> {
   const since = new Date(Date.now() - SECURITY_WINDOW_HOURS * 3600 * 1000).toISOString();
   const result = await withTimeout(
-    getIdentityProvider().listSignIns(ctx, { top: 500, since }),
+    getIdentityProvider().listSignInWindow(ctx, { since, maxItems: 5000 }),
     15000,
     'security'
   );
@@ -101,7 +101,7 @@ async function loadSecurity(ctx: { tenantId: TenantId; correlationId: string }):
     return unavailable(result.reason);
   }
 
-  const events = result.data;
+  const events = result.data.events;
   const failures = events.filter((e) => e.outcome === 'failure');
   const successes = events.filter((e) => e.outcome === 'success');
 
@@ -112,6 +112,7 @@ async function loadSecurity(ctx: { tenantId: TenantId; correlationId: string }):
     usersWithFailures: new Set(failures.map((e) => e.userId)).size,
     legacyAuthSuccesses: successes.filter((e) => e.clientAppUsed && !MODERN_CLIENTS.has(e.clientAppUsed)).length,
     riskySuccesses: successes.filter((e) => e.riskLevel === 'medium' || e.riskLevel === 'high').length,
+    truncated: result.data.truncated,
   });
 }
 

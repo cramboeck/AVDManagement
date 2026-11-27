@@ -9,6 +9,19 @@ import { GraphApiError } from '../src/errors.js';
 import type { TenantId } from '@zerostress/types';
 import fixtures from './fixtures/graph-users.json';
 
+// Echte Paging- und Batch-Logik ueber die gemockten get/post
+function withClientHelpers<T extends object>(mock: T): T {
+  return Object.assign(mock, {
+    getAllPages(this: unknown, ...args: Parameters<GraphClient['getAllPages']>) {
+      return GraphClient.prototype.getAllPages.apply(this as GraphClient, args);
+    },
+    batch(this: unknown, ...args: Parameters<GraphClient['batch']>) {
+      return GraphClient.prototype.batch.apply(this as GraphClient, args);
+    },
+    delay: async () => undefined,
+  });
+}
+
 describe('IdentityProvider', () => {
   let provider: IdentityProvider;
   let mockGraphClient: {
@@ -25,7 +38,53 @@ describe('IdentityProvider', () => {
       get: vi.fn(),
       post: vi.fn(),
     };
-    provider = new IdentityProvider(mockGraphClient as unknown as GraphClient);
+    provider = new IdentityProvider(withClientHelpers(mockGraphClient) as unknown as GraphClient);
+  });
+
+  describe('listSignInWindow', () => {
+    const signIn = (id: string) => ({ id, createdDateTime: '2026-11-25T10:00:00Z', userId: 'u', userPrincipalName: 'max@contoso.com', userDisplayName: 'Max', appDisplayName: 'Office', clientAppUsed: 'Browser', ipAddress: '203.0.113.1', status: { errorCode: 0 }, location: {}, deviceDetail: {}, conditionalAccessStatus: 'success', riskLevelDuringSignIn: 'none', isInteractive: true });
+
+    it('reads every page of the window instead of stopping at 500', async () => {
+      mockGraphClient.get
+        .mockResolvedValueOnce({ value: [signIn('a'), signIn('b')], '@odata.nextLink': 'https://graph.microsoft.com/v1.0/auditLogs/signIns?$skiptoken=x' })
+        .mockResolvedValueOnce({ value: [signIn('c')] });
+      const result = await provider.listSignInWindow(ctx, { since: '2026-11-25T00:00:00Z' });
+      expect(result.available && result.data.events.map((e) => e.id)).toEqual(['a', 'b', 'c']);
+      expect(result.available && result.data.truncated).toBe(false);
+    });
+
+    it('flags truncation at the cap and maps 403 to permission-missing', async () => {
+      mockGraphClient.get.mockResolvedValueOnce({ value: [signIn('a'), signIn('b')], '@odata.nextLink': 'https://graph.microsoft.com/v1.0/auditLogs/signIns?$skiptoken=x' });
+      const capped = await provider.listSignInWindow(ctx, { since: '2026-11-25T00:00:00Z', maxItems: 2 });
+      expect(capped.available && capped.data.truncated).toBe(true);
+
+      mockGraphClient.get.mockRejectedValueOnce(new GraphApiError(403, 'Authorization_RequestDenied', 'no'));
+      expect(await provider.listSignInWindow(ctx, { since: '2026-11-25T00:00:00Z' })).toMatchObject({ available: false, reason: 'permission-missing' });
+    });
+  });
+
+  describe('listAllUsers', () => {
+    it('follows all pages so filters and export see every user', async () => {
+      mockGraphClient.get
+        .mockResolvedValueOnce({ ...fixtures.usersList, '@odata.nextLink': 'https://graph.microsoft.com/v1.0/users?$skiptoken=2' })
+        .mockResolvedValueOnce({ value: fixtures.usersList.value.slice(0, 1) });
+      const result = await provider.listAllUsers(ctx);
+      expect(result.items).toHaveLength(4);
+      expect(result.truncated).toBe(false);
+      expect(mockGraphClient.get.mock.calls[0][1]).toContain('$top=999');
+    });
+
+    it('reports truncation at the cap instead of silently cutting', async () => {
+      mockGraphClient.get.mockResolvedValueOnce({ ...fixtures.usersList, '@odata.nextLink': 'https://graph.microsoft.com/v1.0/users?$skiptoken=2' });
+      const result = await provider.listAllUsers(ctx, 2);
+      expect(result.items).toHaveLength(2);
+      expect(result.truncated).toBe(true);
+    });
+
+    it('propagates 429 after the client retries', async () => {
+      mockGraphClient.get.mockRejectedValueOnce(new GraphApiError(429, 'TooManyRequests', 'slow down'));
+      await expect(provider.listAllUsers(ctx)).rejects.toMatchObject({ statusCode: 429 });
+    });
   });
 
   describe('listUsers', () => {
@@ -144,14 +203,19 @@ describe('IdentityProvider', () => {
   });
 
   describe('getUserLicenses', () => {
-    it('should return user licenses', async () => {
-      mockGraphClient.get.mockResolvedValueOnce(fixtures.userLicenses);
+    it('should return user licenses with direct and group-based origin', async () => {
+      const [e3, p1] = fixtures.userLicenses.value;
+      mockGraphClient.get.mockImplementation(async (_t: string, path: string) =>
+        path.includes('licenseDetails')
+          ? fixtures.userLicenses
+          : { licenseAssignmentStates: [{ skuId: e3.skuId, assignedByGroup: null }, { skuId: p1.skuId, assignedByGroup: 'grp-licensing' }] }
+      );
 
       const result = await provider.getUserLicenses(ctx, 'user-001');
 
       expect(result).toHaveLength(2);
-      expect(result[0].skuPartNumber).toBe('ENTERPRISEPACK');
-      expect(result[1].skuPartNumber).toBe('AAD_PREMIUM');
+      expect(result[0]).toMatchObject({ skuPartNumber: 'ENTERPRISEPACK', displayName: 'Microsoft 365 E3', assignedDirectly: true, inheritedFromGroupIds: [] });
+      expect(result[1]).toMatchObject({ skuPartNumber: 'AAD_PREMIUM', assignedDirectly: false, inheritedFromGroupIds: ['grp-licensing'] });
     });
   });
 
@@ -163,6 +227,7 @@ describe('IdentityProvider', () => {
 
       expect(result).toHaveLength(3);
       expect(result[0].displayName).toBe('Microsoft 365 E3');
+      expect(result[0].availableUnits).toBe(Math.max(0, fixtures.subscribedSkus.value[0].prepaidUnits.enabled - fixtures.subscribedSkus.value[0].consumedUnits));
       expect(result[1].displayName).toBe('Azure AD Premium P1');
       expect(result[2].displayName).toBe('Microsoft Intune');
     });

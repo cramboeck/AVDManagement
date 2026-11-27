@@ -11,6 +11,19 @@ import { GraphClient } from '../src/providers/graph-client.js';
 import { GraphApiError } from '../src/errors.js';
 import type { AppAssignment, CorrelationId, JobId, MspId, TenantId, UserId } from '@zerostress/types';
 
+// Echte Paging- und Batch-Logik ueber die gemockten get/post
+function withClientHelpers<T extends object>(mock: T): T {
+  return Object.assign(mock, {
+    getAllPages(this: unknown, ...args: Parameters<GraphClient['getAllPages']>) {
+      return GraphClient.prototype.getAllPages.apply(this as GraphClient, args);
+    },
+    batch(this: unknown, ...args: Parameters<GraphClient['batch']>) {
+      return GraphClient.prototype.batch.apply(this as GraphClient, args);
+    },
+    delay: async () => undefined,
+  });
+}
+
 const ctx = { tenantId: 'tenant-1' as TenantId, correlationId: 'corr-1' };
 
 const groupAssignment = (id: string, groupId: string, intent = 'required') => ({
@@ -82,7 +95,7 @@ describe('AppProvider', () => {
 
   beforeEach(() => {
     graph = { get: vi.fn(), post: vi.fn() };
-    provider = new AppProvider(graph as unknown as GraphClient);
+    provider = new AppProvider(withClientHelpers(graph) as unknown as GraphClient);
   });
 
   it('lists apps with assignments and install summaries from the report', async () => {

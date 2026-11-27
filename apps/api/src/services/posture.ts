@@ -17,7 +17,7 @@ import { getDeviceProvider, getIdentityProvider, getSecurityProvider } from './m
 import { getDeviceInventory, getTenantVulnerabilities } from './inventory.js';
 
 const SIGN_IN_DAYS = 7;
-const SIGN_IN_SAMPLE = 500;
+const SIGN_IN_SAMPLE = 5000;
 
 const complianceLabels: Record<string, string> = {
   compliant: 'Konform',
@@ -133,8 +133,9 @@ export async function buildSecurityPosture(tenant: ManagedTenant): Promise<Secur
       const since = new Date();
       since.setUTCHours(0, 0, 0, 0);
       since.setUTCDate(since.getUTCDate() - (SIGN_IN_DAYS - 1));
-      const result = await identity.listSignIns(ctx, { top: SIGN_IN_SAMPLE, since: since.toISOString() });
-      if (!result.available) return result;
+      const window = await identity.listSignInWindow(ctx, { since: since.toISOString(), maxItems: SIGN_IN_SAMPLE });
+      if (!window.available) return window;
+      const result = { available: true as const, data: window.data.events };
 
       const days: SignInsByDay[] = [];
       for (let i = 0; i < SIGN_IN_DAYS; i += 1) {
@@ -147,7 +148,7 @@ export async function buildSecurityPosture(tenant: ManagedTenant): Promise<Secur
         const entry = byDay.get(event.createdAt.slice(0, 10));
         if (entry) entry[event.outcome] += 1;
       }
-      return { available: true, data: { days, sampled: result.data.length >= SIGN_IN_SAMPLE } };
+      return { available: true, data: { days, sampled: window.data.truncated } };
     }),
   ]);
 

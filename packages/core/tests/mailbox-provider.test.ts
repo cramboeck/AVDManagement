@@ -55,6 +55,11 @@ function graphMock(over: Partial<Record<'get' | 'post' | 'patch' | 'delete', unk
     post: vi.fn(async () => ({ id: 'new-rule' })),
     patch: vi.fn(async () => undefined),
     delete: vi.fn(async () => undefined),
+    // Echte Batch-Logik ueber den gemockten post (Wiederholung gedrosselter Teilanfragen)
+    batch(this: unknown, ...args: Parameters<GraphClient['batch']>) {
+      return GraphClient.prototype.batch.apply(this as GraphClient, args);
+    },
+    delay: async () => undefined,
     ...over,
   };
 }
@@ -115,6 +120,23 @@ describe('MailboxProvider', () => {
     ]);
     expect(scan.available && scan.data).toMatchObject({ scannedMailboxes: 2, failedMailboxes: 1, externalCount: 1, tenantDomains: ['contoso.com', 'contoso.onmicrosoft.com'] });
     expect(scan.available && scan.data.findings[0]).toMatchObject({ userPrincipalName: 'max@contoso.com', rule: { forwardsExternally: true } });
+
+    // Gedrosseltes Postfach wird in der naechsten Runde wiederholt statt als Fehler gezaehlt
+    let round = 0;
+    const throttledGraph = graphMock({
+      post: vi.fn(async (_t: string, _p: string, _s: string[], body: { requests: { id: string }[] }) => {
+        round += 1;
+        return { responses: body.requests.map((r) => (round === 1 && r.id === '1' ? { id: r.id, status: 429, headers: { 'Retry-After': '1' } } : { id: r.id, status: 200, body: { value: [] } })) };
+      }),
+    });
+    const p3 = new MailboxProvider(throttledGraph as unknown as GraphClient, () => NOW);
+    const retried = await p3.scanForwarding(ctx, [
+      { userPrincipalName: 'a@contoso.com', displayName: 'A' },
+      { userPrincipalName: 'b@contoso.com', displayName: 'B' },
+    ]);
+    expect(retried.available && retried.data).toMatchObject({ scannedMailboxes: 2, failedMailboxes: 0, throttledMailboxes: 0 });
+    expect(throttledGraph.post).toHaveBeenCalledTimes(2);
+    expect((throttledGraph.post.mock.calls[1] as unknown as [string, string, string[], { requests: { id: string }[] }])[3].requests.map((r) => r.id)).toEqual(['1']);
 
     const denied = graphMock({ post: vi.fn(async () => { throw new GraphApiError(403, 'ErrorAccessDenied', 'Forbidden'); }) });
     const p2 = new MailboxProvider(denied as unknown as GraphClient);

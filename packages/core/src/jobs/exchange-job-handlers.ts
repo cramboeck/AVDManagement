@@ -155,7 +155,7 @@ const definitions: Array<{ operation: ExchangeOperation; type: string; displayNa
     type: 'mailbox.set-full-access',
     displayName: 'Vollzugriff setzen',
     describe: (params, facts) => ({
-      before: { vollzugriff: facts ? facts.fullAccess.join(', ') || 'niemand' : 'unbekannt' },
+      before: { vollzugriff: facts && facts.fullAccess ? facts.fullAccess.join(', ') || 'niemand' : 'unbekannt' },
       after: { vollzugriff: `${params.grant ? '+' : '-'} ${String(params.trustee)}${params.grant && params.autoMapping ? ' (AutoMapping)' : ''}` },
       warnings: params.grant ? ['Vollzugriff heisst: alle Ordner lesen, aendern, loeschen. Mit AutoMapping erscheint das Postfach automatisch in Outlook.'] : [],
     }),
@@ -165,7 +165,7 @@ const definitions: Array<{ operation: ExchangeOperation; type: string; displayNa
     type: 'mailbox.set-send-as',
     displayName: 'Senden als setzen',
     describe: (params, facts) => ({
-      before: { sendenAls: facts ? facts.sendAs.join(', ') || 'niemand' : 'unbekannt' },
+      before: { sendenAls: facts && facts.sendAs ? facts.sendAs.join(', ') || 'niemand' : 'unbekannt' },
       after: { sendenAls: `${params.grant ? '+' : '-'} ${String(params.trustee)}` },
       warnings: params.grant ? ['Senden als: Mails erscheinen als vom Postfach selbst gesendet, ohne Hinweis auf den Absender.'] : [],
     }),

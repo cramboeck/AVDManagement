@@ -100,6 +100,30 @@ app.post(
   }
 );
 
+// Lizenz entfernen (direkte Zuweisung; geerbte lehnt der Job ab)
+app.post('/remove-license', requireRole('engineer'), requireConnectedTenant, validate('json', createLicenseJobSchema), async (c) => {
+  const auth = c.get('auth');
+  const tenant = c.get('tenant');
+  const body = c.req.valid('json');
+  const job = await getJobQueue().createJob({
+    type: 'identity.remove-license',
+    tenantId: tenant.id,
+    mspId: auth.mspId,
+    userId: auth.user.id,
+    userEmail: auth.user.email,
+    payload: {
+      userId: body.userId,
+      userDisplayName: body.userDisplayName,
+      skuId: body.skuId,
+      skuDisplayName: body.skuDisplayName,
+      targetType: 'user-license',
+      targetId: body.userId,
+      targetDisplayName: `${body.userDisplayName} - ${body.skuDisplayName}`,
+    },
+  });
+  return c.json(job, 202);
+});
+
 // Konto-Aktionen (deaktivieren, aktivieren, Sitzungen widerrufen, Passwort)
 const accountActionSchema = z.object({
   userId: z.string().min(1),

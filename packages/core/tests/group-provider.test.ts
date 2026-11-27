@@ -8,6 +8,19 @@ import { GraphClient } from '../src/providers/graph-client.js';
 import { GraphApiError } from '../src/errors.js';
 import type { GroupSummary, TenantId } from '@zerostress/types';
 
+// Echte Paging- und Batch-Logik ueber die gemockten get/post
+function withClientHelpers<T extends object>(mock: T): T {
+  return Object.assign(mock, {
+    getAllPages(this: unknown, ...args: Parameters<GraphClient['getAllPages']>) {
+      return GraphClient.prototype.getAllPages.apply(this as GraphClient, args);
+    },
+    batch(this: unknown, ...args: Parameters<GraphClient['batch']>) {
+      return GraphClient.prototype.batch.apply(this as GraphClient, args);
+    },
+    delay: async () => undefined,
+  });
+}
+
 const ctx = { tenantId: 'tenant-1' as TenantId, correlationId: 'corr-1' };
 
 function row(id: string, overrides: Record<string, unknown> = {}) {
@@ -66,8 +79,15 @@ describe('GroupProvider', () => {
   let provider: GroupProvider;
 
   beforeEach(() => {
-    graph = { get: vi.fn(), post: vi.fn() };
-    provider = new GroupProvider(graph as unknown as GraphClient);
+    graph = {
+      get: vi.fn(),
+      post: vi.fn(),
+      batch(this: unknown, ...args: Parameters<GraphClient['batch']>) {
+        return GraphClient.prototype.batch.apply(this as GraphClient, args);
+      },
+      delay: async () => undefined,
+    } as unknown as typeof graph;
+    provider = new GroupProvider(withClientHelpers(graph) as unknown as GraphClient);
   });
 
   it('lists groups across pages and counts members and guests via $batch', async () => {

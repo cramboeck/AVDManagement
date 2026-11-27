@@ -29,7 +29,13 @@ describe('AvdProvider', () => {
       patch: vi.fn(),
       delete: vi.fn(),
     };
-    provider = new AvdProvider(mockArmClient as unknown as ArmClient);
+    // Abo-Liste laeuft ueber getAllPages; die Tests liefern sie ueber get, damit die Faelle lesbar bleiben
+    const routed = {
+      ...mockArmClient,
+      getAllPages: (t: string, path: string, opts?: unknown) =>
+        path === '/subscriptions' ? Promise.resolve(mockArmClient.get(t, path, opts)).then((r: { value: unknown[] }) => r.value) : mockArmClient.getAllPages(t, path, opts),
+    };
+    provider = new AvdProvider(routed as unknown as ArmClient);
   });
 
   describe('listSubscriptions', () => {
@@ -43,17 +49,19 @@ describe('AvdProvider', () => {
       });
     });
 
-    it('returns only enabled subscriptions', async () => {
+    it('returns running subscriptions, including ones with a payment warning', async () => {
       mockArmClient.get.mockResolvedValueOnce({
         value: [
           { subscriptionId: 'sub-enabled', displayName: 'Prod', state: 'Enabled' },
+          { subscriptionId: 'sub-warned', displayName: 'Warned', state: 'Warned' },
+          { subscriptionId: 'sub-pastdue', displayName: 'PastDue', state: 'PastDue' },
           { subscriptionId: 'sub-disabled', displayName: 'Old', state: 'Disabled' },
         ],
       });
 
       const result = await provider.listSubscriptions(ctx);
 
-      expect(result.map((s) => s.subscriptionId)).toEqual(['sub-enabled']);
+      expect(result.map((s) => s.subscriptionId)).toEqual(['sub-enabled', 'sub-warned', 'sub-pastdue']);
     });
 
     it('propagates 403 when the service principal has no RBAC role', async () => {

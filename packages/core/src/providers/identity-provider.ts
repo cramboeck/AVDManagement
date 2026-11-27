@@ -266,6 +266,21 @@ export class IdentityProvider extends BaseResourceProvider {
   }
 
   /**
+   * Alle Benutzer des Tenants (Seiten zu 999) bis maxItems. Filter, Sortierung
+   * und Export in der Oberflaeche wirken so auf alle, nicht nur auf eine Seite.
+   */
+  async listAllUsers(ctx: ProviderContext, maxItems = 5000): Promise<{ items: SyncedUser[]; truncated: boolean }> {
+    this.validateContext(ctx);
+    const { items, truncated } = await this.graphClient.getAllPages<GraphUser>(
+      ctx.tenantId as string,
+      '/users?$select=id,userPrincipalName,displayName,mail,accountEnabled,userType,createdDateTime&$top=999',
+      this.requiredScopes,
+      { maxItems }
+    );
+    return { items: items.map((u) => this.mapGraphUserToSyncedUser(ctx.tenantId, u)), truncated };
+  }
+
+  /**
    * Benutzerliste mit Paginierung
    */
   async listUsers(
@@ -356,17 +371,30 @@ export class IdentityProvider extends BaseResourceProvider {
   ): Promise<UserLicense[]> {
     this.validateContext(ctx);
 
-    const response = await this.graphClient.get<GraphResponse<GraphLicense[]>>(
-      ctx.tenantId as string,
-      `/users/${userId}/licenseDetails`,
-      this.requiredScopes
-    );
+    const tenantId = ctx.tenantId as string;
+    const [details, user] = await Promise.all([
+      this.graphClient.get<GraphResponse<GraphLicense[]>>(tenantId, `/users/${encodeURIComponent(userId)}/licenseDetails`, this.requiredScopes),
+      // Herkunft je Lizenz: assignedByGroup ist null fuer direkte Zuweisungen
+      this.graphClient.get<{ licenseAssignmentStates?: Array<{ skuId: string; assignedByGroup: string | null }> }>(
+        tenantId,
+        `/users/${encodeURIComponent(userId)}?$select=licenseAssignmentStates`,
+        this.requiredScopes
+      ),
+    ]);
+    const states = user.licenseAssignmentStates ?? [];
 
-    return response.value.map((l) => ({
-      skuId: l.skuId,
-      skuPartNumber: l.skuPartNumber ?? '',
-      assignedAt: new Date(),
-    }));
+    return details.value.map((l) => {
+      const forSku = states.filter((s) => s.skuId === l.skuId);
+      const groups = forSku.map((s) => s.assignedByGroup).filter((g): g is string => !!g);
+      return {
+        skuId: l.skuId,
+        skuPartNumber: l.skuPartNumber ?? '',
+        displayName: this.getSkuDisplayName(l.skuPartNumber ?? ''),
+        // Ohne Statusangabe als direkt behandeln (aeltere Konten)
+        assignedDirectly: forSku.length === 0 || forSku.some((s) => !s.assignedByGroup),
+        inheritedFromGroupIds: Array.from(new Set(groups)),
+      };
+    });
   }
 
   /**
@@ -381,11 +409,25 @@ export class IdentityProvider extends BaseResourceProvider {
       [...this.requiredScopes, ...this.licenseScopes]
     );
 
-    return response.value.map((sku) => ({
-      skuId: sku.skuId,
-      skuPartNumber: sku.skuPartNumber,
-      displayName: this.getSkuDisplayName(sku.skuPartNumber),
-    }));
+    return response.value.map((sku) => {
+      const total = sku.prepaidUnits?.enabled ?? 0;
+      const consumed = sku.consumedUnits ?? 0;
+      return {
+        skuId: sku.skuId,
+        skuPartNumber: sku.skuPartNumber,
+        displayName: this.getSkuDisplayName(sku.skuPartNumber),
+        totalUnits: total,
+        consumedUnits: consumed,
+        availableUnits: Math.max(0, total - consumed),
+      };
+    });
+  }
+
+  /** Nutzungsort des Benutzers; ohne ihn lehnt Graph jede Lizenzzuweisung ab. */
+  async getUsageLocation(ctx: ProviderContext, userId: string): Promise<string | null> {
+    this.validateContext(ctx);
+    const user = await this.graphClient.get<{ usageLocation?: string | null }>(ctx.tenantId as string, `/users/${encodeURIComponent(userId)}?$select=usageLocation`, this.requiredScopes);
+    return user.usageLocation || null;
   }
 
   /**
@@ -616,13 +658,14 @@ export class IdentityProvider extends BaseResourceProvider {
   async getUserGroups(ctx: ProviderContext, userId: string): Promise<UserGroup[]> {
     this.validateContext(ctx);
 
-    const response = await this.graphClient.get<GraphResponse<GraphGroup[]>>(
+    // Alle Seiten: Benutzer in mehr als 100 Gruppen sind in Unternehmen normal
+    const { items } = await this.graphClient.getAllPages<GraphGroup>(
       ctx.tenantId as string,
-      `/users/${encodeURIComponent(userId)}/memberOf/microsoft.graph.group?$select=id,displayName,groupTypes,securityEnabled,mailEnabled&$top=100`,
+      `/users/${encodeURIComponent(userId)}/memberOf/microsoft.graph.group?$select=id,displayName,groupTypes,securityEnabled,mailEnabled&$top=999`,
       this.requiredScopes
     );
 
-    return response.value.map((group) => ({
+    return items.map((group) => ({
       id: group.id,
       displayName: group.displayName,
       kind: classifyGroup(group),
@@ -712,6 +755,25 @@ export class IdentityProvider extends BaseResourceProvider {
     }
 
     return { available: true, data: events };
+  }
+
+  /**
+   * Alle Anmeldungen eines Zeitfensters bis maxItems (Seiten zu 1000).
+   * Fuer Kennzahlen und Alerts: statt still bei 500 abzuschneiden, meldet
+   * truncated, dass das Fenster mehr enthielt.
+   */
+  async listSignInWindow(ctx: ProviderContext, query: { since: string; maxItems?: number }): Promise<CapabilityResult<{ events: SignInEvent[]; truncated: boolean }>> {
+    this.validateContext(ctx);
+    const maxItems = Math.min(Math.max(query.maxItems ?? 5000, 1), 20000);
+    const filter = encodeURIComponent(`createdDateTime ge ${new Date(query.since).toISOString()}`);
+    try {
+      const { items, truncated } = await this.graphClient.getAllPages<GraphSignIn>(ctx.tenantId as string, `/auditLogs/signIns?$top=1000&$filter=${filter}`, this.auditScopes, { maxItems });
+      return { available: true, data: { events: items.map(mapSignIn), truncated } };
+    } catch (error) {
+      const unavailable = asUnavailable(error, 'AuditLog.Read.All');
+      if (unavailable) return unavailable;
+      throw error;
+    }
   }
 
   /**

@@ -140,7 +140,7 @@ export default function DashboardPage() {
                 />
                 <Rows
                   rows={[
-                    ['Anmeldungen', String(security.signIns)],
+                    ['Anmeldungen', security.truncated ? `mehr als ${security.signIns}` : String(security.signIns)],
                     ['Benutzer mit Fehlern', String(security.usersWithFailures)],
                     ['Legacy-Auth erfolgreich', String(security.legacyAuthSuccesses), security.legacyAuthSuccesses > 0 ? 'destructive' : undefined],
                     ['Riskant erfolgreich', String(security.riskySuccesses), security.riskySuccesses > 0 ? 'destructive' : undefined],

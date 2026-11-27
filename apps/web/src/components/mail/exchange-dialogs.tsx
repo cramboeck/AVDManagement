@@ -197,7 +197,7 @@ function PermissionForm({ mailbox, action, facts, onSubmit, onClose }: { mailbox
   const [trustee, setTrustee] = useState('');
   const [grant, setGrant] = useState(true);
   const [autoMapping, setAutoMapping] = useState(true);
-  const existing = action === 'full-access' ? (facts?.fullAccess ?? []) : (facts?.sendAs ?? []);
+  const existing = (action === 'full-access' ? facts?.fullAccess : facts?.sendAs) ?? [];
   const valid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trustee.trim()) && trustee.trim().toLowerCase() !== mailbox.userPrincipalName.toLowerCase();
   return (
     <Shell title={`${action === 'full-access' ? 'Vollzugriff' : 'Senden als'}: ${mailbox.displayName}`} titleId="exo-permission" onClose={onClose}>

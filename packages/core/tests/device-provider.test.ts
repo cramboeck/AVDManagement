@@ -8,6 +8,19 @@ import { GraphClient } from '../src/providers/graph-client.js';
 import { GraphApiError } from '../src/errors.js';
 import type { Device, TenantId } from '@zerostress/types';
 
+// Echte Paging- und Batch-Logik ueber die gemockten get/post
+function withClientHelpers<T extends object>(mock: T): T {
+  return Object.assign(mock, {
+    getAllPages(this: unknown, ...args: Parameters<GraphClient['getAllPages']>) {
+      return GraphClient.prototype.getAllPages.apply(this as GraphClient, args);
+    },
+    batch(this: unknown, ...args: Parameters<GraphClient['batch']>) {
+      return GraphClient.prototype.batch.apply(this as GraphClient, args);
+    },
+    delay: async () => undefined,
+  });
+}
+
 const intuneDevice = (overrides: Record<string, unknown> = {}) => ({
   id: 'md-1',
   deviceName: 'LAPTOP-01',
@@ -60,6 +73,16 @@ describe('mergeDevices', () => {
     });
   });
 
+  it('keeps the active, most recently seen Defender record when a device was re-onboarded', () => {
+    const stale = defenderMachine({ id: 'old-machine', lastSeen: '2026-08-01T08:00:00Z', healthStatus: 'Inactive' });
+    const current = defenderMachine({ id: 'new-machine', lastSeen: '2026-09-25T08:00:00Z', healthStatus: 'Active' });
+    for (const order of [[stale, current], [current, stale]]) {
+      const devices = mergeDevices([intuneDevice()], order);
+      expect(devices).toHaveLength(1);
+      expect(devices[0].defender?.machineId).toBe('new-machine');
+    }
+  });
+
   it('falls back to the short hostname when Defender has no Entra id', () => {
     const devices = mergeDevices(
       [intuneDevice({ azureADDeviceId: null })],
@@ -104,7 +127,7 @@ describe('DeviceProvider', () => {
   beforeEach(() => {
     graph = { get: vi.fn(), post: vi.fn() };
     defender = { get: vi.fn() };
-    provider = new DeviceProvider(graph as unknown as GraphClient, defender as unknown as GraphClient);
+    provider = new DeviceProvider(withClientHelpers(graph) as unknown as GraphClient, withClientHelpers(defender) as unknown as GraphClient);
   });
 
   it('follows Intune paging and reports both source counts', async () => {
@@ -516,7 +539,7 @@ describe('DeviceProvider network detail', () => {
         ],
       })),
     };
-    const provider = new DeviceProvider(graph as unknown as GraphClient, defender as unknown as GraphClient);
+    const provider = new DeviceProvider(withClientHelpers(graph) as unknown as GraphClient, withClientHelpers(defender) as unknown as GraphClient);
 
     const result = await provider.getDeviceNetwork({ tenantId: 'tenant-1' as TenantId, correlationId: 'c' }, 'mde-1');
 

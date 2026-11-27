@@ -20,7 +20,8 @@ import { getIdentityProvider, getTokenProvider, rememberMicrosoftTenantId } from
 const TICK_MS = 10 * 60 * 1000;
 // Fenster grosszuegiger als der Takt, damit Nachzuegler von Graph nicht verloren gehen
 const WINDOW_MS = 2 * 60 * 60 * 1000;
-const SAMPLE = 500;
+// Obergrenze je Auswertung; das Fenster wird vollstaendig gelesen, bis hierhin
+const SAMPLE = 5000;
 
 type AlertRow = typeof alerts.$inferSelect;
 
@@ -89,9 +90,10 @@ export async function storeFindings(mspId: string, tenantId: string, findings: A
 
 export async function evaluateTenant(target: { id: string; mspId: string; displayName: string }): Promise<Alert[]> {
   const since = new Date(Date.now() - WINDOW_MS).toISOString();
-  const result = await getIdentityProvider().listSignIns({ tenantId: target.id as TenantId, correlationId: randomUUID() }, { top: SAMPLE, since });
+  const result = await getIdentityProvider().listSignInWindow({ tenantId: target.id as TenantId, correlationId: randomUUID() }, { since, maxItems: SAMPLE });
   if (!result.available) return [];
-  const findings = evaluateSignIns(result.data);
+  if (result.data.truncated) console.warn(`Sign-in window for tenant ${target.id} exceeded ${SAMPLE} events; older events in the window were not evaluated`);
+  const findings = evaluateSignIns(result.data.events);
   const created = await storeFindings(target.mspId, target.id, findings);
   if (created.length > 0) {
     await notify(target.displayName, created).catch((error: Error) => console.error(`Alert mail failed for tenant ${target.id}:`, error.message));

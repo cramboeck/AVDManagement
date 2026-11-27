@@ -10,7 +10,7 @@
 
 import type { AzureResourceGroup, AzureSubnet, AzureVm, AzureVmDetail, AzureVmDisk, AzureVmNic, VmPowerState, VmSizeOption } from '@zerostress/types';
 import { BaseResourceProvider, type ProviderContext } from './resource-provider.js';
-import { ArmClient, type ArmResponse } from './arm-client.js';
+import { ArmClient, type ArmResponse, USABLE_SUBSCRIPTION_STATES, mapWithLimit } from './arm-client.js';
 import { ArmApiError } from '../errors.js';
 
 const COMPUTE_API = '2024-03-01';
@@ -116,8 +116,8 @@ export class VmProvider extends BaseResourceProvider {
 
   async listSubscriptions(ctx: ProviderContext): Promise<Array<{ subscriptionId: string; displayName: string }>> {
     this.validateContext(ctx);
-    const res = await this.armClient.get<ArmResponse<Array<{ subscriptionId: string; displayName: string; state: string }>>>(ctx.tenantId as string, '/subscriptions', { apiVersion: SUBSCRIPTIONS_API });
-    return res.value.filter((s) => s.state === 'Enabled').map((s) => ({ subscriptionId: s.subscriptionId, displayName: s.displayName }));
+    const subscriptions = await this.armClient.getAllPages<{ subscriptionId: string; displayName: string; state: string }>(ctx.tenantId as string, '/subscriptions', { apiVersion: SUBSCRIPTIONS_API });
+    return subscriptions.filter((s) => USABLE_SUBSCRIPTION_STATES.has(s.state)).map((s) => ({ subscriptionId: s.subscriptionId, displayName: s.displayName }));
   }
 
   /** Alle VMs aller Subscriptions mit Betriebszustand (statusOnly). */
@@ -127,14 +127,15 @@ export class VmProvider extends BaseResourceProvider {
     const subscriptions = await this.listSubscriptions(ctx);
     const items: AzureVm[] = [];
     const warnings: string[] = [];
-    for (const sub of subscriptions) {
+    // Abos parallel, hoechstens vier gleichzeitig (Throttling je Tenant)
+    await mapWithLimit(subscriptions, 4, async (sub) => {
       try {
         const vms = await this.armClient.getAllPages<ArmVm>(tenantId, `/subscriptions/${sub.subscriptionId}/providers/Microsoft.Compute/virtualMachines?statusOnly=true`, { apiVersion: COMPUTE_API });
         items.push(...vms.map(toVm));
       } catch (error) {
         warnings.push(`${sub.displayName}: ${error instanceof Error ? error.message : String(error)}`);
       }
-    }
+    });
     items.sort((a, b) => a.name.localeCompare(b.name));
     return { items, warnings };
   }

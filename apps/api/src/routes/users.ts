@@ -37,9 +37,16 @@ app.get('/', requireConnectedTenant, async (c) => {
   const tenant = c.get('tenant');
   const provider = getIdentityProvider();
 
-  const pageSize = parseInt(c.req.query('pageSize') ?? '25', 10);
-  const pageToken = c.req.query('pageToken');
   const search = c.req.query('search');
+  // Ohne Suche die ganze Liste: Filter und Export wirken sonst nur auf die erste Seite
+  if (c.req.query('all') === 'true' && !search) {
+    const all = await provider.listAllUsers(providerContext(c, tenant.id));
+    return c.json({ items: all.items, nextPageToken: null, truncated: all.truncated });
+  }
+
+  const requested = parseInt(c.req.query('pageSize') ?? '25', 10);
+  const pageSize = Number.isFinite(requested) ? Math.min(Math.max(requested, 1), 999) : 25;
+  const pageToken = c.req.query('pageToken');
 
   const result = await provider.listUsers(providerContext(c, tenant.id), {
     pageSize,

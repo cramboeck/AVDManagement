@@ -133,7 +133,9 @@ export class SharePointProvider extends BaseResourceProvider {
       if (!existing.lastActivityAt || (u.lastActivityAt && u.lastActivityAt > existing.lastActivityAt)) existing.lastActivityAt = u.lastActivityAt;
     }
     const sharingUsers = Array.from(byUpn.values()).sort((a, b) => b.sharedExternallyFileCount - a.sharedExternallyFileCount);
-    const anonymised = sites.slice(0, 20).some((s) => s.ownerPrincipalName && !s.ownerPrincipalName.includes('@')) || sharingUsers.slice(0, 20).every((u) => u.userPrincipalName && !u.userPrincipalName.includes('@'));
+    // every() ist auf leeren Listen wahr; ohne Benutzer gibt es nichts zu verbergen
+    const userSample = sharingUsers.slice(0, 20);
+    const anonymised = sites.slice(0, 20).some((s) => s.ownerPrincipalName && !s.ownerPrincipalName.includes('@')) || (userSample.length > 0 && userSample.every((u) => u.userPrincipalName && !u.userPrincipalName.includes('@')));
 
     return {
       available: true,

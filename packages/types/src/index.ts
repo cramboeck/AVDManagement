@@ -97,13 +97,21 @@ export interface LicenseSku {
   skuId: string;
   skuPartNumber: string;
   displayName: string;
+  // Aktive gekaufte Einheiten, davon vergeben, frei (nie negativ)
+  totalUnits: number;
+  consumedUnits: number;
+  availableUnits: number;
 }
 
 // Benutzer-Lizenzzuweisung
 export interface UserLicense {
   skuId: string;
   skuPartNumber: string;
-  assignedAt: Date;
+  displayName: string;
+  // Direkt zugewiesen: laesst sich am Benutzer entfernen
+  assignedDirectly: boolean;
+  // Ueber Gruppen geerbt: nur ueber die Gruppenmitgliedschaft entfernbar
+  inheritedFromGroupIds: string[];
 }
 
 // Job-Status
@@ -1010,8 +1018,9 @@ export interface ExchangeMailboxFacts {
   retentionPolicy: string | null;
   hiddenFromAddressLists: boolean;
   auditEnabled: boolean | null;
-  fullAccess: string[];
-  sendAs: string[];
+  // null = vom Worker nicht gelesen (Obergrenze erreicht oder Fehler); [] = niemand
+  fullAccess: string[] | null;
+  sendAs: string[] | null;
   sendOnBehalf: string[];
 }
 
@@ -1064,6 +1073,8 @@ export interface ForwardingFinding {
 export interface ForwardingScan {
   scannedMailboxes: number;
   failedMailboxes: number;
+  // Davon auch nach drei Runden noch gedrosselt (Scan spaeter wiederholen)
+  throttledMailboxes?: number;
   tenantDomains: string[];
   findings: ForwardingFinding[];
   externalCount: number;
@@ -2058,6 +2069,8 @@ export interface SecurityOverview {
   usersWithFailures: number;
   legacyAuthSuccesses: number;
   riskySuccesses: number;
+  // Mehr Anmeldungen im Fenster als gelesen (Obergrenze erreicht)
+  truncated?: boolean;
 }
 
 export interface JobStats {

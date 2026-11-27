@@ -254,6 +254,29 @@ Alle nennenswerten Aenderungen an ZeroStress Cockpit. Format angelehnt an
 
 ### Geaendert
 
+- Gedrosselte Teilanfragen in `$batch` werden wiederholt (bis drei Runden,
+  Retry-After): der Weiterleitungs-Scan ueberspringt keine Postfaecher mehr
+  still, Gruppen zeigen seltener "Mitglieder: -". Neuer
+  `GraphClient.batch()` und `GraphClient.getAllPages()`.
+- Vollstaendige Listen statt erster Seite: Gruppen eines Benutzers,
+  Besitzer (Sperre "letzter Besitzer"), Defender-Geraete, -Software und
+  -Schwachstellen, App-Zuweisungen (wichtig, weil `/assign` alles ersetzt),
+  Azure-Abos. Abos mit Zahlungswarnung (Warned, PastDue) werden angezeigt.
+- Benutzerliste laedt ohne Suche alle Benutzer (bis 5000, sonst Hinweis);
+  Filter, Sortierung und Export wirken auf alle.
+- Lizenzen: Anzeige mit Produktname, Herkunft direkt oder ueber Gruppe,
+  freie Einheiten im Zuweisungsdialog; Vorschau warnt bei fehlendem
+  Nutzungsort und ohne freie Lizenz; "Lizenz entfernen" fuer direkte
+  Zuweisungen (geerbte lehnt der Job ab).
+- Anmeldungen fuer Dashboard, Sicherheitslage und Alerts werden ueber das
+  ganze Zeitfenster gelesen (bis 5000) statt bei 500 abzubrechen; Hinweis,
+  wenn mehr da waren.
+- Defender: bei mehreren Eintraegen je Geraet gewinnt der aktive, zuletzt
+  gesehene. SharePoint zeigt "Tenant verbirgt Namen" nicht mehr ohne
+  Grund. Exchange: Rechte, die der Worker nicht gelesen hat, erscheinen als
+  "nicht gelesen" statt "niemand"; eine einzelne berechtigte Person wird
+  erkannt (PowerShell-5.1-Einzelstring).
+- AVD-Hostpools und Azure-VMs werden je Abo parallel gelesen (hoechstens 4).
 - App-Zuweisungen behalten ihre Einstellungen (Frist, Benachrichtigung,
   Neustart, Delivery Optimization). Vorher setzte jede Zuweisung einer
   weiteren Gruppe die Einstellungen aller anderen auf Standard zurueck.

@@ -30,6 +30,21 @@ export interface GraphRequestOptions {
   idempotent?: boolean;
 }
 
+export interface GraphBatchRequest {
+  id: string;
+  method: 'GET' | 'POST' | 'PATCH' | 'DELETE';
+  url: string;
+  headers?: Record<string, string>;
+  body?: unknown;
+}
+
+export interface GraphBatchResult {
+  // 0 = das Paket kam gar nicht an; sonst HTTP-Status der Teilantwort
+  status: number;
+  body: unknown;
+  error?: string;
+}
+
 export interface GraphResponse<T> {
   value: T;
   '@odata.nextLink'?: string;
@@ -148,6 +163,74 @@ export class GraphClient {
     }
 
     throw lastError ?? new Error('Unexpected error in GraphClient');
+  }
+
+  /**
+   * JSON-Batch mit Wiederholung gedrosselter Teilanfragen.
+   *
+   * Teilt in Pakete zu 20, schickt bis zu zwei gleichzeitig und wiederholt
+   * Teilantworten mit 429 nach der laengsten Retry-After-Zeit (hoechstens
+   * drei Runden). Ein Paket, das insgesamt scheitert, liefert Status 0 je
+   * Anfrage; fehlende Rechte (401/403) werden weitergereicht.
+   */
+  async batch(tenantId: string, scopes: string[], requests: GraphBatchRequest[], options: { maxRounds?: number; parallel?: number } = {}): Promise<Map<string, GraphBatchResult>> {
+    const maxRounds = options.maxRounds ?? 3;
+    const parallel = Math.max(1, options.parallel ?? 2);
+    const results = new Map<string, GraphBatchResult>();
+    let pending = requests;
+
+    for (let round = 0; round < maxRounds && pending.length > 0; round++) {
+      const chunks: GraphBatchRequest[][] = [];
+      for (let i = 0; i < pending.length; i += 20) chunks.push(pending.slice(i, i + 20));
+      const throttled: GraphBatchRequest[] = [];
+      let waitSeconds = 0;
+
+      for (let i = 0; i < chunks.length; i += parallel) {
+        await Promise.all(
+          chunks.slice(i, i + parallel).map(async (chunk) => {
+            let response: { responses?: Array<{ id: string; status: number; body?: unknown; headers?: Record<string, string> }> };
+            try {
+              response = await this.post(tenantId, '/$batch', scopes, { requests: chunk }, { idempotent: chunk.every((r) => r.method === 'GET') });
+            } catch (error) {
+              if (error instanceof GraphApiError && error.isAuthError) throw error;
+              for (const r of chunk) results.set(r.id, { status: 0, body: undefined, error: error instanceof Error ? error.message : String(error) });
+              return;
+            }
+            for (const r of response.responses ?? []) {
+              if (r.status === 429) {
+                const original = chunk.find((c) => c.id === r.id);
+                if (original) throttled.push(original);
+                const header = r.headers?.['Retry-After'] ?? r.headers?.['retry-after'] ?? null;
+                waitSeconds = Math.max(waitSeconds, parseRetryAfter(header) ?? 5);
+              }
+              results.set(r.id, { status: r.status, body: r.body });
+            }
+          })
+        );
+      }
+
+      pending = throttled;
+      if (pending.length > 0 && round + 1 < maxRounds) await this.delay(backoffMs(round, waitSeconds));
+    }
+    return results;
+  }
+
+  /**
+   * Alle Seiten ueber @odata.nextLink lesen. Mit maxItems bricht die Schleife
+   * ab und meldet truncated, statt still abzuschneiden.
+   */
+  async getAllPages<T>(tenantId: string, path: string, scopes: string[], options: { maxItems?: number; headers?: Record<string, string> } = {}): Promise<{ items: T[]; truncated: boolean }> {
+    const items: T[] = [];
+    let next: string | undefined = path;
+    while (next) {
+      const page: GraphResponse<T[]> = await this.get<GraphResponse<T[]>>(tenantId, next, scopes, options.headers ? { headers: options.headers } : undefined);
+      items.push(...(page.value ?? []));
+      next = page['@odata.nextLink'];
+      if (options.maxItems !== undefined && items.length >= options.maxItems) {
+        return { items: items.slice(0, options.maxItems), truncated: Boolean(next) || items.length > options.maxItems };
+      }
+    }
+    return { items, truncated: false };
   }
 
   async get<T>(

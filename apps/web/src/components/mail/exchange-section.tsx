@@ -59,9 +59,9 @@ export function ExchangeSection({ tenantId, box, onCompleted }: { tenantId: stri
             {(facts.forwardingSmtpAddress || facts.forwardingAddress) && <span className="ml-1 text-xs text-muted-foreground">({facts.deliverToMailboxAndForward ? 'Kopie bleibt' : 'ohne Kopie'})</span>}
           </dd>
           <dt className="text-muted-foreground">Vollzugriff</dt>
-          <dd>{facts.fullAccess.length > 0 ? facts.fullAccess.join(', ') : 'niemand'}</dd>
+          <dd>{facts.fullAccess === null ? 'nicht gelesen' : facts.fullAccess.length > 0 ? facts.fullAccess.join(', ') : 'niemand'}</dd>
           <dt className="text-muted-foreground">Senden als</dt>
-          <dd>{facts.sendAs.length > 0 ? facts.sendAs.join(', ') : 'niemand'}</dd>
+          <dd>{facts.sendAs === null ? 'nicht gelesen' : facts.sendAs.length > 0 ? facts.sendAs.join(', ') : 'niemand'}</dd>
           <dt className="text-muted-foreground">Senden im Auftrag</dt>
           <dd>{facts.sendOnBehalf.length > 0 ? facts.sendOnBehalf.join(', ') : 'niemand'}</dd>
           <dt className="text-muted-foreground">Archiv</dt>

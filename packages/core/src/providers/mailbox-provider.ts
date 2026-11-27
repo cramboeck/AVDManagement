@@ -23,7 +23,7 @@ import type {
   MailboxUsage,
 } from '@zerostress/types';
 import { BaseResourceProvider, type ProviderContext } from './resource-provider.js';
-import { GraphClient, type GraphResponse } from './graph-client.js';
+import { GraphClient, type GraphResponse, type GraphBatchRequest, type GraphBatchResult } from './graph-client.js';
 import { GraphApiError } from '../errors.js';
 
 interface GraphDirectoryUser {
@@ -91,13 +91,8 @@ export interface GraphMessageRule {
   } | null;
 }
 
-interface BatchResponse {
-  responses: { id: string; status: number; body?: unknown }[];
-}
-
 type Unavailable = Exclude<CapabilityResult<never>, { available: true }>;
 
-const BATCH_SIZE = 20;
 // Obergrenze je Scan, damit ein Riesen-Tenant die API nicht minutenlang bindet
 export const SCAN_LIMIT = 1000;
 
@@ -451,41 +446,43 @@ export class MailboxProvider extends BaseResourceProvider {
     let failed = 0;
     let authFailures = 0;
 
-    for (let i = 0; i < targets.length; i += BATCH_SIZE) {
-      const slice = targets.slice(i, i + BATCH_SIZE);
-      const requests = slice.map((m, idx) => ({
-        id: String(idx),
-        method: 'GET',
-        url: `/users/${encodeURIComponent(m.userPrincipalName)}/mailFolders/inbox/messageRules?$select=id,displayName,sequence,isEnabled,hasError,isReadOnly,actions,conditions`,
-      }));
-      let batch: BatchResponse;
-      try {
-        batch = await this.graphClient.post<BatchResponse>(tenantId, '/$batch', this.requiredScopes, { requests });
-      } catch (error) {
-        const unavailable = asUnavailable(error, 'MailboxSettings.Read');
-        if (unavailable && unavailable.reason === 'permission-missing') return unavailable;
-        failed += slice.length;
-        continue;
-      }
-      for (const response of batch.responses) {
-        const mailbox = slice[Number(response.id)];
-        if (!mailbox) continue;
-        if (response.status === 401 || response.status === 403) {
-          authFailures += 1;
-          failed += 1;
-          continue;
-        }
-        if (response.status >= 300) {
-          failed += 1;
-          continue;
-        }
-        const body = response.body as GraphResponse<GraphMessageRule[]> | undefined;
-        for (const raw of body?.value ?? []) {
-          const rule = toInboxRule(raw, tenantDomains);
-          if (rule.forwardsTo.length > 0) findings.push({ userPrincipalName: mailbox.userPrincipalName, displayName: mailbox.displayName, rule });
-        }
-      }
+    const requests: GraphBatchRequest[] = targets.map((m, idx) => ({
+      id: String(idx),
+      method: 'GET',
+      url: `/users/${encodeURIComponent(m.userPrincipalName)}/mailFolders/inbox/messageRules?$select=id,displayName,sequence,isEnabled,hasError,isReadOnly,actions,conditions`,
+    }));
+    let responses: Map<string, GraphBatchResult>;
+    try {
+      // Gedrosselte Postfaecher werden wiederholt; ein Sicherheitsscan darf sie nicht stillschweigend auslassen
+      responses = await this.graphClient.batch(tenantId, this.requiredScopes, requests);
+    } catch (error) {
+      const unavailable = asUnavailable(error, 'MailboxSettings.Read');
+      if (unavailable && unavailable.reason === 'permission-missing') return unavailable;
+      throw error;
     }
+    let throttled = 0;
+    targets.forEach((mailbox, idx) => {
+      const response = responses.get(String(idx));
+      if (!response || response.status === 0) {
+        failed += 1;
+        return;
+      }
+      if (response.status === 401 || response.status === 403) {
+        authFailures += 1;
+        failed += 1;
+        return;
+      }
+      if (response.status === 429) throttled += 1;
+      if (response.status >= 300) {
+        failed += 1;
+        return;
+      }
+      const body = response.body as GraphResponse<GraphMessageRule[]> | undefined;
+      for (const raw of body?.value ?? []) {
+        const rule = toInboxRule(raw, tenantDomains);
+        if (rule.forwardsTo.length > 0) findings.push({ userPrincipalName: mailbox.userPrincipalName, displayName: mailbox.displayName, rule });
+      }
+    });
 
     if (targets.length > 0 && authFailures === targets.length) {
       return { available: false, reason: 'permission-missing', missingPermission: 'MailboxSettings.Read', detail: 'Graph lehnte das Lesen der Posteingangsregeln fuer alle Postfaecher ab' };
@@ -496,6 +493,7 @@ export class MailboxProvider extends BaseResourceProvider {
       data: {
         scannedMailboxes: targets.length - failed,
         failedMailboxes: failed,
+        throttledMailboxes: throttled,
         tenantDomains,
         findings,
         externalCount: findings.filter((f) => f.rule.forwardsExternally && f.rule.isEnabled).length,

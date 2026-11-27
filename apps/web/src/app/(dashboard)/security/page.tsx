@@ -653,7 +653,7 @@ function PostureTab({ tenantId }: { tenantId: string }) {
       <div className="grid gap-4 lg:grid-cols-2">
         <ChartCard
           title="Anmeldungen der letzten 7 Tage"
-          subtitle={signIns?.sampled ? 'Stichprobe der letzten 500 Anmeldungen' : 'Erfolgreich, unterbrochen, fehlgeschlagen'}
+          subtitle={signIns?.sampled ? 'Unvollstaendig: mehr als 5000 Anmeldungen im Zeitraum, nur die neuesten gezaehlt' : 'Erfolgreich, unterbrochen, fehlgeschlagen'}
           tableHeaders={['Tag', 'Erfolgreich', 'Unterbrochen', 'Fehlgeschlagen']}
           tableRows={(signIns?.days ?? []).map((d) => ({ label: formatDay(d.day), values: [d.success, d.interrupted, d.failure] }))}
           isFetching={fetching}

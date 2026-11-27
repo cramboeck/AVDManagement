@@ -127,7 +127,10 @@ export function AssignLicenseDialog({
                     <div className="flex-1">
                       <p className="text-sm font-medium">{sku.displayName}</p>
                       <p className="text-xs text-muted-foreground">
-                        {sku.skuPartNumber}
+                        {sku.skuPartNumber} ·{' '}
+                        <span className={sku.availableUnits > 0 ? undefined : 'text-destructive'}>
+                          {sku.availableUnits} frei von {sku.totalUnits}
+                        </span>
                       </p>
                     </div>
                     {selectedSku?.skuId === sku.skuId && (

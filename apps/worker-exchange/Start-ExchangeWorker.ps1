@@ -210,6 +210,7 @@ function Invoke-CollectFacts {
     $properties = @('UserPrincipalName', 'DisplayName', 'PrimarySmtpAddress', 'RecipientTypeDetails', 'ForwardingSmtpAddress', 'ForwardingAddress', 'DeliverToMailboxAndForward', 'IssueWarningQuota', 'ProhibitSendQuota', 'ProhibitSendReceiveQuota', 'ArchiveStatus', 'LitigationHoldEnabled', 'LitigationHoldDuration', 'RetentionPolicy', 'HiddenFromAddressListsEnabled', 'AuditEnabled', 'GrantSendOnBehalfTo')
     $mailboxes = @(Get-EXOMailbox -ResultSize $MaxFactsMailboxes -RecipientTypeDetails UserMailbox, SharedMailbox, RoomMailbox, EquipmentMailbox -Properties $properties)
     Write-Step -JobId $JobId -Message ('Mailboxes: ' + $mailboxes.Count)
+    if ($mailboxes.Count -ge $MaxFactsMailboxes) { Write-Log -Message ('Mailbox list truncated at ' + $MaxFactsMailboxes + '; mailboxes beyond the limit are missing') -Level 'WARN' }
 
     $autoForwarding = $null
     try {
@@ -225,15 +226,20 @@ function Invoke-CollectFacts {
         $upn = [string]$mailbox.UserPrincipalName
         $fullAccess = New-Object -TypeName System.Collections.Generic.List[string]
         $sendAs = New-Object -TypeName System.Collections.Generic.List[string]
+        # null in the result means "not read" (limit reached or error), an empty list means "nobody"
+        $fullAccessRead = $false
+        $sendAsRead = $false
         if ($index -le $MaxPermissionMailboxes) {
             try {
                 $permissions = @(Get-EXOMailboxPermission -Identity $upn -ErrorAction Stop | Where-Object { ($_.AccessRights -contains 'FullAccess') -and (-not $_.IsInherited) -and ([string]$_.User -notlike 'NT AUTHORITY\*') })
                 foreach ($p in $permissions) { $fullAccess.Add(([string]$p.User).ToLowerInvariant()) }
+                $fullAccessRead = $true
             }
             catch { Write-Log -Message ('FullAccess not readable for one mailbox: ' + $_.Exception.Message) -Level 'WARN' }
             try {
                 $recipientPermissions = @(Get-EXORecipientPermission -Identity $upn -ErrorAction Stop | Where-Object { ($_.AccessRights -contains 'SendAs') -and ([string]$_.Trustee -notlike 'NT AUTHORITY\*') })
                 foreach ($p in $recipientPermissions) { $sendAs.Add(([string]$p.Trustee).ToLowerInvariant()) }
+                $sendAsRead = $true
             }
             catch { Write-Log -Message ('SendAs not readable for one mailbox: ' + $_.Exception.Message) -Level 'WARN' }
         }
@@ -255,8 +261,8 @@ function Invoke-CollectFacts {
             retentionPolicy = $(if ($mailbox.RetentionPolicy) { [string]$mailbox.RetentionPolicy } else { $null })
             hiddenFromAddressLists = [bool]$mailbox.HiddenFromAddressListsEnabled
             auditEnabled = $(if ($null -ne $mailbox.AuditEnabled) { [bool]$mailbox.AuditEnabled } else { $null })
-            fullAccess = @($fullAccess)
-            sendAs = @($sendAs)
+            fullAccess = $(if ($fullAccessRead) { @($fullAccess) } else { $null })
+            sendAs = $(if ($sendAsRead) { @($sendAs) } else { $null })
             sendOnBehalf = @(ConvertTo-Addresses -Value $mailbox.GrantSendOnBehalfTo)
         })
     }
