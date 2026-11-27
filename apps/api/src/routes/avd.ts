@@ -253,6 +253,30 @@ app.post('/actions/run-script', requireRole('engineer'), requireConnectedTenant,
   return c.json(job, 202);
 });
 
+// Sammelaktion auf mehreren Hosts eines Pools: ein Job, eine Vorschau, Ergebnis je Host
+const bulkHostSchema = z.object({
+  hostPoolId: z.string().min(1),
+  hostPoolName: z.string().min(1),
+  action: z.enum(['start', 'stop', 'drain-on', 'drain-off']),
+  hosts: z.array(z.object({ sessionHostId: z.string().min(1), sessionHostName: z.string().min(1) })).min(1).max(50),
+});
+
+app.post('/actions/bulk', requireRole('engineer'), requireConnectedTenant, validate('json', bulkHostSchema), async (c) => {
+  const auth = c.get('auth');
+  const tenant = c.get('tenant');
+  const body = c.req.valid('json');
+  const labels = { start: 'starten', stop: 'stoppen', 'drain-on': 'Drain-Modus an', 'drain-off': 'Drain-Modus aus' } as const;
+  const job = await getJobQueue().createJob({
+    type: 'avd.bulk-host-action',
+    tenantId: tenant.id,
+    mspId: auth.mspId,
+    userId: auth.user.id,
+    userEmail: auth.user.email,
+    payload: { ...body, targetType: 'host-pool', targetId: body.hostPoolId, targetDisplayName: `${body.hostPoolName}: ${body.hosts.length} Hosts ${labels[body.action]}` },
+  });
+  return c.json(job, 202);
+});
+
 const startStopSessionHostSchema = z.object({
   hostPoolId: z.string(),
   hostPoolName: z.string(),

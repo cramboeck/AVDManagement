@@ -5,6 +5,7 @@ import { Command } from 'cmdk';
 import { useRouter } from 'next/navigation';
 import { useTenant } from '@/hooks/use-tenant';
 import clsx from 'clsx';
+import { PALETTE_TARGETS } from '@/lib/navigation';
 
 export function CommandPalette() {
   const [open, setOpen] = useState(false);
@@ -24,19 +25,20 @@ export function CommandPalette() {
     return () => document.removeEventListener('keydown', down);
   }, []);
 
-  const handleSelect = useCallback(
-    (value: string) => {
-      const [type, id] = value.split(':');
-
-      if (type === 'tenant') {
-        setActiveTenantId(id as Parameters<typeof setActiveTenantId>[0]);
-        setOpen(false);
-      } else if (type === 'nav') {
-        router.push(id);
-        setOpen(false);
-      }
+  // cmdk filtert ueber value: Name und Domain muessen darin stehen, nicht nur die Id
+  const selectTenant = useCallback(
+    (id: string) => {
+      setActiveTenantId(id as Parameters<typeof setActiveTenantId>[0]);
+      setOpen(false);
     },
-    [router, setActiveTenantId]
+    [setActiveTenantId]
+  );
+  const navigate = useCallback(
+    (href: string) => {
+      router.push(href);
+      setOpen(false);
+    },
+    [router]
   );
 
   return (
@@ -74,8 +76,8 @@ export function CommandPalette() {
             {tenants.map((tenant) => (
               <Command.Item
                 key={tenant.id}
-                value={`tenant:${tenant.id}`}
-                onSelect={handleSelect}
+                value={`tenant ${tenant.displayName} ${tenant.primaryDomain} ${tenant.id}`}
+                onSelect={() => selectTenant(tenant.id)}
                 className={clsx(
                   'flex items-center gap-3 rounded-md px-3 py-2 text-sm',
                   'cursor-pointer',
@@ -88,6 +90,7 @@ export function CommandPalette() {
                   <div className="font-medium">{tenant.displayName}</div>
                   <div className="text-xs text-muted-foreground">
                     {tenant.primaryDomain}
+                    {tenant.accessMode === 'read-only' && ' · nur lesen'}
                   </div>
                 </div>
                 {tenant.id === activeTenant?.id && (
@@ -98,39 +101,20 @@ export function CommandPalette() {
           </Command.Group>
 
           <Command.Group heading="Navigation" className="mb-2">
-            <Command.Item
-              value="nav:/users"
-              onSelect={handleSelect}
-              className={clsx(
-                'flex items-center gap-3 rounded-md px-3 py-2 text-sm',
-                'cursor-pointer',
-                'aria-selected:bg-accent aria-selected:text-accent-foreground'
-              )}
-            >
-              <span>Benutzer</span>
-            </Command.Item>
-            <Command.Item
-              value="nav:/jobs"
-              onSelect={handleSelect}
-              className={clsx(
-                'flex items-center gap-3 rounded-md px-3 py-2 text-sm',
-                'cursor-pointer',
-                'aria-selected:bg-accent aria-selected:text-accent-foreground'
-              )}
-            >
-              <span>Jobs</span>
-            </Command.Item>
-            <Command.Item
-              value="nav:/audit"
-              onSelect={handleSelect}
-              className={clsx(
-                'flex items-center gap-3 rounded-md px-3 py-2 text-sm',
-                'cursor-pointer',
-                'aria-selected:bg-accent aria-selected:text-accent-foreground'
-              )}
-            >
-              <span>Audit-Log</span>
-            </Command.Item>
+            {PALETTE_TARGETS.map((target) => (
+              <Command.Item
+                key={target.href}
+                value={`nav ${target.label} ${target.keywords}`}
+                onSelect={() => navigate(target.href)}
+                className={clsx(
+                  'flex items-center gap-3 rounded-md px-3 py-2 text-sm',
+                  'cursor-pointer',
+                  'aria-selected:bg-accent aria-selected:text-accent-foreground'
+                )}
+              >
+                <span>{target.label}</span>
+              </Command.Item>
+            ))}
           </Command.Group>
         </Command.List>
 

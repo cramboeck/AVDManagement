@@ -9,8 +9,10 @@ import { ErrorState, ErrorBanner } from '@/components/ui/error-state';
 import { NoTenantSelected } from '@/components/ui/empty-state';
 import { SessionList } from '@/components/avd/session-list';
 import { RunScriptDialog } from '@/components/avd/run-script-dialog';
+import { JobActionDialog } from '@/components/jobs/job-action-dialog';
 import Link from 'next/link';
 import type {
+  Job,
   SyncedHostPool,
   SyncedSessionHost,
   HostPoolSummary,
@@ -39,129 +41,48 @@ const statusLabels: Record<string, string> = {
   NoHeartbeat: 'Kein Heartbeat',
 };
 
+type HostAction = 'start' | 'stop' | 'drain-on' | 'drain-off';
+
+const actionLabels: Record<HostAction, string> = {
+  start: 'Session-Host starten',
+  stop: 'Session-Host stoppen',
+  'drain-on': 'Drain-Modus aktivieren',
+  'drain-off': 'Drain-Modus deaktivieren',
+};
+
 interface ActionDialogProps {
-  isOpen: boolean;
   onClose: () => void;
   host: SyncedSessionHost;
-  action: 'start' | 'stop' | 'drain-on' | 'drain-off';
+  action: HostAction;
   hostPoolName: string;
   hostPoolResourceId: string;
 }
 
-function ActionDialog({
-  isOpen,
-  onClose,
-  host,
-  action,
-  hostPoolName,
-  hostPoolResourceId,
-}: ActionDialogProps) {
+/**
+ * Einzelaktion auf einem Host als Job mit Vorschau und Freigabe. Die VM
+ * bestimmt die API aus dem Hostpool; der Browser schickt keine VM-Id mit.
+ */
+function ActionDialog({ onClose, host, action, hostPoolName, hostPoolResourceId }: ActionDialogProps) {
   const { activeTenant } = useTenant();
   const queryClient = useQueryClient();
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState<Error | null>(null);
-
-  const actionLabels = {
-    start: 'Session-Host starten',
-    stop: 'Session-Host stoppen',
-    'drain-on': 'Drain-Modus aktivieren',
-    'drain-off': 'Drain-Modus deaktivieren',
+  const endpoint = action === 'start' ? 'start-session-host' : action === 'stop' ? 'stop-session-host' : 'set-drain-mode';
+  const payload: Record<string, unknown> = {
+    hostPoolId: hostPoolResourceId,
+    hostPoolName,
+    sessionHostId: host.id,
+    sessionHostName: host.name,
+    ...(action === 'start' || action === 'stop' ? { vmResourceId: host.vmResourceId ?? '' } : {}),
+    ...(action === 'drain-on' || action === 'drain-off' ? { allowNewSession: action === 'drain-off' } : {}),
   };
-
-  const actionEndpoints = {
-    start: 'start-session-host',
-    stop: 'stop-session-host',
-    'drain-on': 'set-drain-mode',
-    'drain-off': 'set-drain-mode',
-  };
-
-  const handleSubmit = async () => {
-    if (!activeTenant) return;
-    setIsSubmitting(true);
-    setError(null);
-
-    try {
-      const endpoint = actionEndpoints[action];
-      const payload: Record<string, unknown> = {
-        hostPoolId: hostPoolResourceId,
-        hostPoolName,
-        sessionHostId: host.id,
-        sessionHostName: host.name,
-      };
-
-      if (action === 'start' || action === 'stop') {
-        payload.vmResourceId = host.vmResourceId;
-      }
-
-      if (action === 'drain-on' || action === 'drain-off') {
-        payload.allowNewSession = action === 'drain-off';
-      }
-
-      await api.post(`/tenants/${activeTenant.id}/avd/actions/${endpoint}`, payload);
-
-      queryClient.invalidateQueries({ queryKey: ['sessionHosts'] });
-      queryClient.invalidateQueries({ queryKey: ['jobs'] });
-      onClose();
-    } catch (err) {
-      setError(err as Error);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  if (!isOpen) return null;
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div
-        className="w-full max-w-md rounded-lg border bg-background shadow-lg"
-        role="dialog"
-        aria-modal="true"
-      >
-        <div className="border-b p-4">
-          <h2 className="text-lg font-semibold">{actionLabels[action]}</h2>
-        </div>
-        <div className="space-y-3 p-4">
-          <ErrorBanner error={error} onDismiss={() => setError(null)} />
-          <p className="text-sm text-muted-foreground">
-            {action === 'start' && (
-              <>Die VM <strong>{host.name}</strong> wird gestartet. Dies kann bis zu 2 Minuten dauern.</>
-            )}
-            {action === 'stop' && (
-              <>Die VM <strong>{host.name}</strong> wird heruntergefahren.
-              {host.sessions > 0 && (
-                <span className="text-destructive"> Achtung: {host.sessions} aktive Session(s) werden beendet!</span>
-              )}
-              </>
-            )}
-            {action === 'drain-on' && (
-              <>Drain-Modus wird fuer <strong>{host.name}</strong> aktiviert. Neue Verbindungen werden blockiert.</>
-            )}
-            {action === 'drain-off' && (
-              <>Drain-Modus wird fuer <strong>{host.name}</strong> deaktiviert. Neue Verbindungen sind wieder moeglich.</>
-            )}
-          </p>
-        </div>
-        <div className="flex justify-end gap-2 border-t p-4">
-          <button
-            onClick={onClose}
-            className="rounded-md border px-4 py-2 text-sm hover:bg-accent"
-            disabled={isSubmitting}
-          >
-            Abbrechen
-          </button>
-          <button
-            onClick={handleSubmit}
-            disabled={isSubmitting}
-            className={`rounded-md px-4 py-2 text-sm text-white ${
-              action === 'stop' ? 'bg-destructive hover:bg-destructive/90' : 'bg-primary hover:bg-primary/90'
-            }`}
-          >
-            {isSubmitting ? 'Wird ausgefuehrt...' : actionLabels[action]}
-          </button>
-        </div>
-      </div>
-    </div>
+    <JobActionDialog
+      title={`${actionLabels[action]}: ${host.name}`}
+      confirmLabel={actionLabels[action]}
+      tone={action === 'stop' ? 'destructive' : 'default'}
+      createJob={() => api.post<Job>(`/tenants/${activeTenant!.id}/avd/actions/${endpoint}`, payload)}
+      onClose={onClose}
+      onCompleted={() => queryClient.invalidateQueries({ queryKey: ['sessionHosts'] })}
+    />
   );
 }
 
@@ -333,134 +254,91 @@ interface BulkActionBarProps {
   onClearSelection: () => void;
 }
 
-function BulkActionBar({
-  selectedCount,
-  hosts,
-  selectedIds,
-  hostPoolName,
-  hostPoolResourceId,
-  onClearSelection,
-}: BulkActionBarProps) {
+const bulkFilters: Record<HostAction, (h: SyncedSessionHost) => boolean> = {
+  start: (h) => h.status === 'Shutdown' || h.status === 'Unavailable',
+  stop: (h) => h.status === 'Available' || h.status === 'Disconnected',
+  'drain-on': (h) => h.allowNewSession,
+  'drain-off': (h) => !h.allowNewSession,
+};
+
+const bulkLabels: Record<HostAction, string> = { start: 'Alle starten', stop: 'Alle stoppen', 'drain-on': 'Drain aktivieren', 'drain-off': 'Drain aufheben' };
+
+/**
+ * Sammelaktion: ein Job fuer alle passenden Hosts, eine gemeinsame Vorschau
+ * und ein Ergebnis je Host (statt vieler Einzeljobs ohne Uebersicht).
+ */
+function BulkActionBar({ selectedCount, hosts, selectedIds, hostPoolName, hostPoolResourceId, onClearSelection }: BulkActionBarProps) {
   const { activeTenant } = useTenant();
   const queryClient = useQueryClient();
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState<Error | null>(null);
-
+  const [action, setAction] = useState<HostAction | null>(null);
   const selectedHosts = hosts.filter((h) => selectedIds.has(h.id));
-  const canStartAny = selectedHosts.some(
-    (h) => h.status === 'Shutdown' || h.status === 'Unavailable'
-  );
-  const canStopAny = selectedHosts.some(
-    (h) => h.status === 'Available' || h.status === 'Disconnected'
-  );
-  const canDrainAny = selectedHosts.some(
-    (h) => h.status === 'Available' && h.allowNewSession
-  );
-
-  const executeBulkAction = async (
-    action: 'start' | 'stop' | 'drain-on',
-    filterFn: (h: SyncedSessionHost) => boolean
-  ) => {
-    if (!activeTenant) return;
-    setIsSubmitting(true);
-    setError(null);
-
-    const hostsToProcess = selectedHosts.filter(filterFn);
-    const endpoint =
-      action === 'start'
-        ? 'start-session-host'
-        : action === 'stop'
-          ? 'stop-session-host'
-          : 'set-drain-mode';
-
-    try {
-      await Promise.all(
-        hostsToProcess.map(async (host) => {
-          const payload: Record<string, unknown> = {
-            hostPoolId: hostPoolResourceId,
-            hostPoolName,
-            sessionHostId: host.id,
-            sessionHostName: host.name,
-          };
-
-          if (action === 'start' || action === 'stop') {
-            payload.vmResourceId = host.vmResourceId;
-          }
-          if (action === 'drain-on') {
-            payload.allowNewSession = false;
-          }
-
-          await api.post(`/tenants/${activeTenant.id}/avd/actions/${endpoint}`, payload);
-        })
-      );
-
-      queryClient.invalidateQueries({ queryKey: ['sessionHosts'] });
-      queryClient.invalidateQueries({ queryKey: ['jobs'] });
-      onClearSelection();
-    } catch (err) {
-      setError(err as Error);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
+  const targets = action ? selectedHosts.filter(bulkFilters[action]) : [];
 
   return (
-    <div className="space-y-2">
-    <ErrorBanner error={error} onDismiss={() => setError(null)} />
-    <div className="flex items-center gap-4 rounded-lg border bg-accent/50 px-4 py-2">
+    <div className="flex flex-wrap items-center gap-4 rounded-lg border bg-accent/50 px-4 py-2">
       <span className="text-sm font-medium">{selectedCount} ausgewaehlt</span>
-      <div className="flex gap-2">
-        {canStartAny && (
-          <button
-            onClick={() =>
-              executeBulkAction(
-                'start',
-                (h) => h.status === 'Shutdown' || h.status === 'Unavailable'
-              )
-            }
-            disabled={isSubmitting}
-            className="rounded-md bg-primary px-3 py-1 text-xs text-white hover:bg-primary/90 disabled:opacity-50"
-          >
-            Alle starten
-          </button>
-        )}
-        {canStopAny && (
-          <button
-            onClick={() =>
-              executeBulkAction(
-                'stop',
-                (h) => h.status === 'Available' || h.status === 'Disconnected'
-              )
-            }
-            disabled={isSubmitting}
-            className="rounded-md bg-destructive px-3 py-1 text-xs text-white hover:bg-destructive/90 disabled:opacity-50"
-          >
-            Alle stoppen
-          </button>
-        )}
-        {canDrainAny && (
-          <button
-            onClick={() =>
-              executeBulkAction(
-                'drain-on',
-                (h) => h.status === 'Available' && h.allowNewSession
-              )
-            }
-            disabled={isSubmitting}
-            className="rounded-md border px-3 py-1 text-xs hover:bg-accent disabled:opacity-50"
-          >
-            Drain aktivieren
-          </button>
-        )}
+      <div className="flex flex-wrap gap-2">
+        {(Object.keys(bulkLabels) as HostAction[]).map((a) => {
+          const count = selectedHosts.filter(bulkFilters[a]).length;
+          if (count === 0) return null;
+          return (
+            <button
+              key={a}
+              onClick={() => setAction(a)}
+              className={
+                a === 'stop'
+                  ? 'rounded-md bg-destructive px-3 py-1 text-xs text-white hover:bg-destructive/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-destructive'
+                  : a === 'start'
+                    ? 'rounded-md bg-primary px-3 py-1 text-xs text-white hover:bg-primary/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary'
+                    : 'rounded-md border px-3 py-1 text-xs hover:bg-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-primary'
+              }
+            >
+              {bulkLabels[a]} ({count})
+            </button>
+          );
+        })}
       </div>
-      <button
-        onClick={onClearSelection}
-        className="ml-auto text-xs text-muted-foreground hover:text-foreground"
-      >
+      <button onClick={onClearSelection} className="ml-auto text-xs text-muted-foreground hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-primary">
         Auswahl aufheben
       </button>
+      {action && targets.length > 0 && (
+        <JobActionDialog
+          title={`${bulkLabels[action]}: ${targets.length} Hosts in ${hostPoolName}`}
+          description="Ein Job, eine Vorschau fuer alle Hosts; das Ergebnis steht je Host im Job."
+          confirmLabel={bulkLabels[action]}
+          tone={action === 'stop' ? 'destructive' : 'default'}
+          createJob={() =>
+            api.post<Job>(`/tenants/${activeTenant!.id}/avd/actions/bulk`, {
+              hostPoolId: hostPoolResourceId,
+              hostPoolName,
+              action,
+              hosts: targets.map((h) => ({ sessionHostId: h.id, sessionHostName: h.name })),
+            })
+          }
+          renderResult={(job) => <BulkHostResult job={job} />}
+          onClose={() => setAction(null)}
+          onCompleted={() => {
+            queryClient.invalidateQueries({ queryKey: ['sessionHosts'] });
+            onClearSelection();
+          }}
+        />
+      )}
     </div>
-    </div>
+  );
+}
+
+function BulkHostResult({ job }: { job: Job }) {
+  const outcomes = (job.result as { outcomes?: Array<{ sessionHostName: string; success: boolean; message: string | null }> } | null)?.outcomes ?? [];
+  if (outcomes.length === 0) return <p className="text-sm text-muted-foreground">{job.error ?? 'Kein Ergebnis.'}</p>;
+  return (
+    <ul className="space-y-1 text-sm">
+      {outcomes.map((o) => (
+        <li key={o.sessionHostName} className="flex justify-between gap-3">
+          <span>{o.sessionHostName}</span>
+          <span className={o.success ? 'text-success' : 'text-destructive'}>{o.success ? 'ok' : o.message ?? 'fehlgeschlagen'}</span>
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -473,7 +351,7 @@ export default function HostPoolDetailPage({
   const resourceId = decodeURIComponent(params.resourceId);
   const { activeTenant, isLoading: tenantLoading } = useTenant();
   const [selectedHost, setSelectedHost] = useState<SyncedSessionHost | null>(null);
-  const [selectedAction, setSelectedAction] = useState<'start' | 'stop' | 'drain-on' | 'drain-off' | null>(null);
+  const [selectedAction, setSelectedAction] = useState<HostAction | null>(null);
   const [scriptHost, setScriptHost] = useState<SyncedSessionHost | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
@@ -682,7 +560,6 @@ export default function HostPoolDetailPage({
 
       {selectedHost && selectedAction && (
         <ActionDialog
-          isOpen={true}
           onClose={() => {
             setSelectedHost(null);
             setSelectedAction(null);

@@ -15,73 +15,7 @@ import { formatDateTime } from '@/components/identity/sign-in-table';
 import { ScriptResultView, wingetUpdatesFrom, wingetInventoryFrom, type WingetUpdate } from '@/components/devices/scripts-tab';
 import { WingetInstallDialog, type WingetTarget } from '@/components/devices/winget-install-dialog';
 import { AppUninstallDialog, type AppUninstallTarget } from '@/components/devices/app-uninstall-dialog';
-import type { AppPackage, DetectedApp, Device, DeviceSoftwareInventory, Job, ScriptRunResult, WingetCatalogEntry } from '@zerostress/types';
-
-function normalise(value: string): string {
-  // Das Pluszeichen bleibt: "Options+" und "Options" sind verschiedene Programme
-  return value.toLowerCase().replace(/[^a-z0-9+]+/g, '');
-}
-
-// winget kennt Ids, Intune kennt Anzeigenamen; ein Treffer ueber den Namen reicht fuer die Markierung
-export function matchWingetUpdate(app: DetectedApp, updates: WingetUpdate[]): WingetUpdate | null {
-  const appName = normalise(app.displayName);
-  if (appName.length < 3) return null;
-  for (const update of updates) {
-    const name = normalise(update.name.replace(/\.\.\.$/, ''));
-    const idTail = normalise(update.id.split('.').slice(1).join(' '));
-    if (name.length >= 4 && (appName.includes(name) || name.includes(appName))) return update;
-    if (idTail.length >= 4 && appName.includes(idTail)) return update;
-  }
-  return null;
-}
-
-export interface CatalogHit {
-  id: string;
-  name: string;
-  // Paket im eigenen Katalog (mit Version), sonst nur Basis-Set
-  packageId: string | null;
-  packageVersion: string | null;
-}
-
-/**
- * Erkennung gegen den winget-Katalog: Basis-Set und eigene Pakete ueber den
- * Anzeigenamen. Ein Treffer heisst: dafuer gibt es eine winget-Id.
- */
-// Gleiche Regel wie nameMatches in packages/core/src/apps/software-catalog.ts;
-// die Zusammenfuehrung in die API steht im Backlog (Fachlogik gehoert ins Backend)
-function nameMatches(displayName: string, candidate: string): boolean {
-  const name = normalise(displayName);
-  const cand = normalise(candidate);
-  if (name.length < 3 || cand.length < 3) return false;
-  if (cand.length < 5) {
-    const words = displayName.toLowerCase().split(/[^a-z0-9+]+/).filter(Boolean);
-    return words.includes(candidate.toLowerCase()) || name === cand;
-  }
-  return name.includes(cand) || cand.includes(name);
-}
-
-export function matchCatalog(app: DetectedApp, baseSet: WingetCatalogEntry[], packages: AppPackage[]): CatalogHit | null {
-  const appName = normalise(app.displayName);
-  if (appName.length < 3) return null;
-  for (const p of packages) {
-    if (p.manifest.installerType !== 'winget' || !p.manifest.wingetPackageIdentifier) continue;
-    if (nameMatches(app.displayName, p.manifest.name)) {
-      return { id: p.manifest.wingetPackageIdentifier, name: p.manifest.name, packageId: p.id, packageVersion: p.manifest.version };
-    }
-  }
-  // Laengster passender Katalogname gewinnt (wie in core)
-  let best: { entry: WingetCatalogEntry; score: number } | null = null;
-  for (const e of baseSet) {
-    let score = 0;
-    for (const c of [e.name, ...(e.aliases ?? [])]) {
-      if (nameMatches(app.displayName, c)) score = Math.max(score, normalise(c).length);
-    }
-    const idTail = normalise(e.id.split('.').slice(1).join(' '));
-    if (score === 0 && idTail.length >= 4 && appName.includes(idTail)) score = idTail.length;
-    if (score > 0 && (!best || score > best.score)) best = { entry: e, score };
-  }
-  return best ? { id: best.entry.id, name: best.entry.name, packageId: null, packageVersion: null } : null;
-}
+import type { DetectedApp, Device, DeviceSoftwareInventory, DeviceSoftwareMatch, Job, ScriptRunResult, WingetCatalogEntry } from '@zerostress/types';
 
 // Store-/MSIX-Pakete melden Intune und Defender mit Paketnamen wie 5319275A.WhatsAppDesktop
 function isStorePackageName(name: string): boolean {
@@ -93,26 +27,10 @@ function isRuntimeId(id: string, prefixes: string[]): boolean {
   return prefixes.some((p) => lower.startsWith(p.toLowerCase()));
 }
 
-/** Inventar-Id (aus winget list) ueber den Namensteil der Id dem Intune-Eintrag zuordnen. */
-export function matchInventoryId(app: DetectedApp, ids: string[]): string | null {
-  const appName = normalise(app.displayName);
-  if (appName.length < 3) return null;
-  for (const id of ids) {
-    const tail = normalise(id.split('.').slice(1).join(' '));
-    const head = normalise(id.split('.')[0] ?? '');
-    if (tail.length >= 4 && (appName.includes(tail) || tail.includes(appName))) return id;
-    if (head.length >= 4 && tail.length >= 3 && appName.includes(head) && appName.includes(tail)) return id;
-  }
-  return null;
-}
+// Zuordnung zu winget und Katalog berechnet die API (packages/core/src/apps/device-software.ts)
+type SoftwareRow = DetectedApp & DeviceSoftwareMatch;
 
-interface SoftwareRow extends DetectedApp {
-  update: WingetUpdate | null;
-  catalog: CatalogHit | null;
-  // Id laut winget-Inventar auf dem Geraet (Grundlage fuer Deinstallation)
-  wingetId: string | null;
-  wingetState: 'update' | 'catalog' | 'none';
-}
+const NO_MATCH: DeviceSoftwareMatch = { update: null, catalog: null, wingetId: null, wingetState: 'none', blockedBy: null };
 
 function formatSize(bytes: number | null): string {
   if (bytes === null || bytes <= 0) return '—';
@@ -135,7 +53,6 @@ export function SoftwareTab({ base, tenantId, device }: { base: string; tenantId
     staleTime: 10 * 60 * 1000,
   });
   const baseSet = useQuery({ queryKey: ['winget-base-set'], queryFn: () => api.get<{ items: WingetCatalogEntry[]; runtimePrefixes: string[] }>('/packages/winget/base-set'), staleTime: Infinity });
-  const packages = useQuery({ queryKey: ['packages'], queryFn: () => api.get<{ items: AppPackage[] }>('/packages'), staleTime: 60 * 1000 });
 
   const jobsQuery = useJobs(tenantId, { type: 'device.run-script', managedDeviceId: managedDeviceId ?? undefined, limit: 100 }, { enabled: !!managedDeviceId });
 
@@ -159,19 +76,28 @@ export function SoftwareTab({ base, tenantId, device }: { base: string; tenantId
 
   const rows: SoftwareRow[] = useMemo(
     () =>
-      (softwareQuery.data?.available ? softwareQuery.data.data.items : []).map((app) => {
-        const update = matchWingetUpdate(app, updates);
-        const catalog = matchCatalog(app, baseSet.data?.items ?? [], packages.data?.items ?? []);
-        const wingetId = update?.id ?? matchInventoryId(app, inventory_.ids) ?? null;
-        return { ...app, update, catalog, wingetId, wingetState: update ? 'update' : catalog || wingetId ? 'catalog' : 'none' };
-      }),
-    [softwareQuery.data, updates, baseSet.data, packages.data, inventory_.ids]
+      softwareQuery.data?.available ? softwareQuery.data.data.items.map((app) => ({ ...app, ...(softwareQuery.data.available ? softwareQuery.data.data.matches?.[app.id] ?? NO_MATCH : NO_MATCH) })) : [],
+    [softwareQuery.data]
   );
 
   const installedNames = useMemo(() => new Set(rows.filter((r) => r.catalog).map((r) => r.catalog!.id)), [rows]);
   const columns: ColumnDef<SoftwareRow>[] = useMemo(
     () => [
-      { id: 'name', header: 'Software', accessor: (a) => a.displayName, cell: (a) => <span className="font-medium">{a.displayName}</span> },
+      {
+        id: 'name',
+        header: 'Software',
+        accessor: (a) => a.displayName,
+        cell: (a) => (
+          <span className="font-medium">
+            {a.displayName}
+            {a.blockedBy && (
+              <span className="ml-2 rounded-full bg-destructive/10 px-2 py-0.5 text-[11px] text-destructive" title={`Sperrliste: ${a.blockedBy}`}>
+                gesperrt
+              </span>
+            )}
+          </span>
+        ),
+      },
       { id: 'version', header: 'Version', accessor: (a) => a.version, className: 'font-mono text-xs' },
       {
         id: 'winget',
@@ -210,7 +136,13 @@ export function SoftwareTab({ base, tenantId, device }: { base: string; tenantId
         cell: (a) =>
           managedDeviceId ? (
             <div className="flex flex-wrap gap-1">
-              {!a.wingetId && (
+              {/* Defender meldet normalisierte Namen ("chrome"); die Deinstallation braucht den exakten Registry-Namen */}
+              {!a.wingetId && a.source === 'defender' && (
+                <span className="text-xs text-muted-foreground" title="Defender meldet einen vereinfachten Namen, der nicht zum Registry-Eintrag passt. winget-Inventar pruefen oder ueber Intune deinstallieren.">
+                  nur ueber winget
+                </span>
+              )}
+              {!a.wingetId && a.source !== 'defender' && (
                 <button
                   onClick={() => setUninstall({ displayName: a.displayName, version: a.version, publisher: a.publisher, kind: isStorePackageName(a.displayName) ? 'appx' : 'registry' })}
                   className="rounded-md border border-destructive/40 px-2 py-0.5 text-xs text-destructive hover:bg-destructive/10"
@@ -275,7 +207,11 @@ export function SoftwareTab({ base, tenantId, device }: { base: string; tenantId
   const unmatchedIds = inventory_.ids.filter((id) => !rows.some((r) => r.wingetId === id));
   const unmatchedRuntimes = unmatchedIds.filter((id) => isRuntimeId(id, runtimePrefixes));
   const unmatchedApps = unmatchedIds.filter((id) => !isRuntimeId(id, runtimePrefixes));
-  const refreshJobs = () => queryClient.invalidateQueries({ queryKey: ['jobs', tenantId] });
+  // Nach einer winget-Pruefung auch die Softwareliste neu laden: die Zuordnung kommt von dort
+  const refreshJobs = () => {
+    queryClient.invalidateQueries({ queryKey: ['jobs', tenantId] });
+    queryClient.invalidateQueries({ queryKey: ['device-software', tenantId, device.id] });
+  };
 
   return (
     <div className="space-y-4">

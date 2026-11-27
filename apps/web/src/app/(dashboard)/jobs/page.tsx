@@ -84,6 +84,16 @@ export default function JobsPage() {
     if (job) setSelectedJob(job);
   }, [data]);
 
+  const cancelMutation = useMutation({
+    mutationFn: (jobId: string) => api.post<Job>(`/tenants/${activeTenant!.id}/jobs/${jobId}/cancel`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['jobs', activeTenant?.id] });
+      setSelectedJob(null);
+      setApproveError(null);
+    },
+    onError: (err: Error) => setApproveError(err),
+  });
+
   const approveMutation = useMutation({
     mutationFn: (jobId: string) =>
       api.post<Job>(`/tenants/${activeTenant!.id}/jobs/${jobId}/approve`),
@@ -162,6 +172,8 @@ export default function JobsPage() {
           onClose={() => setSelectedJob(null)}
           onApprove={() => approveMutation.mutate(selectedJob.id)}
           isApproving={approveMutation.isPending}
+          onCancelJob={() => cancelMutation.mutate(selectedJob.id)}
+          isCancelling={cancelMutation.isPending}
         />
       )}
     </div>
@@ -211,16 +223,33 @@ function JobDetailPanel({
   onClose,
   onApprove,
   isApproving,
+  onCancelJob,
+  isCancelling,
 }: {
   job: Job;
   onClose: () => void;
   onApprove: () => void;
   isApproving: boolean;
+  onCancelJob: () => void;
+  isCancelling: boolean;
 }) {
+  const panelRef = useRef<HTMLDivElement>(null);
+  const [confirmCancel, setConfirmCancel] = useState(false);
+  // Fokus in den Bereich, Escape schliesst
+  useEffect(() => {
+    panelRef.current?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [onClose]);
+  const cancellable = job.status === 'pending_approval' || job.status === 'pending_second_approval' || job.status === 'queued';
+
   return (
-    <div className="fixed inset-y-0 right-0 z-40 w-96 border-l bg-background shadow-lg">
+    <div ref={panelRef} tabIndex={-1} role="dialog" aria-modal="false" aria-labelledby="job-detail-title" className="fixed inset-y-0 right-0 z-40 w-96 overflow-y-auto border-l bg-background shadow-lg focus:outline-none">
       <div className="flex h-14 items-center justify-between border-b px-4">
-        <h2 className="font-medium">Job Details</h2>
+        <h2 id="job-detail-title" className="font-medium">Job Details</h2>
         <button
           onClick={onClose}
           className="rounded p-1 hover:bg-accent"
@@ -254,11 +283,27 @@ function JobDetailPanel({
         </div>
 
         {job.preview && (
-          <div>
-            <p className="mb-2 text-xs text-muted-foreground">Vorschau</p>
-            <pre className="max-h-48 overflow-auto rounded bg-muted p-2 text-xs">
-              {JSON.stringify(job.preview, null, 2)}
-            </pre>
+          <div className="space-y-2">
+            <p className="text-xs text-muted-foreground">Vorschau</p>
+            {job.preview.warnings.length > 0 && (
+              <ul className="space-y-1 rounded-md border border-warning/40 bg-warning/10 p-2 text-xs">
+                {job.preview.warnings.map((w, i) => (
+                  <li key={i}>{w}</li>
+                ))}
+              </ul>
+            )}
+            <ul className="max-h-64 space-y-2 overflow-auto text-xs">
+              {job.preview.changes.map((change, i) => (
+                <li key={`${change.objectId}-${i}`} className="rounded-md border p-2">
+                  <p className="font-medium">{change.objectDisplayName}</p>
+                  <dl className="mt-1 grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5">
+                    {Array.from(new Set([...Object.keys(change.before ?? {}), ...Object.keys(change.after ?? {})])).map((key) => (
+                      <PreviewDiffRow key={key} name={key} before={(change.before ?? {})[key]} after={(change.after ?? {})[key]} />
+                    ))}
+                  </dl>
+                </li>
+              ))}
+            </ul>
           </div>
         )}
 
@@ -293,11 +338,39 @@ function JobDetailPanel({
               onClick={onClose}
               className={clsx(
                 'rounded-md border px-4 py-2 text-sm',
-                'hover:bg-accent'
+                'hover:bg-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-primary'
               )}
             >
-              Abbrechen
+              Schliessen
             </button>
+          </div>
+        )}
+
+        {cancellable && (
+          <div className="border-t pt-3">
+            {confirmCancel ? (
+              <div className="flex items-center gap-2 text-sm">
+                <span>Job wirklich abbrechen?</span>
+                <button
+                  onClick={onCancelJob}
+                  disabled={isCancelling}
+                  className="rounded-md bg-destructive px-3 py-1 text-xs font-medium text-white hover:bg-destructive/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-destructive disabled:opacity-50"
+                >
+                  {isCancelling ? 'Breche ab...' : 'Ja, abbrechen'}
+                </button>
+                <button onClick={() => setConfirmCancel(false)} className="rounded-md border px-3 py-1 text-xs hover:bg-accent">
+                  Nein
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setConfirmCancel(true)}
+                className="rounded-md border border-destructive/40 px-3 py-1.5 text-xs text-destructive hover:bg-destructive/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-destructive"
+              >
+                Job abbrechen
+              </button>
+            )}
+            <p className="mt-1 text-xs text-muted-foreground">Abbrechen geht, solange der Job wartet; ein laufender Job laeuft zu Ende.</p>
           </div>
         )}
 
@@ -309,6 +382,31 @@ function JobDetailPanel({
         )}
       </div>
     </div>
+  );
+}
+
+function formatValue(value: unknown): string {
+  if (value === undefined || value === null || value === '') return '-';
+  if (Array.isArray(value)) return value.length ? value.map((v) => formatValue(v)).join(', ') : '-';
+  if (typeof value === 'object') return JSON.stringify(value);
+  return String(value);
+}
+
+function PreviewDiffRow({ name, before, after }: { name: string; before: unknown; after: unknown }) {
+  const changed = formatValue(before) !== formatValue(after);
+  return (
+    <>
+      <dt className="text-muted-foreground">{name}</dt>
+      <dd>
+        {changed ? (
+          <>
+            <span className="text-muted-foreground line-through">{formatValue(before)}</span> <span aria-hidden="true">{'->'}</span> <span className="font-medium">{formatValue(after)}</span>
+          </>
+        ) : (
+          formatValue(after)
+        )}
+      </dd>
+    </>
   );
 }
 

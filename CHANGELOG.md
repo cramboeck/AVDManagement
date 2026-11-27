@@ -38,6 +38,18 @@ Alle nennenswerten Aenderungen an ZeroStress Cockpit. Format angelehnt an
 
 ### Hinzugefuegt
 
+- Sammelaktionen auf Geraeten: Auswahl in der Geraeteliste (nur
+  Intune-verwaltete, auch ueber alle gefilterten Seiten), dann
+  Synchronisieren, Defender-Schnellscan oder Neustart als ein Job
+  `device.bulk-action` mit Vorschau und Ergebnis je Geraet (hoechstens 50).
+- AVD-Sammelaktion `avd.bulk-host-action` (starten, stoppen, Drain an/aus)
+  mit einer Vorschau fuer alle Hosts und Ergebnis je Host statt vieler
+  Einzeljobs; zaehlt fuer das Vier-Augen-Prinzip als Mehrfachziel.
+- Jobs-Seite: "Job abbrechen" mit Rueckfrage, Vorschau als vorher/nachher
+  statt JSON, Escape schliesst, Fokus im Detailbereich.
+- Befehlspalette (Cmd+K) findet Tenants ueber Name und Domain und kennt alle
+  Bereiche der Konsole.
+
 - Nur-Lese-Betrieb: je Tenant (Tenants > "Auf Nur-Lesen stellen", Owner,
   Begruendung, Audit `tenant.access-mode`) und fuer die ganze Konsole
   (`CONSOLE_READ_ONLY=true`). Die JobQueue sperrt schreibende Jobs beim
@@ -254,6 +266,17 @@ Alle nennenswerten Aenderungen an ZeroStress Cockpit. Format angelehnt an
 
 ### Geaendert
 
+- AVD: Start, Stopp und Drain einzelner Hosts zeigen die Vorschau und
+  verlangen die Freigabe (gemeinsamer Job-Dialog); Drain, Trennen und
+  Abmelden haben jetzt eine Vorschau, Abmelden warnt vor Datenverlust.
+- Teilergebnisse von Sammelaktionen bleiben im Job erhalten und stehen im
+  Audit als "partial" (vorher gingen die Einzelheiten verloren).
+- Zuordnung der Geraete-Software zu winget, Katalog und Sperrliste laeuft im
+  Backend (`packages/core/src/apps/device-software.ts`); die Oberflaeche
+  zeigt gesperrte Software an. Exakte Katalognamen gewinnen vor Teiltreffern
+  ("Logitech Options" ist nicht "Logi Options+").
+- "Deinstallieren" erscheint nicht mehr bei Defender-Zeilen, deren
+  vereinfachter Name keinem Registry-Eintrag entspricht.
 - Joblisten serverseitig gefiltert (Typ, Typ-Praefix, Geraet, Benutzer,
   App, Skript, Gruppe, Paket; `limit` hoechstens 200). Job-Historien je
   Geraet, Benutzer und App zeigen damit auch aeltere Jobs; jede Ansicht hat

@@ -65,7 +65,9 @@ export function matchWingetId(displayName: string, packages: CatalogPackageRef[]
     const candidates = [e.name, ...(e.aliases ?? [])];
     let score = 0;
     for (const c of candidates) {
-      if (nameMatches(displayName, c)) score = Math.max(score, normaliseName(c).length);
+      // Exakter Name schlaegt jeden Teiltreffer: "Logitech Options" ist nicht "Logitech Options+"
+      if (normaliseName(c) === name) score = Math.max(score, 10000);
+      else if (nameMatches(displayName, c)) score = Math.max(score, normaliseName(c).length);
     }
     const tail = idTail(e.id);
     if (score === 0 && tail.length >= 4 && name.includes(tail)) score = tail.length;

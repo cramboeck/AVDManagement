@@ -100,6 +100,28 @@ app.post(
   }
 );
 
+// Sammelaktion auf Geraeten (Sync, Neustart, Defender-Scan): ein Job, Ergebnis je Geraet
+const deviceBulkSchema = z.object({
+  action: z.enum(['sync', 'restart', 'defender-scan']),
+  devices: z.array(z.object({ managedDeviceId: z.string().min(1), deviceName: z.string().min(1) })).min(1).max(50),
+});
+
+app.post('/device-bulk', requireRole('engineer'), requireConnectedTenant, validate('json', deviceBulkSchema), async (c) => {
+  const auth = c.get('auth');
+  const tenant = c.get('tenant');
+  const body = c.req.valid('json');
+  const labels = { sync: 'synchronisieren', restart: 'neu starten', 'defender-scan': 'Defender-Scan' } as const;
+  const job = await getJobQueue().createJob({
+    type: 'device.bulk-action',
+    tenantId: tenant.id,
+    mspId: auth.mspId,
+    userId: auth.user.id,
+    userEmail: auth.user.email,
+    payload: { ...body, targetType: 'device', targetId: `${body.devices.length} devices`, targetDisplayName: `${body.devices.length} Geraete ${labels[body.action]}` },
+  });
+  return c.json(job, 202);
+});
+
 // Lizenz entfernen (direkte Zuweisung; geerbte lehnt der Job ab)
 app.post('/remove-license', requireRole('engineer'), requireConnectedTenant, validate('json', createLicenseJobSchema), async (c) => {
   const auth = c.get('auth');

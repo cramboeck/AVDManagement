@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import clsx from 'clsx';
@@ -11,6 +12,7 @@ import { NoTenantSelected, EmptyState } from '@/components/ui/empty-state';
 import { DataTable, type ColumnDef } from '@/components/ui/data-table';
 import { CapabilityNotice } from '@/components/identity/capability-notice';
 import { SnapshotStatus } from '@/components/inventory/snapshot-status';
+import { JobActionDialog } from '@/components/jobs/job-action-dialog';
 import {
   ComplianceBadge,
   ExposureBadge,
@@ -19,7 +21,7 @@ import {
   complianceLabels,
   formatRelative,
 } from '@/components/devices/device-badges';
-import type { Device, DeviceInventory, DeviceComplianceState, DeviceExposureLevel, DeviceRiskScore } from '@zerostress/types';
+import type { Job, Device, DeviceInventory, DeviceComplianceState, DeviceExposureLevel, DeviceRiskScore } from '@zerostress/types';
 
 const exposureRank: Record<DeviceExposureLevel, number> = { High: 0, Medium: 1, Low: 2, None: 3, Unknown: 4 };
 const riskRank: Record<DeviceRiskScore, number> = { High: 0, Medium: 1, Low: 2, Informational: 3, None: 4, Unknown: 5 };
@@ -32,6 +34,8 @@ function sourceOf(d: Device): 'both' | 'intune-only' | 'defender-only' {
 export default function DevicesPage() {
   const { activeTenant, isLoading: tenantLoading } = useTenant();
   const router = useRouter();
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkAction, setBulkAction] = useState<'sync' | 'restart' | 'defender-scan' | null>(null);
 
   const inventoryQuery = useQuery({
     queryKey: ['devices', activeTenant?.id],
@@ -177,20 +181,76 @@ export default function DevicesPage() {
               description="In diesem Tenant sind weder Intune-verwaltete noch Defender-onboardete Geraete sichtbar."
             />
           ) : (
-            <DataTable
-              rows={devices}
-              columns={columns}
-              getRowId={(d) => d.id}
-              storageKey="devices"
-              initialSort={{ columnId: 'name', direction: 'asc' }}
-              searchPlaceholder="Name, Benutzer, OS, Seriennummer..."
-              onRowClick={(d) => router.push(`/devices/${encodeURIComponent(d.id)}`)}
-              exportFileName="geraete"
-            />
+            <>
+              {selected.size > 0 && (
+                <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-accent/50 px-4 py-2 text-sm" role="region" aria-label="Sammelaktionen">
+                  <span className="font-medium">{selected.size} ausgewaehlt</span>
+                  {selected.size > 50 && <span className="text-xs text-destructive">Hoechstens 50 je Sammelaktion</span>}
+                  <button onClick={() => setBulkAction('sync')} disabled={selected.size > 50} className="rounded-md border px-3 py-1 text-xs hover:bg-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50">
+                    Synchronisieren
+                  </button>
+                  <button onClick={() => setBulkAction('defender-scan')} disabled={selected.size > 50} className="rounded-md border px-3 py-1 text-xs hover:bg-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50">
+                    Defender-Schnellscan
+                  </button>
+                  <button onClick={() => setBulkAction('restart')} disabled={selected.size > 50} className="rounded-md border border-destructive/40 px-3 py-1 text-xs text-destructive hover:bg-destructive/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-destructive disabled:opacity-50">
+                    Neu starten
+                  </button>
+                  <button onClick={() => setSelected(new Set())} className="ml-auto text-xs text-muted-foreground hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+                    Auswahl aufheben
+                  </button>
+                </div>
+              )}
+              <DataTable
+                rows={devices}
+                columns={columns}
+                getRowId={(d) => d.id}
+                storageKey="devices"
+                initialSort={{ columnId: 'name', direction: 'asc' }}
+                searchPlaceholder="Name, Benutzer, OS, Seriennummer..."
+                onRowClick={(d) => router.push(`/devices/${encodeURIComponent(d.id)}`)}
+                exportFileName="geraete"
+                // Nur Intune-verwaltete Geraete lassen sich per Intune-Aktion ansprechen
+                selectedIds={selected}
+                onSelectionChange={setSelected}
+                isSelectable={(d) => !!d.intune}
+              />
+              {bulkAction && (
+                <JobActionDialog
+                  title={`${bulkAction === 'sync' ? 'Synchronisieren' : bulkAction === 'restart' ? 'Neu starten' : 'Defender-Schnellscan'}: ${selected.size} Geraete`}
+                  description="Ein Job, eine Vorschau je Geraet; das Ergebnis steht je Geraet im Job."
+                  confirmLabel={bulkAction === 'restart' ? 'Neu starten' : 'Starten'}
+                  tone={bulkAction === 'restart' ? 'destructive' : 'default'}
+                  createJob={() =>
+                    api.post<Job>(`/tenants/${activeTenant.id}/jobs/device-bulk`, {
+                      action: bulkAction,
+                      devices: devices.filter((d) => selected.has(d.id) && d.intune).map((d) => ({ managedDeviceId: d.intune!.managedDeviceId, deviceName: d.name })),
+                    })
+                  }
+                  renderResult={(job) => <DeviceBulkResult job={job} />}
+                  onClose={() => setBulkAction(null)}
+                  onCompleted={() => setSelected(new Set())}
+                />
+              )}
+            </>
           )}
         </>
       )}
     </div>
+  );
+}
+
+function DeviceBulkResult({ job }: { job: Job }) {
+  const outcomes = (job.result as { outcomes?: Array<{ managedDeviceId: string; deviceName: string; success: boolean; message: string | null }> } | null)?.outcomes ?? [];
+  if (outcomes.length === 0) return <p className="text-sm text-muted-foreground">{job.error ?? 'Kein Ergebnis.'}</p>;
+  return (
+    <ul className="max-h-64 space-y-1 overflow-auto text-sm">
+      {outcomes.map((o) => (
+        <li key={o.managedDeviceId} className="flex justify-between gap-3">
+          <span>{o.deviceName}</span>
+          <span className={o.success ? 'text-success' : 'text-destructive'}>{o.success ? 'angefordert' : o.message ?? 'fehlgeschlagen'}</span>
+        </li>
+      ))}
+    </ul>
   );
 }
 

@@ -6,14 +6,15 @@
 
 import { createHash, randomUUID } from 'node:crypto';
 import { and, eq, inArray, lt } from 'drizzle-orm';
-import { buildSoftwareOverview, matchBlockRule, matchWingetId, WingetError, WINGET_BASE_SET, newestVersion, type CatalogPackageRef } from '@zerostress/core';
-import type { AnomalyFinding, ManagedTenant, SoftwareBlockRule, SoftwareInventoryItem, SoftwareOverview, TenantId } from '@zerostress/types';
+import { buildSoftwareOverview, matchBlockRule, matchDeviceSoftware, matchWingetId, wingetInventoryFromOutput, wingetUpdatesFromOutput, WingetError, WINGET_BASE_SET, newestVersion, type CatalogPackageRef } from '@zerostress/core';
+import type { AnomalyFinding, DetectedApp, DeviceSoftwareMatch, Job, ManagedTenant, SoftwareBlockRule, SoftwareInventoryItem, SoftwareOverview, TenantId } from '@zerostress/types';
 import { db, softwareBlocklist, wingetVersions, mspUsers } from '../db/index.js';
 import { getInventoryService } from './inventory.js';
 import { listPackages } from './packages.js';
 import { getWingetClient } from './winget-catalog.js';
 import { getDeviceProvider } from './microsoft-clients.js';
 import { notify, storeFindings } from './alerting.js';
+import { getJobQueue } from './job-queue.js';
 
 const VERSION_TTL_MS = 24 * 60 * 60 * 1000;
 // Je Aufruf nur wenige Katalogabfragen, damit das GitHub-Ratenlimit (60/h ohne Token) reicht
@@ -190,4 +191,28 @@ export async function pruneWingetVersions(now = new Date()): Promise<number> {
   const cutoff = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
   const rows = await db.delete(wingetVersions).where(lt(wingetVersions.checkedAt, cutoff)).returning({ id: wingetVersions.packageId });
   return rows.length;
+}
+
+/**
+ * Zuordnung der Software eines Geraets zu winget und Katalog. Nutzt die
+ * letzten abgeschlossenen Laeufe von winget-updates und winget-inventory.
+ */
+export async function matchDeviceSoftwareItems(
+  tenant: ManagedTenant,
+  managedDeviceId: string | null,
+  items: DetectedApp[]
+): Promise<{ matches: Record<string, DeviceSoftwareMatch>; wingetCheckedAt: string | null; wingetInventoryAt: string | null; wingetInventoryTruncated: boolean }> {
+  const queue = getJobQueue();
+  const latest = async (scriptId: string): Promise<Job | null> => {
+    if (!managedDeviceId) return null;
+    const jobs = await queue.listJobs(tenant.id, { type: 'device.run-script', status: 'completed', payload: { managedDeviceId, scriptId }, limit: 1 });
+    return jobs[0] ?? null;
+  };
+  const [packages, rules, updatesJob, inventoryJob] = await Promise.all([packageRefs(tenant.mspId), listBlockRules(tenant.mspId), latest('winget-updates'), latest('winget-inventory')]);
+  const outputOf = (job: Job | null) => ((job?.result as { outputJson?: Record<string, unknown> | null } | null)?.outputJson ?? null);
+  const inventory = wingetInventoryFromOutput(outputOf(inventoryJob));
+  const ctx = { updates: wingetUpdatesFromOutput(outputOf(updatesJob)), inventoryIds: inventory.ids, packages, baseSet: WINGET_BASE_SET, rules };
+  const matches: Record<string, DeviceSoftwareMatch> = {};
+  for (const item of items) matches[item.id] = matchDeviceSoftware(item, ctx);
+  return { matches, wingetCheckedAt: updatesJob?.completedAt ?? null, wingetInventoryAt: inventoryJob?.completedAt ?? null, wingetInventoryTruncated: inventory.truncated };
 }

@@ -5,7 +5,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTenant } from '@/hooks/use-tenant';
 import { api } from '@/lib/api';
 import { ErrorBanner } from '@/components/ui/error-state';
-import type { UserSession } from '@zerostress/types';
+import { JobActionDialog } from '@/components/jobs/job-action-dialog';
+import type { Job, UserSession } from '@zerostress/types';
 
 interface SessionListProps {
   hostPoolResourceId: string;
@@ -167,52 +168,10 @@ export function SessionList({
     refetchInterval: 15000,
   });
 
-  const disconnectSession = async (session: UserSession) => {
-    if (!activeTenant) return;
-    setActionError(null);
-
-    try {
-      await api.post(`/tenants/${activeTenant.id}/avd/actions/disconnect-session`, {
-        hostPoolId: hostPoolResourceId,
-        hostPoolName,
-        sessionHostId,
-        sessionHostName,
-        sessionId: session.id,
-        userPrincipalName: session.userPrincipalName,
-      });
-
-      queryClient.invalidateQueries({ queryKey: ['userSessions'] });
-      queryClient.invalidateQueries({ queryKey: ['jobs'] });
-    } catch (err) {
-      setActionError(err as Error);
-    }
-  };
-
-  const logoffSession = async (session: UserSession) => {
-    if (!activeTenant) return;
-
-    if (!confirm(`Benutzer ${session.userPrincipalName} wirklich abmelden?`)) {
-      return;
-    }
-
-    setActionError(null);
-    try {
-      await api.post(`/tenants/${activeTenant.id}/avd/actions/logoff-session`, {
-        hostPoolId: hostPoolResourceId,
-        hostPoolName,
-        sessionHostId,
-        sessionHostName,
-        sessionId: session.id,
-        userPrincipalName: session.userPrincipalName,
-        force: false,
-      });
-
-      queryClient.invalidateQueries({ queryKey: ['userSessions'] });
-      queryClient.invalidateQueries({ queryKey: ['jobs'] });
-    } catch (err) {
-      setActionError(err as Error);
-    }
-  };
+  // Trennen und Abmelden als Job mit Vorschau statt Sofortaktion bzw. Browser-Bestaetigung
+  const [sessionAction, setSessionAction] = useState<{ session: UserSession; verb: 'disconnect' | 'logoff' } | null>(null);
+  const disconnectSession = (session: UserSession) => setSessionAction({ session, verb: 'disconnect' });
+  const logoffSession = (session: UserSession) => setSessionAction({ session, verb: 'logoff' });
 
   if (isLoading) {
     return (
@@ -315,6 +274,27 @@ export function SessionList({
           </tbody>
         </table>
       </div>
+
+      {sessionAction && activeTenant && (
+        <JobActionDialog
+          title={`${sessionAction.verb === 'logoff' ? 'Abmelden' : 'Trennen'}: ${sessionAction.session.userPrincipalName}`}
+          confirmLabel={sessionAction.verb === 'logoff' ? 'Abmelden' : 'Trennen'}
+          tone={sessionAction.verb === 'logoff' ? 'destructive' : 'default'}
+          createJob={() =>
+            api.post<Job>(`/tenants/${activeTenant.id}/avd/actions/${sessionAction.verb === 'logoff' ? 'logoff-session' : 'disconnect-session'}`, {
+              hostPoolId: hostPoolResourceId,
+              hostPoolName,
+              sessionHostId,
+              sessionHostName,
+              sessionId: sessionAction.session.id,
+              userPrincipalName: sessionAction.session.userPrincipalName,
+              ...(sessionAction.verb === 'logoff' ? { force: false } : {}),
+            })
+          }
+          onClose={() => setSessionAction(null)}
+          onCompleted={() => queryClient.invalidateQueries({ queryKey: ['userSessions'] })}
+        />
+      )}
 
       {messageSession && (
         <SendMessageDialog

@@ -41,6 +41,10 @@ export interface DataTableProps<T> {
   toolbar?: React.ReactNode;
   exportFileName?: string;
   dense?: boolean;
+  // Zeilenauswahl fuer Sammelaktionen; "alle" waehlt alle gefilterten Zeilen, nicht nur die Seite
+  selectedIds?: Set<string>;
+  onSelectionChange?: (ids: Set<string>) => void;
+  isSelectable?: (row: T) => boolean;
 }
 
 interface PersistedState {
@@ -113,6 +117,9 @@ export function DataTable<T>({
   toolbar,
   exportFileName,
   dense = false,
+  selectedIds,
+  onSelectionChange,
+  isSelectable,
 }: DataTableProps<T>) {
   const [sort, setSort] = useState<PersistedState['sort']>(initialSort ?? null);
   const [pageSize, setPageSize] = useState(initialPageSize);
@@ -186,6 +193,21 @@ export function DataTable<T>({
   const pageCount = Math.max(1, Math.ceil(processed.length / pageSize));
   const currentPage = Math.min(page, pageCount - 1);
   const pageRows = processed.slice(currentPage * pageSize, (currentPage + 1) * pageSize);
+  const selecting = !!selectedIds && !!onSelectionChange;
+  const selectableRows = selecting ? processed.filter((r) => (isSelectable ? isSelectable(r) : true)) : [];
+  const allSelected = selecting && selectableRows.length > 0 && selectableRows.every((r) => selectedIds!.has(getRowId(r)));
+  const toggleRow = (row: T) => {
+    if (!selecting) return;
+    const next = new Set(selectedIds);
+    const id = getRowId(row);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    onSelectionChange!(next);
+  };
+  const toggleAll = () => {
+    if (!selecting) return;
+    onSelectionChange!(allSelected ? new Set() : new Set(selectableRows.map(getRowId)));
+  };
   const activeFilterCount = Object.values(filters).filter(Boolean).length;
 
   const toggleSort = (column: ColumnDef<T>) => {
@@ -300,6 +322,11 @@ export function DataTable<T>({
           <table className="w-full text-sm">
             <thead className="border-b bg-muted/50">
               <tr>
+                {selecting && (
+                  <th scope="col" className={clsx(cellPadding, 'w-8')}>
+                    <input type="checkbox" checked={allSelected} onChange={toggleAll} aria-label={`Alle ${selectableRows.length} gefilterten Zeilen auswaehlen`} className="h-4 w-4" />
+                  </th>
+                )}
                 {visibleColumns.map((column) => {
                   const active = sort?.columnId === column.id;
                   const sortable = column.sortable !== false;
@@ -347,6 +374,13 @@ export function DataTable<T>({
                     rowClassName?.(row)
                   )}
                 >
+                  {selecting && (
+                    <td className={clsx(cellPadding, 'w-8 align-top')} onClick={(e) => e.stopPropagation()}>
+                      {(isSelectable ? isSelectable(row) : true) && (
+                        <input type="checkbox" checked={selectedIds!.has(getRowId(row))} onChange={() => toggleRow(row)} aria-label="Zeile auswaehlen" className="h-4 w-4" />
+                      )}
+                    </td>
+                  )}
                   {visibleColumns.map((column) => (
                     <td
                       key={column.id}

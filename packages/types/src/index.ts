@@ -1670,10 +1670,32 @@ export interface BulkWingetOutcome {
   installedVersion: string | null;
 }
 
+export interface DeviceWingetUpdate {
+  name: string;
+  id: string;
+  installed: string;
+  available: string;
+}
+
+// Zuordnung einer installierten Software zu winget und Katalog (vom Backend berechnet)
+export interface DeviceSoftwareMatch {
+  update: DeviceWingetUpdate | null;
+  catalog: { id: string; name: string; packageId: string | null; packageVersion: string | null } | null;
+  wingetId: string | null;
+  wingetState: 'update' | 'catalog' | 'none';
+  blockedBy: string | null;
+}
+
 export interface DeviceSoftwareSet {
   items: DetectedApp[];
   intune: CapabilityResult<{ count: number }>;
   defender: CapabilityResult<{ count: number }>;
+  // Zuordnung je items[].id; leer, wenn die API sie nicht berechnen konnte
+  matches?: Record<string, DeviceSoftwareMatch>;
+  // Zeitpunkte der letzten winget-Pruefung und -Inventarisierung auf dem Geraet
+  wingetCheckedAt?: string | null;
+  wingetInventoryAt?: string | null;
+  wingetInventoryTruncated?: boolean;
 }
 
 export type DeviceSoftwareInventory = CapabilityResult<DeviceSoftwareSet>;

@@ -4,6 +4,7 @@
 
 import { randomUUID } from 'node:crypto';
 import { Hono } from 'hono';
+import { matchDeviceSoftwareItems } from '../services/software.js';
 import { validate } from '../middleware/validate.js';
 import { z } from 'zod';
 import { authMiddleware, requireRole } from '../middleware/auth.js';
@@ -158,10 +159,16 @@ app.get('/:deviceId/software', requireConnectedTenant, async (c) => {
     return c.json(inventory);
   }
   const items = mergeSoftware(intune.available ? intune.data : [], defender.available ? defender.data : []);
+  // Zuordnung zu winget und Katalog im Backend; schlaegt sie fehl, bleibt das Inventar sichtbar
+  const matched = await matchDeviceSoftwareItems(tenant, device.intune?.managedDeviceId ?? null, items).catch((error: Error) => {
+    console.error('Device software matching failed:', error.message);
+    return null;
+  });
   const inventory: DeviceSoftwareInventory = {
     available: true,
     data: {
       items,
+      ...(matched ?? {}),
       intune: intune.available ? { available: true, data: { count: intune.data.length } } : intune,
       defender: defender.available ? { available: true, data: { count: defender.data.length } } : defender,
     },

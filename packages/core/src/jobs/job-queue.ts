@@ -473,6 +473,8 @@ export class JobQueue {
             status: 'failed',
             completedAt: new Date().toISOString(),
             error: message,
+            // Teilergebnisse (Sammelaktionen) behalten: welche Ziele gingen, welche nicht
+            ...(result.data ? { result: result.data } : {}),
           });
 
           await this.auditLogger.log({
@@ -483,7 +485,8 @@ export class JobQueue {
             targetType: this.extractTargetType(job.payload),
             targetId: this.extractTargetId(job.payload),
             targetDisplayName: this.extractTargetDisplayName(job.payload),
-            result: 'failure',
+            // Teilweise erfolgreich ist im Audit "partial", nicht "failure"
+            result: result.error?.code?.endsWith('_PARTIAL') ? 'partial' : 'failure',
             errorMessage: message,
             correlationId: job.correlationId,
           });
