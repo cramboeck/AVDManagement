@@ -38,10 +38,10 @@ export function getJobQueue(): JobQueue {
       logThrottled('Redis connection error', error);
     });
 
-    registerIdentityJobs(getIdentityProvider());
+    const sealer = getResultSealer();
+    registerIdentityJobs(getIdentityProvider(), { sealer: sealer ?? undefined });
     registerAvdJobs(getAvdProvider());
     registerDeviceJobs(getDeviceProvider());
-    const sealer = getResultSealer();
     registerScriptJobs(getRemediationProvider(), { sealer });
     registerAvdScriptJobs(getAvdProvider(), { sealer });
     registerAppJobs(getAppProvider());
@@ -86,6 +86,13 @@ export function getJobQueue(): JobQueue {
       new DrizzleAuditLogger()
     );
     jobQueue.startWorker();
+
+    jobStore
+      .scrubPlaintextPasswords()
+      .then((count) => {
+        if (count > 0) console.log(`Removed plaintext passwords from ${count} earlier reset job(s)`);
+      })
+      .catch((error: Error) => console.error('Password scrub failed:', error.message));
 
     const sweep = setInterval(() => {
       const store = jobStore;

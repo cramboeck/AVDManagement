@@ -90,6 +90,16 @@ export class DrizzleJobStore implements JobStore {
     return purged.length;
   }
 
+  // Aeltere Passwort-Resets speicherten das temporaere Passwort im Klartext; einmalig entfernen
+  async scrubPlaintextPasswords(): Promise<number> {
+    const scrubbed = await db
+      .update(jobs)
+      .set({ result: sql`(${jobs.result} - 'temporaryPassword') || '{"passwordScrubbed": true}'::jsonb` })
+      .where(and(eq(jobs.type, 'identity.reset-password'), sql`${jobs.result} ? 'temporaryPassword'`))
+      .returning({ id: jobs.id });
+    return scrubbed.length;
+  }
+
   // Freigaben, die niemand bestaetigt hat, nicht ewig offen lassen
   async cancelExpiredPending(olderThan: Date, secondApprovalOlderThan: Date = olderThan): Promise<number> {
     const cancelled = await db

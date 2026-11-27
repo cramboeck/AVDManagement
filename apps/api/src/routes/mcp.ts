@@ -230,7 +230,8 @@ const tools: ToolDefinition[] = [
       if (auth.user.role === 'readonly') throw new ToolError('Rolle Engineer erforderlich');
       const jobId = str(args, 'jobId') as JobId;
       const job = await getJobQueue().getJob(jobId);
-      if (!job || job.mspId !== auth.mspId) throw new ToolError('Job nicht gefunden');
+      // Auch die Tenant-Sichtbarkeit des Technikers pruefen, nicht nur den MSP
+      if (!job || job.mspId !== auth.mspId || !(await canAccessTenant(auth, job.tenantId))) throw new ToolError('Job nicht gefunden');
       return getJobQueue().approveJob(jobId, auth.user.id);
     },
   },
@@ -241,7 +242,7 @@ const tools: ToolDefinition[] = [
     kind: 'readonly',
     run: async (auth, args) => {
       const job = await getJobQueue().getJob(str(args, 'jobId') as JobId);
-      if (!job || job.mspId !== auth.mspId) throw new ToolError('Job nicht gefunden');
+      if (!job || job.mspId !== auth.mspId || !(await canAccessTenant(auth, job.tenantId))) throw new ToolError('Job nicht gefunden');
       return job;
     },
   },

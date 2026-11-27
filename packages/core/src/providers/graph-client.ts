@@ -6,12 +6,15 @@
  */
 
 import { GraphApiError } from '../errors.js';
+import { resolveRequestUrl } from './request-url.js';
 
 export interface GraphClientConfig {
   getAccessToken: (tenantId: string, scopes: string[]) => Promise<string>;
   baseUrl?: string;
   defaultRetries?: number;
   defaultTimeoutMs?: number;
+  // Weitere vertrauenswuerdige Hosts fuer absolute URLs (z. B. regionale Defender-Hosts)
+  extraOrigins?: RegExp;
 }
 
 export interface GraphRequestOptions {
@@ -35,12 +38,14 @@ export class GraphClient {
   private readonly baseUrl: string;
   private readonly defaultRetries: number;
   private readonly defaultTimeoutMs: number;
+  private readonly extraOrigins?: RegExp;
   private readonly getAccessToken: (tenantId: string, scopes: string[]) => Promise<string>;
 
   constructor(config: GraphClientConfig) {
     this.baseUrl = config.baseUrl ?? 'https://graph.microsoft.com/v1.0';
     this.defaultRetries = config.defaultRetries ?? 3;
     this.defaultTimeoutMs = config.defaultTimeoutMs ?? 30000;
+    this.extraOrigins = config.extraOrigins;
     this.getAccessToken = config.getAccessToken;
   }
 
@@ -59,8 +64,9 @@ export class GraphClient {
       responseType = 'json',
     } = options;
 
+    // Vor dem Token pruefen: eine fremde URL bekommt nie ein Token
+    const url = resolveRequestUrl(this.baseUrl, path, this.extraOrigins);
     const accessToken = await this.getAccessToken(tenantId, scopes);
-    const url = path.startsWith('http') ? path : `${this.baseUrl}${path}`;
 
     let lastError: Error | null = null;
 

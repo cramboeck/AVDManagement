@@ -16,6 +16,7 @@ import { SignInTable, formatDateTime } from '@/components/identity/sign-in-table
 import { AuditTable } from '@/components/identity/audit-table';
 import { DataTable, type ColumnDef } from '@/components/ui/data-table';
 import { MembershipJobDialog } from '@/components/groups/membership-dialogs';
+import { SealedResult } from '@/components/devices/sealed-result';
 import type {
   UserDetail,
   UserLicense,
@@ -28,6 +29,7 @@ import type {
   DirectoryAuditEvent,
   Job,
   JobStatus,
+  ScriptRunResult,
 } from '@zerostress/types';
 
 type Tab = 'overview' | 'security' | 'groups' | 'history' | 'jobs';
@@ -548,10 +550,24 @@ function JobsTab({ tenantId, microsoftId }: { tenantId: string; microsoftId: str
 }
 
 function TemporaryPassword({ job }: { job: Job }) {
-  const [copied, setCopied] = useState(false);
-  const password = typeof job.result?.temporaryPassword === 'string' ? job.result.temporaryPassword : null;
-  if (!password) return <p className="text-sm text-muted-foreground">Kein Passwort im Ergebnis.</p>;
+  if (job.result?.passwordScrubbed) return <p className="text-sm text-muted-foreground">Das Passwort dieses aelteren Resets wurde aus Sicherheitsgruenden entfernt; bei Bedarf erneut zuruecksetzen.</p>;
+  if (!job.result?.sealed) return <p className="text-sm text-muted-foreground">{job.error ?? 'Kein Passwort im Ergebnis.'}</p>;
+  return (
+    <SealedResult
+      tenantId={job.tenantId}
+      jobId={job.id}
+      result={job.result as unknown as ScriptRunResult}
+      notice="Das temporaere Passwort liegt verschluesselt vor. Anzeige nur mit Begruendung, Rolle Engineer und Audit-Eintrag."
+      render={(revealed) => {
+        const value = revealed.outputJson?.temporaryPassword;
+        return typeof value === 'string' ? <PasswordDisplay password={value} /> : <p className="text-sm text-muted-foreground">Kein Passwort im Ergebnis.</p>;
+      }}
+    />
+  );
+}
 
+function PasswordDisplay({ password }: { password: string }) {
+  const [copied, setCopied] = useState(false);
   const copy = async () => {
     await navigator.clipboard.writeText(password);
     setCopied(true);

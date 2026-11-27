@@ -6,6 +6,29 @@ Alle nennenswerten Aenderungen an ZeroStress Cockpit. Format angelehnt an
 
 ## Unreleased
 
+### Sicherheit
+
+- Jobs: Lesen, Freigeben, Abbrechen und Anzeigen versiegelter Ergebnisse
+  pruefen jetzt Tenant und MSP; fremde Job-Ids antworten mit 404 (vorher
+  konnte ein Techniker Jobs anderer Tenants lesen und freigeben). MCP prueft
+  zusaetzlich die Tenant-Sichtbarkeit. Routen-Test mit Gegenprobe.
+- Graph-, Defender- und ARM-Client senden ein Token nur noch an den eigenen
+  Host (bei Defender auch an die regionalen Microsoft-Hosts). Vorher konnte
+  ein manipulierter `pageToken` das Token eines Kundentenants an einen
+  fremden Server schicken.
+- Passwort-Reset: temporaeres Passwort mit kryptografischem Zufall, nur
+  noch versiegelt im Job-Ergebnis (Anzeige mit Begruendung und Audit);
+  ohne `RESULT_ENCRYPTION_KEY` wird nicht zurueckgesetzt. Klartext aus
+  aelteren Reset-Jobs entfernt die API beim Start.
+- Audit-Seite zeigt nur noch den Tenant aus der URL (vorher das ganze
+  MSP-Audit, auch fuer eingeschraenkte Techniker); Filter Ergebnis und Suche
+  wirken, Blaettern ueber Keyset-Cursor, `limit` hoechstens 200.
+- Job abbrechen entfernt eingereihte Jobs aus der Queue, der Worker fuehrt
+  abgebrochene Jobs nicht mehr aus, laufende Jobs werden ehrlich abgelehnt;
+  Abbruch steht im Audit (`job.cancel`).
+- Tenant-Routen (Detail, Consent, Verbindungstest, Nur-Lesen, Entfernen)
+  pruefen die Sichtbarkeit je Techniker und ignorieren entfernte Tenants.
+
 ### Hinzugefuegt
 
 - Nur-Lese-Betrieb: je Tenant (Tenants > "Auf Nur-Lesen stellen", Owner,

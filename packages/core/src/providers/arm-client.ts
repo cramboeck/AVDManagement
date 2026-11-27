@@ -6,6 +6,7 @@
  */
 
 import { ArmApiError } from '../errors.js';
+import { resolveRequestUrl } from './request-url.js';
 
 export interface ArmClientConfig {
   getAccessToken: (tenantId: string, scopes: string[]) => Promise<string>;
@@ -69,15 +70,15 @@ export class ArmClient {
       apiVersion = this.defaultApiVersion,
     } = options;
 
-    const accessToken = await this.getAccessToken(tenantId, ARM_SCOPES);
-
+    // Absolute URLs (nextLink, Async-Operation) nur auf dem ARM-Host, siehe request-url.ts
     let url: string;
-    if (path.startsWith('http')) {
-      url = path;
+    if (/^https?:\/\//i.test(path)) {
+      url = resolveRequestUrl(this.baseUrl, path);
     } else {
       const separator = path.includes('?') ? '&' : '?';
       url = `${this.baseUrl}${path}${separator}api-version=${apiVersion}`;
     }
+    const accessToken = await this.getAccessToken(tenantId, ARM_SCOPES);
 
     let lastError: Error | null = null;
 

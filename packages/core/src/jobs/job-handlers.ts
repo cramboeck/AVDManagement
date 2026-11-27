@@ -9,6 +9,7 @@ import {
   type PreviewResult,
 } from './job-types.js';
 import { IdentityProvider } from '../providers/identity-provider.js';
+import type { ResultSealer } from './script-job-handlers.js';
 
 // Payload-Typen
 interface AssignLicensePayload {
@@ -311,25 +312,40 @@ export function createRevokeSessionsHandler(
   };
 }
 
+export interface IdentityJobOptions {
+  // Versiegelt das temporaere Passwort (Schluessel aus Key Vault); ohne Sealer kein Reset
+  sealer?: ResultSealer;
+}
+
 /**
- * Passwort zuruecksetzen. Das temporaere Passwort steht nur im Job-Ergebnis
- * und muss beim naechsten Login geaendert werden.
+ * Passwort zuruecksetzen. Das temporaere Passwort liegt nur versiegelt im
+ * Job-Ergebnis; Anzeige ueber /reveal mit Begruendung, Rolle Engineer und
+ * Audit. Ohne Schluessel wird gar nicht erst zurueckgesetzt, damit kein
+ * Passwort im Klartext in der Datenbank landet.
  */
 export function createResetPasswordHandler(
-  identityProvider: IdentityProvider
+  identityProvider: IdentityProvider,
+  options: IdentityJobOptions = {}
 ): (ctx: JobContext) => Promise<JobResult> {
   return async (ctx) => {
     const payload = ctx.payload as unknown as UserAccountPayload;
+    const sealer = options.sealer;
+    if (!sealer) {
+      return { success: false, error: { code: 'RESULT_ENCRYPTION_MISSING', message: 'RESULT_ENCRYPTION_KEY ist nicht gesetzt; ohne Schluessel kann das temporaere Passwort nicht sicher abgelegt werden. Es wurde nichts geaendert.', retryable: false } };
+    }
     try {
       const { temporaryPassword } = await identityProvider.resetPassword(
         { tenantId: ctx.tenantId, correlationId: ctx.correlationId },
         payload.userId
       );
+      const cipher = await sealer.seal({ output: null, outputJson: { temporaryPassword }, detectionError: null, remediationError: null });
       return {
         success: true,
         data: {
           userId: payload.userId,
-          temporaryPassword,
+          sealed: true,
+          cipher,
+          scriptId: 'password-reset',
           forceChangeAtNextSignIn: true,
           resetAt: new Date().toISOString(),
         },
@@ -357,7 +373,7 @@ function simpleAccountPreview(
 /**
  * Job-Definitionen registrieren
  */
-export function registerIdentityJobs(identityProvider: IdentityProvider): void {
+export function registerIdentityJobs(identityProvider: IdentityProvider, options: IdentityJobOptions = {}): void {
   registerJob(
     {
       type: 'identity.disable-user',
@@ -408,9 +424,9 @@ export function registerIdentityJobs(identityProvider: IdentityProvider): void {
       concurrencyPerTenant: 5,
       requiresPreview: true,
     },
-    createResetPasswordHandler(identityProvider),
+    createResetPasswordHandler(identityProvider, options),
     simpleAccountPreview('passwordReset', [
-      'Ein temporaeres Passwort wird erzeugt und einmalig im Job-Ergebnis angezeigt. Der Benutzer muss es beim naechsten Login aendern.',
+      'Ein temporaeres Passwort wird erzeugt und verschluesselt im Job-Ergebnis abgelegt; Anzeige mit Begruendung (Audit). Der Benutzer muss es beim naechsten Login aendern.',
     ])
   );
 

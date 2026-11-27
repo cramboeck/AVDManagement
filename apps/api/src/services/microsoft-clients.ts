@@ -28,6 +28,7 @@ import {
   TeamViewerProvider,
   SharePointProvider,
   DEFENDER_API_BASE_URL,
+  DEFENDER_ORIGINS,
   NotFoundError,
 } from '@zerostress/core';
 import { db, managedTenants } from '../db/index.js';
@@ -92,6 +93,7 @@ export function getDefenderClient(): GraphClient {
     defenderClient = new GraphClient({
       getAccessToken: getAccessTokenForManagedTenant,
       baseUrl: process.env.DEFENDER_API_BASE_URL ?? DEFENDER_API_BASE_URL,
+      extraOrigins: DEFENDER_ORIGINS,
     });
   }
   return defenderClient;

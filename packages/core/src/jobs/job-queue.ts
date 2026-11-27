@@ -271,11 +271,18 @@ export class JobQueue {
         false
       );
     }
+    // Ein laufender Handler laesst sich nicht sicher unterbrechen; ehrlich ablehnen statt "abgebrochen" anzuzeigen
+    if (job.status === 'running') {
+      throw new JobError(jobId, 'ALREADY_RUNNING', 'Der Job laeuft bereits und kann nicht mehr abgebrochen werden.', false);
+    }
 
     await this.jobStore.update(jobId, {
       status: 'cancelled',
       completedAt: new Date().toISOString(),
     });
+    // Eingereihte Jobs auch aus BullMQ entfernen; der Worker prueft zusaetzlich den Status
+    const bullJob = await this.queue.getJob(jobId);
+    await bullJob?.remove().catch(() => undefined);
 
     return (await this.jobStore.findById(jobId))!;
   }
@@ -310,6 +317,10 @@ export class JobQueue {
         const job = await this.jobStore.findById(jobData.id);
         if (!job) {
           throw new Error(`Job ${jobData.id} not found in store`);
+        }
+        // Abgebrochen, waehrend er in der Queue lag: nichts ausfuehren
+        if (job.status === 'cancelled') {
+          return { success: false, error: { code: 'CANCELLED', message: 'Job was cancelled before it ran', retryable: false } };
         }
 
         const registered = getRegisteredJob(job.type);

@@ -20,6 +20,19 @@ const audit = new DrizzleAuditLogger();
 app.use('*', authMiddleware);
 app.use('*', tenantContextMiddleware);
 
+const jobNotFound = { type: 'https://api.zerostress.io/problems/not-found', title: 'Job not found', status: 404 } as const;
+
+/**
+ * Job nur liefern, wenn er zum Tenant der URL und zum MSP des Aufrufers
+ * gehoert. Ein fremder Job antwortet wie ein unbekannter mit 404, damit
+ * sich Job-Ids anderer Tenants nicht pruefen lassen.
+ */
+async function findTenantJob(jobId: JobId, tenantId: string, mspId: string): Promise<Job | null> {
+  const job = await getJobQueue().getJob(jobId);
+  if (!job || job.tenantId !== tenantId || job.mspId !== mspId) return null;
+  return job;
+}
+
 // Jobs auflisten
 app.get('/', async (c) => {
   const tenant = c.get('tenant');
@@ -41,22 +54,9 @@ app.get('/', async (c) => {
 
 // Job-Details
 app.get('/:jobId', async (c) => {
-  const jobId = c.req.param('jobId') as JobId;
-  const queue = getJobQueue();
-
-  const job = await queue.getJob(jobId);
-
-  if (!job) {
-    return c.json(
-      {
-        type: 'https://api.zerostress.io/problems/not-found',
-        title: 'Job not found',
-        status: 404,
-      },
-      404
-    );
-  }
-
+  const auth = c.get('auth');
+  const job = await findTenantJob(c.req.param('jobId') as JobId, c.get('tenant').id, auth.mspId);
+  if (!job) return c.json(jobNotFound, 404);
   return c.json(job);
 });
 
@@ -230,6 +230,7 @@ app.post('/:jobId/approve', requireRole('engineer'), async (c) => {
   const auth = c.get('auth');
   const jobId = c.req.param('jobId') as JobId;
   const queue = getJobQueue();
+  if (!(await findTenantJob(jobId, c.get('tenant').id, auth.mspId))) return c.json(jobNotFound, 404);
 
   try {
     const job = await queue.approveJob(jobId, auth.user.id, auth.user.email);
@@ -445,10 +446,8 @@ app.post('/:jobId/reveal', requireRole('engineer'), requireConnectedTenant, vali
   const jobId = c.req.param('jobId') as JobId;
   const { reason } = c.req.valid('json');
   const correlationId = randomUUID() as CorrelationId;
-  const job = await getJobQueue().getJob(jobId);
-  if (!job || job.tenantId !== tenant.id) {
-    return c.json({ type: 'https://api.zerostress.io/problems/not-found', title: 'Job not found', status: 404 }, 404);
-  }
+  const job = await findTenantJob(jobId, tenant.id, auth.mspId);
+  if (!job) return c.json(jobNotFound, 404);
   const result = job.result as { sealed?: boolean; cipher?: SealedCipher | null; purged?: boolean; scriptId?: string } | null;
   const auditBase = {
     mspId: auth.mspId,
@@ -482,12 +481,28 @@ app.post('/:jobId/reveal', requireRole('engineer'), requireConnectedTenant, vali
 app.post('/:jobId/cancel', requireRole('engineer'), async (c) => {
   const jobId = c.req.param('jobId') as JobId;
   const queue = getJobQueue();
+  const auth = c.get('auth');
+  const existing = await findTenantJob(jobId, c.get('tenant').id, auth.mspId);
+  if (!existing) return c.json(jobNotFound, 404);
+  const auditBase = {
+    mspId: auth.mspId,
+    tenantId: existing.tenantId,
+    userId: auth.user.id,
+    action: 'job.cancel',
+    targetType: 'job',
+    targetId: existing.id,
+    targetDisplayName: typeof existing.payload.targetDisplayName === 'string' ? existing.payload.targetDisplayName : existing.type,
+    beforeState: { status: existing.status, jobType: existing.type },
+    correlationId: existing.correlationId,
+  };
 
   try {
     const job = await queue.cancelJob(jobId);
+    await audit.log({ ...auditBase, afterState: { status: job.status }, result: 'success' });
     return c.json(job);
   } catch (error) {
     if ((error as { type?: string }).type === 'job-error') {
+      await audit.log({ ...auditBase, result: 'failure', errorMessage: (error as Error).message });
       return c.json(
         {
           type: 'https://api.zerostress.io/problems/job-error',

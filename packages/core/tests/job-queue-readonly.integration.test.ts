@@ -119,6 +119,24 @@ describe.skipIf(!redisUrl)('JobQueue read-only mode', () => {
     consoleReadOnly = false;
   });
 
+  it('does not run a queued job that was cancelled', async () => {
+    await queue.stopWorker();
+    const job = await queue.createJob({ type: 'test.write', tenantId: tenantB, mspId, userId, payload });
+    await queue.approveJob(job.id, userId);
+    const cancelled = await queue.cancelJob(job.id);
+    expect(cancelled.status).toBe('cancelled');
+    queue.startWorker(1);
+    await new Promise((r) => setTimeout(r, 500));
+    expect(executed).not.toContain(job.id);
+    expect(store.jobs.get(job.id)?.status).toBe('cancelled');
+  });
+
+  it('refuses to cancel a running job instead of pretending', async () => {
+    const job = await queue.createJob({ type: 'test.write', tenantId: tenantB, mspId, userId, payload });
+    await store.update(job.id, { status: 'running' });
+    await expect(queue.cancelJob(job.id)).rejects.toMatchObject({ errorCode: 'ALREADY_RUNNING' });
+  });
+
   it('still runs undo jobs in read-only mode', async () => {
     consoleReadOnly = true;
     const job = await queue.createJob({ type: 'test.undo', tenantId: tenantA, mspId, userId, payload });

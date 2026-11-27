@@ -8,25 +8,31 @@ import { validate } from '../middleware/validate.js';
 import { z } from 'zod';
 import { eq, and } from 'drizzle-orm';
 import { db, managedTenants } from '../db/index.js';
-import { authMiddleware, requireRole } from '../middleware/auth.js';
+import { authMiddleware, requireRole, type AuthContext } from '../middleware/auth.js';
 import { DrizzleAuditLogger } from '../services/audit-logger.js';
 import { createConsentState } from '../services/consent-state.js';
 import { testTenantConnection, persistConnectionTestResult } from '../services/tenant-connection.js';
 import { toManagedTenant, type TenantRow } from '../services/tenant-mapper.js';
 import { DrizzleSnapshotStore } from '../services/inventory-store.js';
-import { tenantFilter } from '../services/access.js';
+import { canAccessTenant, tenantFilter } from '../services/access.js';
 import { getTokenProvider } from '../services/microsoft-clients.js';
-import type { TenantId, MspId, UserId, CorrelationId } from '@zerostress/types';
+import type { TenantId, UserId, CorrelationId } from '@zerostress/types';
 
 const app = new Hono();
 const audit = new DrizzleAuditLogger();
 
 app.use('*', authMiddleware);
 
-async function findOwnTenant(tenantId: string, mspId: MspId): Promise<TenantRow | undefined> {
-  return db.query.managedTenants.findFirst({
-    where: and(eq(managedTenants.id, tenantId), eq(managedTenants.mspId, mspId)),
+/**
+ * Tenant des eigenen MSP, nicht entfernt und fuer diesen Techniker sichtbar
+ * (Owner sehen alle). Gleiche Regeln wie tenantContextMiddleware.
+ */
+async function findAccessibleTenant(auth: AuthContext, tenantId: string): Promise<TenantRow | undefined> {
+  const row = await db.query.managedTenants.findFirst({
+    where: and(eq(managedTenants.id, tenantId), eq(managedTenants.mspId, auth.mspId), eq(managedTenants.isActive, true)),
   });
+  if (!row) return undefined;
+  return (await canAccessTenant(auth, row.id)) ? row : undefined;
 }
 
 function notFound(tenantId: string) {
@@ -56,7 +62,7 @@ app.get('/:tenantId', async (c) => {
   const auth = c.get('auth');
   const tenantId = c.req.param('tenantId');
 
-  const tenant = await findOwnTenant(tenantId, auth.mspId);
+  const tenant = await findAccessibleTenant(auth, tenantId);
   if (!tenant) {
     return c.json(notFound(tenantId), 404);
   }
@@ -185,7 +191,7 @@ app.delete('/:tenantId', requireRole('owner'), validate('json', removeTenantSche
   const { confirmName } = c.req.valid('json');
   const correlationId = randomUUID() as CorrelationId;
 
-  const tenant = await findOwnTenant(tenantId, auth.mspId);
+  const tenant = await findAccessibleTenant(auth, tenantId);
   if (!tenant) {
     return c.json(notFound(tenantId), 404);
   }
@@ -232,7 +238,7 @@ const accessModeSchema = z.object({
 app.patch('/:tenantId/access-mode', requireRole('owner'), validate('json', accessModeSchema), async (c) => {
   const auth = c.get('auth');
   const { mode, reason } = c.req.valid('json');
-  const tenant = await findOwnTenant(c.req.param('tenantId'), auth.mspId);
+  const tenant = await findAccessibleTenant(auth, c.req.param('tenantId'));
   if (!tenant) return c.json(notFound(c.req.param('tenantId')), 404);
   const before = tenant.accessMode;
   const auditBase = {
@@ -260,7 +266,7 @@ app.get('/:tenantId/consent-url', requireRole('engineer'), async (c) => {
   const tenantId = c.req.param('tenantId');
   const auth = c.get('auth');
 
-  const tenant = await findOwnTenant(tenantId, auth.mspId);
+  const tenant = await findAccessibleTenant(auth, tenantId);
   if (!tenant) {
     return c.json(notFound(tenantId), 404);
   }
@@ -290,7 +296,7 @@ app.post('/:tenantId/test-connection', requireRole('engineer'), async (c) => {
   const auth = c.get('auth');
   const correlationId = randomUUID() as CorrelationId;
 
-  const tenant = await findOwnTenant(tenantId, auth.mspId);
+  const tenant = await findAccessibleTenant(auth, tenantId);
   if (!tenant) {
     return c.json(notFound(tenantId), 404);
   }

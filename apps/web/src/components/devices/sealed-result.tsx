@@ -16,12 +16,14 @@ interface SealedResultProps {
   jobId: string;
   result: ScriptRunResult;
   render: (revealed: ScriptRunResult) => React.ReactNode;
+  // Hinweistext vor der Anzeige; Standard: Kontonamen
+  notice?: string;
 }
 
 /**
  * Versiegeltes Ergebnis: Hinweis, Knopf, Dialog mit Begruendung, Anzeige mit Ablauf.
  */
-export function SealedResult({ tenantId, jobId, result, render }: SealedResultProps) {
+export function SealedResult({ tenantId, jobId, result, render, notice }: SealedResultProps) {
   const [open, setOpen] = useState(false);
   const [revealed, setRevealed] = useState<RevealedScriptResult | null>(null);
   const [secondsLeft, setSecondsLeft] = useState(REVEAL_SECONDS);
@@ -59,7 +61,7 @@ export function SealedResult({ tenantId, jobId, result, render }: SealedResultPr
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-dashed px-3 py-2">
-      <p className="text-sm text-muted-foreground">Ergebnis enthaelt Kontonamen und liegt verschluesselt vor. Anzeige nur mit Begruendung, Rolle Engineer und Audit-Eintrag.</p>
+      <p className="text-sm text-muted-foreground">{notice ?? 'Ergebnis enthaelt Kontonamen und liegt verschluesselt vor. Anzeige nur mit Begruendung, Rolle Engineer und Audit-Eintrag.'}</p>
       <button onClick={() => setOpen(true)} className="rounded-md border px-3 py-1.5 text-sm hover:bg-accent">
         Anzeigen
       </button>

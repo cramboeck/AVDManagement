@@ -5,6 +5,7 @@
  * Implementiert Delta-Query fuer effiziente Synchronisation.
  */
 
+import { randomInt } from 'node:crypto';
 import type {
   TenantId,
   SyncedUser,
@@ -766,17 +767,17 @@ export class IdentityProvider extends BaseResourceProvider {
     const special = '!@#$%&*';
     const all = uppercase + lowercase + numbers + special;
 
-    let password = '';
-    password += uppercase[Math.floor(Math.random() * uppercase.length)];
-    password += lowercase[Math.floor(Math.random() * lowercase.length)];
-    password += numbers[Math.floor(Math.random() * numbers.length)];
-    password += special[Math.floor(Math.random() * special.length)];
+    // Kryptografischer Zufall; Math.random ist fuer Passwoerter ungeeignet
+    const pick = (set: string): string => set[randomInt(set.length)];
+    const chars = [pick(uppercase), pick(lowercase), pick(numbers), pick(special)];
+    for (let i = chars.length; i < length; i++) chars.push(pick(all));
 
-    for (let i = 4; i < length; i++) {
-      password += all[Math.floor(Math.random() * all.length)];
+    // Fisher-Yates statt sort(() => random): gleichverteilt
+    for (let i = chars.length - 1; i > 0; i--) {
+      const j = randomInt(i + 1);
+      [chars[i], chars[j]] = [chars[j], chars[i]];
     }
-
-    return password.split('').sort(() => Math.random() - 0.5).join('');
+    return chars.join('');
   }
 
   private mapGraphUserToSyncedUser(tenantId: TenantId, user: GraphUser): SyncedUser {
