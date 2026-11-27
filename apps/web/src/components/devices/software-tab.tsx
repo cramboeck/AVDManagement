@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useJobs } from '@/hooks/use-jobs';
 import { api } from '@/lib/api';
 import { LoadingTable } from '@/components/ui/loading';
 import { ErrorState } from '@/components/ui/error-state';
@@ -136,12 +137,7 @@ export function SoftwareTab({ base, tenantId, device }: { base: string; tenantId
   const baseSet = useQuery({ queryKey: ['winget-base-set'], queryFn: () => api.get<{ items: WingetCatalogEntry[]; runtimePrefixes: string[] }>('/packages/winget/base-set'), staleTime: Infinity });
   const packages = useQuery({ queryKey: ['packages'], queryFn: () => api.get<{ items: AppPackage[] }>('/packages'), staleTime: 60 * 1000 });
 
-  const jobsQuery = useQuery({
-    queryKey: ['jobs', tenantId],
-    queryFn: () => api.get<{ items: Job[] }>(`/tenants/${tenantId}/jobs?limit=100`),
-    refetchInterval: 5000,
-    enabled: !!managedDeviceId,
-  });
+  const jobsQuery = useJobs(tenantId, { type: 'device.run-script', managedDeviceId: managedDeviceId ?? undefined, limit: 100 }, { enabled: !!managedDeviceId });
 
   const latestCheck = useMemo(
     () =>

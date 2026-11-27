@@ -63,7 +63,14 @@ export default function JobsPage() {
     queryFn: () =>
       api.get<JobsResponse>(`/tenants/${activeTenant!.id}/jobs`),
     enabled: !!activeTenant,
-    refetchInterval: 5000,
+    // Nur nachfragen, solange etwas laeuft oder auf Freigabe wartet
+    refetchInterval: (query) => {
+      const items = query.state.data?.items ?? [];
+      if (items.some((j) => j.status === 'queued' || j.status === 'running')) return 3000;
+      if (items.some((j) => j.status === 'pending_approval' || j.status === 'pending_second_approval')) return 15000;
+      return 60000;
+    },
+    refetchIntervalInBackground: false,
   });
 
   // Link aus einem Toast (/jobs?job=<id>): den Job nach dem Laden auswaehlen

@@ -5,7 +5,7 @@
 import { Hono } from 'hono';
 import { validate } from '../middleware/validate.js';
 import { z } from 'zod';
-import { getLibraryScript } from '@zerostress/core';
+import { getLibraryScript, summarizeHostPool } from '@zerostress/core';
 import { authMiddleware, requireRole } from '../middleware/auth.js';
 import { tenantContextMiddleware, requireConnectedTenant } from '../middleware/tenant-context.js';
 import { getAvdProvider } from '../services/microsoft-clients.js';
@@ -108,15 +108,11 @@ app.get('/host-pools/:resourceId/session-hosts', requireConnectedTenant, async (
   const resourceId = toArmResourceId(c.req.param('resourceId'));
   const provider = getAvdProvider();
 
-  const sessionHosts = await provider.listSessionHosts(
-    {
-      tenantId: tenant.id,
-      correlationId: c.req.header('X-Correlation-ID') ?? crypto.randomUUID(),
-    },
-    resourceId
-  );
-
-  return c.json({ items: sessionHosts });
+  const ctx = { tenantId: tenant.id, correlationId: c.req.header('X-Correlation-ID') ?? crypto.randomUUID() };
+  // Pool und Hosts in zwei Aufrufen; Kennzahlen gleich mit, die Detailseite braucht keine zweite Abfrage je Takt
+  const loaded = await provider.getHostPoolWithHosts(ctx, resourceId);
+  if (!loaded) return c.json({ type: 'https://api.zerostress.io/problems/not-found', title: 'Host Pool not found', status: 404 }, 404);
+  return c.json({ items: loaded.hosts, summary: loaded.pool.summary ?? summarizeHostPool(loaded.pool, loaded.hosts) });
 });
 
 app.get(

@@ -2,9 +2,9 @@
  * Job-Store Implementation mit Drizzle
  */
 
-import { eq, and, or, desc, lt, inArray, sql } from 'drizzle-orm';
+import { eq, and, or, desc, lt, like, inArray, sql, type SQL } from 'drizzle-orm';
 import { db, jobs, mspUsers } from '../db/index.js';
-import { targetCountOf, type JobStore } from '@zerostress/core';
+import { JOB_PAYLOAD_FILTER_KEYS, targetCountOf, type JobListOptions, type JobStore } from '@zerostress/core';
 import type { Job, JobId, TenantId, JobStatus } from '@zerostress/types';
 
 type JobRow = typeof jobs.$inferSelect;
@@ -62,13 +62,17 @@ export class DrizzleJobStore implements JobStore {
     return job;
   }
 
-  async findByTenant(
-    tenantId: TenantId,
-    options?: { limit?: number; status?: JobStatus }
-  ): Promise<Job[]> {
-    const conditions = [eq(jobs.tenantId, tenantId)];
+  async findByTenant(tenantId: TenantId, options?: JobListOptions): Promise<Job[]> {
+    const conditions: SQL[] = [eq(jobs.tenantId, tenantId)];
     if (options?.status) {
       conditions.push(eq(jobs.status, options.status));
+    }
+    if (options?.type) conditions.push(eq(jobs.type, options.type));
+    if (options?.typePrefix) conditions.push(like(jobs.type, `${options.typePrefix.replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`));
+    // Payload-Filter nur fuer bekannte Schluessel; Schluessel und Wert gehen als Parameter an Postgres
+    for (const key of JOB_PAYLOAD_FILTER_KEYS) {
+      const value = options?.payload?.[key];
+      if (value) conditions.push(sql`${jobs.payload} ->> ${key} = ${value}`);
     }
 
     const rows = await db.query.jobs.findMany({

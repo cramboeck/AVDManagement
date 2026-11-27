@@ -143,6 +143,31 @@ function sessionPath(hostPoolResourceId: string, sessionHostName: string, sessio
   return `${hostPath(hostPoolResourceId, sessionHostName)}/userSessions/${encodeURIComponent(sessionHostShortName(sessionId))}`;
 }
 
+/** Kennzahlen eines Hostpools aus seinen Hosts (rein, ohne Netzwerk). */
+export function summarizeHostPool(hostPool: SyncedHostPool, sessionHosts: SyncedSessionHost[]): HostPoolSummary {
+  const availableHosts = sessionHosts.filter((h) => h.status === 'Available').length;
+  const unavailableHosts = sessionHosts.filter((h) => h.status === 'Unavailable' || h.status === 'Disconnected').length;
+  const shutdownHosts = sessionHosts.filter((h) => h.status === 'Shutdown').length;
+  const hostsInDrainMode = sessionHosts.filter((h) => !h.allowNewSession).length;
+  const totalSessions = sessionHosts.reduce((sum, h) => sum + (h.sessions ?? 0), 0);
+  const maxSessions = availableHosts * hostPool.maxSessionLimit;
+  const utilizationPercent = maxSessions > 0 ? Math.round((totalSessions / maxSessions) * 100) : 0;
+  return {
+    id: hostPool.id,
+    name: hostPool.name,
+    friendlyName: hostPool.friendlyName,
+    hostPoolType: hostPool.hostPoolType,
+    totalHosts: sessionHosts.length,
+    availableHosts,
+    unavailableHosts,
+    shutdownHosts,
+    hostsInDrainMode,
+    totalSessions,
+    maxSessions,
+    utilizationPercent,
+  };
+}
+
 export class AvdProvider extends BaseResourceProvider {
   readonly name = 'avd';
   readonly requiredScopes = ['https://management.azure.com/.default'];
@@ -184,7 +209,11 @@ export class AvdProvider extends BaseResourceProvider {
     const { pools, warnings } = await this.collectHostPools(ctx);
 
     return {
-      items: pools.map(({ pool, hosts }) => this.mapAzureHostPoolToSynced(ctx, pool, hosts.length, hosts.reduce((sum, h) => sum + (h.properties.sessions ?? 0), 0))),
+      items: pools.map(({ pool, hosts }) => {
+        const synced = this.mapAzureHostPoolToSynced(ctx, pool, hosts.length, hosts.reduce((sum, h) => sum + (h.properties.sessions ?? 0), 0));
+        // Kennzahlen gleich mitliefern: die Liste braucht keine Abfrage je Karte mehr
+        return { ...synced, summary: summarizeHostPool(synced, hosts.map((h) => this.mapAzureSessionHostToSynced(ctx, h, synced.id))) };
+      }),
       nextPageToken: null,
       warnings,
     };
@@ -582,36 +611,27 @@ export class AvdProvider extends BaseResourceProvider {
     ctx: ProviderContext,
     hostPoolResourceId: string
   ): Promise<HostPoolSummary | null> {
-    const hostPool = await this.getHostPool(ctx, hostPoolResourceId);
-    if (!hostPool) return null;
+    const loaded = await this.getHostPoolWithHosts(ctx, hostPoolResourceId);
+    return loaded ? summarizeHostPool(loaded.pool, loaded.hosts) : null;
+  }
 
-    const sessionHosts = await this.listSessionHosts(ctx, hostPoolResourceId);
-
-    const availableHosts = sessionHosts.filter((h) => h.status === 'Available').length;
-    const unavailableHosts = sessionHosts.filter(
-      (h) => h.status === 'Unavailable' || h.status === 'Disconnected'
-    ).length;
-    const shutdownHosts = sessionHosts.filter((h) => h.status === 'Shutdown').length;
-    const hostsInDrainMode = sessionHosts.filter((h) => !h.allowNewSession).length;
-    const totalSessions = sessionHosts.reduce((sum, h) => sum + h.sessions, 0);
-    const maxSessions = availableHosts * hostPool.maxSessionLimit;
-    const utilizationPercent =
-      maxSessions > 0 ? Math.round((totalSessions / maxSessions) * 100) : 0;
-
-    return {
-      id: hostPool.id,
-      name: hostPool.name,
-      friendlyName: hostPool.friendlyName,
-      hostPoolType: hostPool.hostPoolType,
-      totalHosts: sessionHosts.length,
-      availableHosts,
-      unavailableHosts,
-      shutdownHosts,
-      hostsInDrainMode,
-      totalSessions,
-      maxSessions,
-      utilizationPercent,
-    };
+  /**
+   * Pool und Hosts mit genau zwei ARM-Aufrufen (Pool, Hostliste). null bei 404.
+   */
+  async getHostPoolWithHosts(ctx: ProviderContext, hostPoolResourceId: string): Promise<{ pool: SyncedHostPool; hosts: SyncedSessionHost[] } | null> {
+    this.validateContext(ctx);
+    const tenantId = ctx.tenantId as string;
+    let pool: AzureHostPool;
+    try {
+      pool = await this.armClient.get<AzureHostPool>(tenantId, hostPoolResourceId, { apiVersion: AVD_API_VERSION });
+    } catch (error) {
+      if ((error as { statusCode?: number }).statusCode === 404) return null;
+      throw error;
+    }
+    const rawHosts = await this.listSessionHostsForPool(ctx, pool.id);
+    const synced = this.mapAzureHostPoolToSynced(ctx, pool, rawHosts.length, rawHosts.reduce((sum, h) => sum + (h.properties.sessions ?? 0), 0));
+    const hosts = rawHosts.map((h) => this.mapAzureSessionHostToSynced(ctx, h, synced.id));
+    return { pool: { ...synced, summary: summarizeHostPool(synced, hosts) }, hosts };
   }
 
   private mapAzureHostPoolToSynced(

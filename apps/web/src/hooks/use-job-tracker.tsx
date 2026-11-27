@@ -2,7 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { api } from '@/lib/api';
+import { api, ApiError } from '@/lib/api';
 import type { Job, JobStatus } from '@zerostress/types';
 
 /**
@@ -30,7 +30,10 @@ interface JobTrackerValue {
 }
 
 const STORAGE_KEY = 'zsc.tracked-jobs';
-const POLL_MS = 3000;
+// Laufende Jobs eng, wartende Freigaben und unsichtbare Tabs gemaechlich
+const POLL_ACTIVE_MS = 3000;
+const POLL_WAITING_MS = 20000;
+const POLL_HIDDEN_MS = 15000;
 const ACTIVE: JobStatus[] = ['queued', 'running', 'pending_second_approval', 'pending_approval'];
 
 const JobTrackerContext = createContext<JobTrackerValue | null>(null);
@@ -108,7 +111,11 @@ export function JobTrackerProvider({ children }: { children: ReactNode }) {
           try {
             const fresh = await api.get<Job>(`/tenants/${j.tenantId}/jobs/${j.id}`);
             return { id: j.id, status: fresh.status, error: fresh.error ?? null };
-          } catch {
+          } catch (error) {
+            // Job weg oder kein Zugriff mehr: nicht endlos weiterfragen
+            if (error instanceof ApiError && (error.status === 404 || error.status === 403)) {
+              return { id: j.id, status: 'failed' as JobStatus, error: 'Job ist nicht mehr abrufbar (geloescht oder kein Zugriff)' };
+            }
             return null;
           }
         })
@@ -139,10 +146,20 @@ export function JobTrackerProvider({ children }: { children: ReactNode }) {
       }
     };
     void tick();
-    const handle = setInterval(() => void tick(), POLL_MS);
+    const running = active.some((j) => j.status === 'queued' || j.status === 'running');
+    let handle: ReturnType<typeof setTimeout> | undefined;
+    const schedule = () => {
+      const delay = document.hidden ? POLL_HIDDEN_MS : running ? POLL_ACTIVE_MS : POLL_WAITING_MS;
+      handle = setTimeout(() => {
+        void tick().finally(() => {
+          if (!cancelled) schedule();
+        });
+      }, delay);
+    };
+    schedule();
     return () => {
       cancelled = true;
-      clearInterval(handle);
+      if (handle) clearTimeout(handle);
     };
   }, [active, queryClient]);
 

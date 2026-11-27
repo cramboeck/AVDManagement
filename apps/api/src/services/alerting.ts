@@ -51,15 +51,32 @@ export function toAlert(row: AlertRow): Alert {
  * Befunde ablegen: neue Fingerabdruecke anlegen, bekannte fortschreiben.
  * Rueckgabe: die neu angelegten Alerts (fuer die Benachrichtigung).
  */
+const SEVERITY_RANK: Record<string, number> = { low: 1, medium: 2, high: 3 };
+
+/** Schweregrad steigt mit, faellt aber nicht still zurueck. */
+export function higherSeverity(a: string, b: string): string {
+  return (SEVERITY_RANK[b] ?? 0) > (SEVERITY_RANK[a] ?? 0) ? b : a;
+}
+
 export async function storeFindings(mspId: string, tenantId: string, findings: AnomalyFinding[]): Promise<Alert[]> {
   const created: Alert[] = [];
   for (const f of findings) {
     const existing = await db.query.alerts.findFirst({ where: and(eq(alerts.tenantId, tenantId), eq(alerts.fingerprint, f.fingerprint)) });
     if (existing) {
-      if (existing.status !== 'resolved') {
+      const severity = higherSeverity(existing.severity, f.severity);
+      const seenAfterClose = existing.status === 'resolved' && (!existing.acknowledgedAt || new Date(f.lastSeenAt).getTime() > existing.acknowledgedAt.getTime());
+      if (seenAfterClose) {
+        // Erneut aufgetreten, nachdem jemand erledigt geklickt hat: wieder oeffnen und erneut melden
+        const [reopened] = await db
+          .update(alerts)
+          .set({ status: 'open', severity, lastSeenAt: new Date(f.lastSeenAt), occurrences: existing.occurrences + 1, summary: f.summary, evidence: f.evidence, notifiedAt: null, acknowledgedBy: null, acknowledgedAt: null })
+          .where(eq(alerts.id, existing.id))
+          .returning();
+        if (reopened) created.push(toAlert(reopened));
+      } else if (existing.status !== 'resolved') {
         await db
           .update(alerts)
-          .set({ lastSeenAt: new Date(f.lastSeenAt), occurrences: Math.max(existing.occurrences, f.occurrences), summary: f.summary, evidence: f.evidence })
+          .set({ severity, lastSeenAt: new Date(f.lastSeenAt), occurrences: Math.max(existing.occurrences, f.occurrences), summary: f.summary, evidence: f.evidence })
           .where(eq(alerts.id, existing.id));
       }
       continue;

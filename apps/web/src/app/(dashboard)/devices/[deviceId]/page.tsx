@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import clsx from 'clsx';
 import { useTenant } from '@/hooks/use-tenant';
+import { useJobs } from '@/hooks/use-jobs';
 import { api } from '@/lib/api';
 import { LoadingPage, LoadingTable } from '@/components/ui/loading';
 import { ErrorState } from '@/components/ui/error-state';
@@ -634,15 +635,11 @@ function VulnerabilityList({ vulnerabilities }: { vulnerabilities: DeviceVulnera
 }
 
 function JobsTab({ tenantId, managedDeviceId }: { tenantId: string; managedDeviceId: string | null }) {
-  const jobsQuery = useQuery({
-    queryKey: ['jobs', tenantId],
-    queryFn: () => api.get<{ items: Job[] }>(`/tenants/${tenantId}/jobs`),
-    refetchInterval: 5000,
-  });
+  const jobsQuery = useJobs(tenantId, { managedDeviceId: managedDeviceId ?? undefined, limit: 100 }, { enabled: !!managedDeviceId });
 
-  if (jobsQuery.isLoading) return <LoadingTable rows={3} />;
+  if (jobsQuery.isLoading && managedDeviceId) return <LoadingTable rows={3} />;
   if (jobsQuery.error) return <ErrorState error={jobsQuery.error as Error} onRetry={jobsQuery.refetch} />;
-  const jobs = (jobsQuery.data?.items ?? []).filter((job) => managedDeviceId && job.payload.managedDeviceId === managedDeviceId);
+  const jobs = managedDeviceId ? (jobsQuery.data?.items ?? []) : [];
   if (jobs.length === 0) return <EmptyState title="Keine Jobs fuer dieses Geraet" />;
 
   return (

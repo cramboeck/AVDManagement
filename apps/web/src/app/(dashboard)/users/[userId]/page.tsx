@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import clsx from 'clsx';
 import { useTenant } from '@/hooks/use-tenant';
+import { useJobs } from '@/hooks/use-jobs';
 import { api } from '@/lib/api';
 import { LoadingPage, LoadingTable, LoadingSpinner } from '@/components/ui/loading';
 import { ErrorState } from '@/components/ui/error-state';
@@ -547,15 +548,11 @@ function HistoryTab({ base, tenantId, userId }: { base: string; tenantId: string
 }
 
 function JobsTab({ tenantId, microsoftId }: { tenantId: string; microsoftId: string }) {
-  const jobsQuery = useQuery({
-    queryKey: ['jobs', tenantId],
-    queryFn: () => api.get<{ items: Job[] }>(`/tenants/${tenantId}/jobs`),
-    refetchInterval: 5000,
-  });
+  const jobsQuery = useJobs(tenantId, { userId: microsoftId, limit: 100 });
 
   if (jobsQuery.isLoading) return <LoadingTable rows={3} />;
   if (jobsQuery.error) return <ErrorState error={jobsQuery.error as Error} onRetry={jobsQuery.refetch} />;
-  const jobs = (jobsQuery.data?.items ?? []).filter((job) => job.payload.userId === microsoftId);
+  const jobs = jobsQuery.data?.items ?? [];
   if (jobs.length === 0) return <EmptyState title="Keine Jobs fuer diesen Benutzer" />;
 
   return (

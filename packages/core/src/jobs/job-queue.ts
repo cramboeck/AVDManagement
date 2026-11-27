@@ -48,8 +48,20 @@ export interface JobStore {
   create(job: Job): Promise<void>;
   update(id: JobId, updates: Partial<Job>): Promise<void>;
   findById(id: JobId): Promise<Job | null>;
-  findByTenant(tenantId: TenantId, options?: { limit?: number; status?: JobStatus }): Promise<Job[]>;
+  findByTenant(tenantId: TenantId, options?: JobListOptions): Promise<Job[]>;
 }
+
+/** Filter fuer die Jobliste; Payload-Felder nur aus einer festen Liste (siehe JOB_PAYLOAD_FILTER_KEYS). */
+export interface JobListOptions {
+  limit?: number;
+  status?: JobStatus;
+  type?: string;
+  typePrefix?: string;
+  payload?: Partial<Record<JobPayloadFilterKey, string>>;
+}
+
+export const JOB_PAYLOAD_FILTER_KEYS = ['managedDeviceId', 'userId', 'appId', 'scriptId', 'groupId', 'packageId'] as const;
+export type JobPayloadFilterKey = (typeof JOB_PAYLOAD_FILTER_KEYS)[number];
 
 export interface AuditLogger {
   log(entry: {
@@ -342,7 +354,7 @@ export class JobQueue {
    */
   async listJobs(
     tenantId: TenantId,
-    options?: { limit?: number; status?: JobStatus }
+    options?: JobListOptions
   ): Promise<Job[]> {
     return this.jobStore.findByTenant(tenantId, options);
   }

@@ -4,6 +4,7 @@
 
 import { randomUUID } from 'node:crypto';
 import { Hono } from 'hono';
+import { compareVersions, mapWithLimit } from '@zerostress/core';
 import { validate } from '../middleware/validate.js';
 import { z } from 'zod';
 import { authMiddleware, requireRole } from '../middleware/auth.js';
@@ -77,6 +78,32 @@ app.delete('/blocklist/:ruleId', requireRole('engineer'), async (c) => {
     correlationId: randomUUID() as CorrelationId,
   });
   return c.json({ removed: true });
+});
+
+// Geraete mehrerer Versionen in einem Aufruf (Sammelaktion), serverseitig mit begrenzter Parallelitaet.
+// Mit latest markiert die API veraltete Installationen, die Oberflaeche vergleicht keine Versionen selbst.
+app.get('/devices', requireConnectedTenant, async (c) => {
+  const tenant = c.get('tenant');
+  const ids = (c.req.query('ids') ?? '').split(',').map((x) => x.trim()).filter(Boolean);
+  const latest = c.req.query('latest') || null;
+  if (ids.length === 0 || ids.length > 50 || ids.some((id) => !/^[A-Za-z0-9-]{8,64}$/.test(id))) {
+    return c.json({ type: 'https://api.zerostress.io/problems/validation', title: 'ids ungueltig (1 bis 50 App-Ids)', status: 400 }, 400);
+  }
+  const versionOf = new Map((c.req.query('versions') ?? '').split(',').map((pair) => pair.split('=') as [string, string]).filter((p) => p.length === 2));
+  const results = await mapWithLimit(ids, 4, async (id) => ({ id, result: await listSoftwareDevices(tenant, id) }));
+  const unavailable = results.find((r) => !r.result.available)?.result ?? null;
+  const devices = new Map<string, Record<string, unknown>>();
+  for (const { id, result } of results) {
+    if (!result.available) continue;
+    const version = versionOf.get(id) ? decodeURIComponent(versionOf.get(id) as string) : null;
+    for (const d of result.data) {
+      if (devices.has(d.managedDeviceId)) continue;
+      const outdated = latest && version ? compareVersions(version, latest) < 0 : null;
+      devices.set(d.managedDeviceId, { ...d, version, outdated });
+    }
+  }
+  const sorted = Array.from(devices.values()).sort((a, b) => String(a.deviceName).localeCompare(String(b.deviceName), 'de'));
+  return c.json({ devices: sorted, unavailable: unavailable && !unavailable.available ? unavailable : null });
 });
 
 // Geraete, auf denen eine erkannte App (Version) installiert ist

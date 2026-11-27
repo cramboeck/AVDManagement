@@ -5,7 +5,7 @@
 import { Hono } from 'hono';
 import { validate } from '../middleware/validate.js';
 import { z } from 'zod';
-import { getLibraryScript } from '@zerostress/core';
+import { getLibraryScript, JOB_PAYLOAD_FILTER_KEYS, type JobPayloadFilterKey } from '@zerostress/core';
 import { authMiddleware, requireRole } from '../middleware/auth.js';
 import { tenantContextMiddleware, requireConnectedTenant } from '../middleware/tenant-context.js';
 import { randomUUID } from 'node:crypto';
@@ -39,15 +39,15 @@ app.get('/', async (c) => {
   const queue = getJobQueue();
 
   const status = c.req.query('status') as JobStatus | undefined;
-  const limit = parseInt(c.req.query('limit') ?? '50', 10);
-
-  let jobs: Job[];
-  if (tenant) {
-    jobs = await queue.listJobs(tenant.id, { status, limit });
-  } else {
-    // Alle Jobs fuer MSP (TODO: separater Endpunkt)
-    jobs = [];
+  const requested = parseInt(c.req.query('limit') ?? '50', 10);
+  const limit = Number.isFinite(requested) ? Math.min(Math.max(requested, 1), 200) : 50;
+  // Filter serverseitig: sonst verschwinden Jobs eines Geraets hinter den neuesten 50 des Tenants
+  const payload: Partial<Record<JobPayloadFilterKey, string>> = {};
+  for (const key of JOB_PAYLOAD_FILTER_KEYS) {
+    const value = c.req.query(key);
+    if (value) payload[key] = value;
   }
+  const jobs: Job[] = await queue.listJobs(tenant.id, { status, limit, type: c.req.query('type') || undefined, typePrefix: c.req.query('typePrefix') || undefined, payload });
 
   return c.json({ items: jobs });
 });

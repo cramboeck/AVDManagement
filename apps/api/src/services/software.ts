@@ -30,11 +30,15 @@ async function packageRefs(mspId: string): Promise<CatalogPackageRef[]> {
     .map((p) => ({ id: p.id, name: p.manifest.name, wingetId: p.manifest.wingetPackageIdentifier as string, version: p.manifest.version, latestVersion: p.latestVersion }));
 }
 
+// Laeuft gerade ein Nachladen, startet kein zweites
+let refreshing: Promise<void> | null = null;
+
 /**
- * Katalogversionen fuer die gegebenen Ids aus dem Cache; abgelaufene werden
- * in kleinen Portionen nachgeladen. Ratenlimit bricht den Nachlauf ab.
+ * Katalogversionen aus dem Cache. Abgelaufene werden standardmaessig im
+ * Hintergrund nachgeladen, damit die Seite nicht auf GitHub wartet; mit
+ * inline: true (Hintergrund-Jobs) wird gewartet.
  */
-export async function latestVersionsFor(ids: string[]): Promise<Map<string, string | null>> {
+export async function latestVersionsFor(ids: string[], options: { inline?: boolean } = {}): Promise<Map<string, string | null>> {
   const unique = Array.from(new Set(ids));
   const map = new Map<string, string | null>();
   if (unique.length === 0) return map;
@@ -46,6 +50,22 @@ export async function latestVersionsFor(ids: string[]): Promise<Map<string, stri
     if (row) map.set(id, row.latestVersion);
     if (!row || now - row.checkedAt.getTime() > VERSION_TTL_MS) stale.push(id);
   }
+  if (stale.length === 0) return map;
+  if (!options.inline) {
+    if (!refreshing) {
+      refreshing = refreshVersions(stale, new Map(map))
+        .catch((error: Error) => console.error('winget version refresh failed:', error.message))
+        .finally(() => {
+          refreshing = null;
+        });
+    }
+    return map;
+  }
+  await refreshVersions(stale, map);
+  return map;
+}
+
+async function refreshVersions(stale: string[], map: Map<string, string | null>): Promise<void> {
   const client = getWingetClient();
   for (const id of stale.slice(0, VERSION_REFRESH_PER_CALL)) {
     try {
@@ -64,7 +84,6 @@ export async function latestVersionsFor(ids: string[]): Promise<Map<string, stri
         .onConflictDoUpdate({ target: wingetVersions.packageId, set: { checkedAt: new Date() } });
     }
   }
-  return map;
 }
 
 export async function listBlockRules(mspId: string): Promise<SoftwareBlockRule[]> {

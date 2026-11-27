@@ -1,7 +1,8 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import clsx from 'clsx';
 import { useTenant } from '@/hooks/use-tenant';
 import { api } from '@/lib/api';
@@ -32,6 +33,8 @@ function reasonLabel(reason: string | null): string {
 export default function DashboardPage() {
   const { activeTenant, isLoading, error, refetch, tenants, setActiveTenantId } = useTenant();
 
+  const queryClient = useQueryClient();
+  const [refreshing, setRefreshing] = useState(false);
   const tenantQuery = useQuery({
     queryKey: ['dashboard', activeTenant?.id],
     queryFn: () => api.get<TenantDashboard>(`/tenants/${activeTenant!.id}/dashboard`),
@@ -80,11 +83,20 @@ export default function DashboardPage() {
             </span>
           )}
           <button
-            onClick={() => tenantQuery.refetch()}
-            disabled={tenantQuery.isFetching}
-            className="rounded-md border px-3 py-1.5 text-sm hover:bg-accent disabled:opacity-50"
+            onClick={async () => {
+              // Server-Zwischenspeicher umgehen: frischer Stand direkt von Microsoft
+              setRefreshing(true);
+              try {
+                const fresh = await api.get<TenantDashboard>(`/tenants/${activeTenant.id}/dashboard?refresh=true`);
+                queryClient.setQueryData(['dashboard', activeTenant.id], fresh);
+              } finally {
+                setRefreshing(false);
+              }
+            }}
+            disabled={refreshing || tenantQuery.isFetching}
+            className="rounded-md border px-3 py-1.5 text-sm hover:bg-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50"
           >
-            {tenantQuery.isFetching ? 'Aktualisiere...' : 'Aktualisieren'}
+            {refreshing || tenantQuery.isFetching ? 'Aktualisiere...' : 'Aktualisieren'}
           </button>
         </div>
       </div>

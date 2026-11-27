@@ -9,9 +9,12 @@ import { authMiddleware } from '../middleware/auth.js';
 import { tenantContextMiddleware } from '../middleware/tenant-context.js';
 import { buildTenantDashboard, mapWithConcurrency } from '../services/dashboard.js';
 import { toManagedTenant } from '../services/tenant-mapper.js';
+import { DashboardCache } from '../services/dashboard-cache.js';
 import { tenantFilter } from '../services/access.js';
 
-const TENANT_CONCURRENCY = 3;
+const TENANT_CONCURRENCY = 4;
+// Ein Speicher fuer beide Sichten: das Tenant-Dashboard nutzt den Stand der MSP-Sicht mit
+const cache = new DashboardCache(buildTenantDashboard);
 
 const tenantDashboardRouter = new Hono();
 tenantDashboardRouter.use('*', authMiddleware);
@@ -19,7 +22,7 @@ tenantDashboardRouter.use('*', tenantContextMiddleware);
 
 tenantDashboardRouter.get('/', async (c) => {
   const tenant = c.get('tenant');
-  return c.json(await buildTenantDashboard(tenant));
+  return c.json(await cache.get(tenant, { refresh: c.req.query('refresh') === 'true' }));
 });
 
 const dashboardRouter = new Hono();
@@ -36,7 +39,8 @@ dashboardRouter.get('/', async (c) => {
   const visible = await tenantFilter(auth);
   const rows = allRows.filter((t) => visible === null || visible.includes(t.id));
 
-  const items = await mapWithConcurrency(rows.map(toManagedTenant), TENANT_CONCURRENCY, buildTenantDashboard);
+  const refresh = c.req.query('refresh') === 'true';
+  const items = await mapWithConcurrency(rows.map(toManagedTenant), TENANT_CONCURRENCY, (tenant) => cache.get(tenant, { refresh }));
   items.sort(
     (a, b) => b.attention - a.attention || a.tenant.displayName.localeCompare(b.tenant.displayName, 'de')
   );

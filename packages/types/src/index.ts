@@ -2150,6 +2150,8 @@ export type UserSessionState =
 
 // Host Pool (gespiegelt aus Azure)
 export interface SyncedHostPool {
+  // Kennzahlen aus den mitgeladenen Hosts (Liste); fehlt bei aelteren Aufrufern
+  summary?: HostPoolSummary;
   id: HostPoolId;
   tenantId: TenantId;
   mspId: MspId;

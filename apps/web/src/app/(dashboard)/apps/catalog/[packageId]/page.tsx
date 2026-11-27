@@ -31,7 +31,7 @@ export default function PackageDetailPage({ params }: { params: { packageId: str
   const artifactInput = useRef<HTMLInputElement>(null);
   const installerInput = useRef<HTMLInputElement>(null);
 
-  const query = useQuery({ queryKey: ['package', packageId], queryFn: () => api.get<AppPackage>(`/packages/${packageId}`), refetchInterval: (q) => (q.state.data && ['queued', 'building', 'draft'].includes(q.state.data.status) ? 5000 : q.state.data?.deployments.some((d) => d.status === 'publishing' || d.status === 'pending') ? 5000 : false) });
+  const query = useQuery({ queryKey: ['package', packageId], queryFn: () => api.get<AppPackage>(`/packages/${packageId}`), refetchInterval: (q) => (q.state.data && ['queued', 'building'].includes(q.state.data.status) ? 5000 : q.state.data?.deployments.some((d) => d.status === 'publishing' || d.status === 'pending') ? 5000 : false) });
 
   const builds = useQuery({
     queryKey: ['package-builds', packageId],

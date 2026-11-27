@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import clsx from 'clsx';
+import { useJobs } from '@/hooks/use-jobs';
 import { api } from '@/lib/api';
 import { LoadingTable } from '@/components/ui/loading';
 import { ErrorState } from '@/components/ui/error-state';
@@ -31,12 +32,7 @@ export function ScriptsTab({ tenantId, device }: { tenantId: string; device: Dev
     staleTime: 5 * 60 * 1000,
   });
 
-  const jobsQuery = useQuery({
-    queryKey: ['jobs', tenantId],
-    queryFn: () => api.get<{ items: Job[] }>(`/tenants/${tenantId}/jobs?limit=100`),
-    refetchInterval: 5000,
-    enabled: !!managedDeviceId,
-  });
+  const jobsQuery = useJobs(tenantId, { type: 'device.run-script', managedDeviceId: managedDeviceId ?? undefined, limit: 100 }, { enabled: !!managedDeviceId });
 
   if (!managedDeviceId) {
     return (

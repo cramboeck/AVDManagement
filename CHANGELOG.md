@@ -254,6 +254,28 @@ Alle nennenswerten Aenderungen an ZeroStress Cockpit. Format angelehnt an
 
 ### Geaendert
 
+- Joblisten serverseitig gefiltert (Typ, Typ-Praefix, Geraet, Benutzer,
+  App, Skript, Gruppe, Paket; `limit` hoechstens 200). Job-Historien je
+  Geraet, Benutzer und App zeigen damit auch aeltere Jobs; jede Ansicht hat
+  einen eigenen Cache-Schluessel und fragt nur nach, solange ein Job laeuft.
+- Job-Benachrichtigungen fragen wartende Freigaben nur noch alle 20 s ab,
+  hoeren bei 404/403 auf und behalten den Tenant beim Tenant-Wechsel.
+- Paketseite fragt bei Entwuerfen nicht mehr endlos nach; Bereitstellungen
+  eines abgebrochenen oder fehlgeschlagenen Jobs zeigen "fehlgeschlagen"
+  statt "ausstehend".
+- AVD: Kennzahlen je Hostpool kommen mit der Liste bzw. der Hostliste;
+  keine Abfrage je Karte und Takt mehr, die Detailseite laedt Pool und
+  Hosts mit zwei ARM-Aufrufen.
+- Dashboards je Tenant werden 5 Minuten zwischengespeichert (danach bis 30
+  Minuten alter Stand mit Erneuerung im Hintergrund); "Aktualisieren" holt
+  einen frischen Stand.
+- Unbekannte Geraete-Ids loesen hoechstens alle 5 Minuten einen Abgleich
+  aus; winget-Versionen laedt die Software-Seite im Hintergrund nach.
+- Sammelaktion winget: ein API-Aufruf fuer alle Versionen, vorgewaehlt
+  werden beim Aktualisieren nur veraltete Installationen.
+- Sicherheitslage nennt fehlende Rechte, Drosselung und Zeitueberschreitung
+  statt pauschal "nicht in Defender". Ein erledigter Alert geht wieder auf,
+  wenn derselbe Befund danach erneut auftritt; der Schweregrad steigt mit.
 - Gedrosselte Teilanfragen in `$batch` werden wiederholt (bis drei Runden,
   Retry-After): der Weiterleitungs-Scan ueberspringt keine Postfaecher mehr
   still, Gruppen zeigen seltener "Mitglieder: -". Neuer

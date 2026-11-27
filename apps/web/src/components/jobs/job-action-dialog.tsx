@@ -41,6 +41,8 @@ export function JobActionDialog({
   onCompleted,
 }: JobActionDialogProps) {
   const { activeTenant } = useTenant();
+  // Tenant beim Oeffnen festhalten: ein Tenant-Wechsel waehrend des Jobs darf die Abfrage nicht umleiten
+  const [tenantId] = useState(() => activeTenant?.id ?? null);
   const { track } = useJobTracker();
   const queryClient = useQueryClient();
   const [jobId, setJobId] = useState<string | null>(null);
@@ -67,9 +69,9 @@ export function JobActionDialog({
   }, [createJob]);
 
   const jobQuery = useQuery({
-    queryKey: ['job', activeTenant?.id, jobId],
-    queryFn: () => api.get<Job>(`/tenants/${activeTenant!.id}/jobs/${jobId}`),
-    enabled: !!activeTenant && !!jobId,
+    queryKey: ['job', tenantId, jobId],
+    queryFn: () => api.get<Job>(`/tenants/${tenantId}/jobs/${jobId}`),
+    enabled: !!tenantId && !!jobId,
     refetchInterval: (query) => {
       const status = query.state.data?.status;
       return status === 'queued' || status === 'running' ? 1500 : false;
@@ -101,7 +103,7 @@ export function JobActionDialog({
 
   const cancel = async () => {
     if (jobId && job?.status === 'pending_approval') {
-      await api.post(`/tenants/${activeTenant!.id}/jobs/${jobId}/cancel`).catch(() => undefined);
+      await api.post(`/tenants/${tenantId}/jobs/${jobId}/cancel`).catch(() => undefined);
       queryClient.invalidateQueries({ queryKey: ['jobs'] });
     }
     onClose();
@@ -121,14 +123,14 @@ export function JobActionDialog({
     setIsApproving(true);
     setError(null);
     try {
-      const approved = await api.post<Job>(`/tenants/${activeTenant!.id}/jobs/${jobId}/approve`);
+      const approved = await api.post<Job>(`/tenants/${tenantId}/jobs/${jobId}/approve`);
       setPhase(approved.status === 'pending_second_approval' ? 'second' : 'running');
-      queryClient.invalidateQueries({ queryKey: ['job', activeTenant?.id, jobId] });
+      queryClient.invalidateQueries({ queryKey: ['job', tenantId, jobId] });
     } catch (err) {
       setError(err as Error);
       // Abgelaufene Vorschau: die API hat sie neu erzeugt, also den Job neu laden und erneut zeigen
       if (err instanceof ApiError && err.problem.code === 'PREVIEW_EXPIRED') {
-        queryClient.invalidateQueries({ queryKey: ['job', activeTenant?.id, jobId] });
+        queryClient.invalidateQueries({ queryKey: ['job', tenantId, jobId] });
       }
     } finally {
       setIsApproving(false);
@@ -248,7 +250,7 @@ export function JobActionDialog({
             <button
               onClick={() => {
                 // Der Dialog geht zu, der Job laeuft weiter; Toast oben rechts meldet das Ergebnis
-                track({ id: jobId, tenantId: activeTenant!.id, title, status: job.status });
+                track({ id: jobId, tenantId: tenantId!, title, status: job.status });
                 onClose();
               }}
               className="rounded-md border px-4 py-2 text-sm hover:bg-accent"

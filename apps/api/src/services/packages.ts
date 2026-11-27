@@ -6,7 +6,7 @@ import { Readable } from 'node:stream';
 import { and, desc, eq, inArray } from 'drizzle-orm';
 import { detectionKeyPath, normalizeManifest, packageIdentifier, usesWrapper } from '@zerostress/core';
 import type { AppDeployment, AppManifest, AppPackage, DeploymentStatus, PackageStatus, StoredFile, TenantId } from '@zerostress/types';
-import { db, appPackages, appDeployments, managedTenants, mspUsers } from '../db/index.js';
+import { db, appPackages, appDeployments, managedTenants, mspUsers, jobs } from '../db/index.js';
 import { getArtifactStore } from './artifact-store.js';
 
 type PackageRow = typeof appPackages.$inferSelect;
@@ -69,13 +69,20 @@ async function loadDeployments(packageIds: string[]): Promise<Map<string, AppDep
   const map = new Map<string, AppDeployment[]>();
   if (packageIds.length === 0) return map;
   const rows = await db
-    .select({ deployment: appDeployments, tenantName: managedTenants.displayName })
+    .select({ deployment: appDeployments, tenantName: managedTenants.displayName, jobStatus: jobs.status, jobError: jobs.error })
     .from(appDeployments)
     .innerJoin(managedTenants, eq(managedTenants.id, appDeployments.tenantId))
+    .leftJoin(jobs, eq(jobs.id, appDeployments.jobId))
     .where(inArray(appDeployments.packageId, packageIds));
   for (const r of rows) {
     const list = map.get(r.deployment.packageId) ?? [];
-    list.push(toDeployment(r.deployment, r.tenantName));
+    const deployment = toDeployment(r.deployment, r.tenantName);
+    // Job abgebrochen, abgelehnt oder vor dem Start gescheitert: nicht ewig "ausstehend" zeigen
+    if ((deployment.status === 'pending' || deployment.status === 'publishing') && (r.jobStatus === 'cancelled' || r.jobStatus === 'failed')) {
+      deployment.status = 'failed';
+      deployment.error = deployment.error ?? (r.jobStatus === 'cancelled' ? 'Job wurde abgebrochen oder nicht freigegeben' : (typeof r.jobError === 'string' ? r.jobError : 'Job fehlgeschlagen'));
+    }
+    list.push(deployment);
     map.set(r.deployment.packageId, list);
   }
   return map;

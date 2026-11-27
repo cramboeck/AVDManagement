@@ -33,18 +33,22 @@ export function BulkWingetDialog({ tenantId, row, mode, versionId, onClose, onCo
 
   const deviceQueries = useQuery({
     queryKey: ['software-devices', tenantId, targetVersions.map((v) => v.id).join(',')],
-    queryFn: async () => {
-      const lists = await Promise.all(targetVersions.map((v) => api.get<CapabilityResult<BulkWingetDevice[]>>(`/tenants/${tenantId}/software/${encodeURIComponent(v.id)}/devices`).then((r) => ({ version: v.version, result: r }))));
-      const unavailable = lists.find((l) => !l.result.available)?.result;
-      const devices = new Map<string, BulkWingetDevice & { version: string | null }>();
-      for (const l of lists) if (l.result.available) for (const d of l.result.data) if (!devices.has(d.managedDeviceId)) devices.set(d.managedDeviceId, { ...d, version: l.version });
-      return { devices: Array.from(devices.values()).sort((a, b) => a.deviceName.localeCompare(b.deviceName)), unavailable: unavailable && !unavailable.available ? unavailable : null };
+    // Ein Aufruf fuer alle Versionen; die API laedt sie mit begrenzter Parallelitaet und markiert veraltete
+    queryFn: () => {
+      const params = new URLSearchParams({ ids: targetVersions.map((v) => v.id).join(',') });
+      params.set('versions', targetVersions.map((v) => `${v.id}=${encodeURIComponent(v.version ?? '')}`).join(','));
+      if (row.latestVersion) params.set('latest', row.latestVersion);
+      return api.get<{ devices: Array<BulkWingetDevice & { version: string | null; outdated: boolean | null }>; unavailable: Exclude<CapabilityResult<never>, { available: true }> | null }>(`/tenants/${tenantId}/software/devices?${params}`);
     },
     staleTime: 5 * 60 * 1000,
   });
 
   useEffect(() => {
-    if (deviceQueries.data && selected.size === 0) setSelected(new Set(deviceQueries.data.devices.slice(0, BULK_MAX).map((d) => d.managedDeviceId)));
+    // Beim Aktualisieren nur Geraete mit veralteter Version vorwaehlen; unbekannte Version zaehlt mit
+    if (deviceQueries.data && selected.size === 0) {
+      const candidates = mode === 'upgrade' ? deviceQueries.data.devices.filter((d) => d.outdated !== false) : deviceQueries.data.devices;
+      setSelected(new Set(candidates.slice(0, BULK_MAX).map((d) => d.managedDeviceId)));
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deviceQueries.data]);
 

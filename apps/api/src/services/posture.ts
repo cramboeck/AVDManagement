@@ -4,6 +4,7 @@
  * keine personenbezogenen Daten, daher kein Audit-Eintrag pro Aufruf.
  */
 
+import { ArmApiError, GraphApiError } from '@zerostress/core';
 import { randomUUID } from 'node:crypto';
 import type {
   CapabilityResult,
@@ -42,7 +43,17 @@ const exposureLabels: Record<string, string> = {
 const severityOrder: VulnerabilitySeverity[] = ['Critical', 'High', 'Medium', 'Low', 'Unknown'];
 
 function timeoutError(label: string): CapabilityResult<never> {
-  return { available: false, reason: 'not-onboarded', missingPermission: null, detail: `${label} timed out` };
+  return { available: false, reason: 'error', missingPermission: null, detail: `${label}: Zeitueberschreitung, spaeter erneut versuchen` };
+}
+
+/** Fehler in einen ehrlichen Grund uebersetzen statt pauschal "nicht in Defender". */
+function failureReason(error: unknown): CapabilityResult<never> {
+  const message = error instanceof Error ? error.message : String(error);
+  if (error instanceof GraphApiError || error instanceof ArmApiError) {
+    if (error.statusCode === 401 || error.statusCode === 403) return { available: false, reason: 'permission-missing', missingPermission: null, detail: message };
+    if (error.statusCode === 429) return { available: false, reason: 'error', missingPermission: null, detail: `Microsoft drosselt gerade (429); spaeter erneut versuchen. ${message}` };
+  }
+  return { available: false, reason: 'error', missingPermission: null, detail: message };
 }
 
 async function guarded<T>(label: string, ms: number, load: () => Promise<CapabilityResult<T>>): Promise<CapabilityResult<T>> {
@@ -53,12 +64,7 @@ async function guarded<T>(label: string, ms: number, load: () => Promise<Capabil
   try {
     return await Promise.race([load(), timeout]);
   } catch (error) {
-    return {
-      available: false,
-      reason: 'not-onboarded',
-      missingPermission: null,
-      detail: error instanceof Error ? error.message : String(error),
-    };
+    return failureReason(error);
   } finally {
     if (timer) clearTimeout(timer);
   }

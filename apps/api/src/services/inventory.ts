@@ -104,6 +104,10 @@ export async function getDeviceInventory(tenant: ManagedTenant): Promise<DeviceI
  * Geraet aus dem Snapshot; ein unbekanntes Geraet loest einmal einen
  * direkten Abgleich aus, damit frisch enrollte Geraete sofort erreichbar sind.
  */
+// Unbekannte Geraete-Ids (geloescht, alte Lesezeichen) loesen hoechstens alle 5 Minuten einen Abgleich aus
+const MISS_TTL_MS = 5 * 60 * 1000;
+const recentMisses = new Map<string, number>();
+
 export async function findDevice(tenant: ManagedTenant, deviceId: string): Promise<Device | null> {
   const target = targetOf(tenant);
   const svc = getInventoryService();
@@ -112,8 +116,19 @@ export async function findDevice(tenant: ManagedTenant, deviceId: string): Promi
   if (hit || read.meta.live) {
     return hit ?? null;
   }
+  // Schluessel mit Tenant-Id: ein Fehlschlag in Tenant A blockiert nichts in Tenant B
+  const missKey = `${tenant.id}:${deviceId}`;
+  const lastMiss = recentMisses.get(missKey);
+  if (lastMiss && Date.now() - lastMiss < MISS_TTL_MS) return null;
   const fresh = await svc.sync(target, 'devices');
-  return fresh.payload?.items.find((d) => d.id === deviceId) ?? null;
+  const found = fresh.payload?.items.find((d) => d.id === deviceId) ?? null;
+  if (found) recentMisses.delete(missKey);
+  else {
+    recentMisses.set(missKey, Date.now());
+    // Speicher begrenzen
+    if (recentMisses.size > 5000) recentMisses.delete(recentMisses.keys().next().value as string);
+  }
+  return found;
 }
 
 export async function getTenantVulnerabilities(

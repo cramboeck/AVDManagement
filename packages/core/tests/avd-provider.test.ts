@@ -176,6 +176,29 @@ describe('AvdProvider', () => {
       );
     });
   });
+  describe('getHostPoolWithHosts', () => {
+    const poolId = '/subscriptions/11111111-2222-3333-4444-555555555555/resourceGroups/rg/providers/Microsoft.DesktopVirtualization/hostPools/pool';
+
+    it('loads pool and hosts with two calls and computes the summary', async () => {
+      mockArmClient.get.mockResolvedValueOnce({ id: poolId, name: 'pool', type: 'hp', location: 'westeurope', properties: { hostPoolType: 'Pooled', loadBalancerType: 'BreadthFirst', maxSessionLimit: 10, preferredAppGroupType: 'Desktop', validationEnvironment: false, startVMOnConnect: false } });
+      mockArmClient.getAllPages.mockResolvedValueOnce([
+        { id: `${poolId}/sessionHosts/h1`, name: 'pool/h1', type: 'sh', properties: { status: 'Available', allowNewSession: true, sessions: 4 } },
+        { id: `${poolId}/sessionHosts/h2`, name: 'pool/h2', type: 'sh', properties: { status: 'Available', allowNewSession: false, sessions: 1 } },
+        { id: `${poolId}/sessionHosts/h3`, name: 'pool/h3', type: 'sh', properties: { status: 'Unavailable', allowNewSession: true, sessions: 0 } },
+      ]);
+      const loaded = await provider.getHostPoolWithHosts(ctx, poolId);
+      expect(mockArmClient.get).toHaveBeenCalledTimes(1);
+      expect(mockArmClient.getAllPages).toHaveBeenCalledTimes(1);
+      expect(loaded?.pool.activeSessionCount).toBe(5);
+      expect(loaded?.pool.summary).toMatchObject({ totalHosts: 3, availableHosts: 2, unavailableHosts: 1, hostsInDrainMode: 1, totalSessions: 5, maxSessions: 20, utilizationPercent: 25 });
+    });
+
+    it('returns null for a deleted pool', async () => {
+      mockArmClient.get.mockRejectedValueOnce(new ArmApiError(404, 'ResourceNotFound', 'gone'));
+      expect(await provider.getHostPoolWithHosts(ctx, poolId)).toBeNull();
+    });
+  });
+
   describe('session host paths', () => {
     const pool = '/subscriptions/11111111-2222-3333-4444-555555555555/resourceGroups/rg/providers/Microsoft.DesktopVirtualization/hostPools/pool';
 

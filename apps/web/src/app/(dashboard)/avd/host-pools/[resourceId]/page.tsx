@@ -18,6 +18,7 @@ import type {
 
 interface SessionHostsResponse {
   items: SyncedSessionHost[];
+  summary?: HostPoolSummary | null;
 }
 
 const statusColors: Record<string, string> = {
@@ -528,14 +529,14 @@ export default function HostPoolDetailPage({
     refetchInterval: 30000,
   });
 
+  // Kennzahlen kommen mit der Hostliste; Einzelabfrage nur als Rueckfall fuer aeltere API-Staende
   const summaryQuery = useQuery<HostPoolSummary>({
     queryKey: ['hostPoolSummary', activeTenant?.id, resourceId],
     queryFn: () =>
       api.get<HostPoolSummary>(
         `/tenants/${activeTenant!.id}/avd/host-pools/${encodeURIComponent(resourceId)}/summary`
       ),
-    enabled: !!activeTenant,
-    refetchInterval: 30000,
+    enabled: !!activeTenant && hostsQuery.isSuccess && hostsQuery.data?.summary === undefined,
   });
 
   const handleAction = (host: SyncedSessionHost, action: 'start' | 'stop' | 'drain-on' | 'drain-off') => {
@@ -547,7 +548,7 @@ export default function HostPoolDetailPage({
   if (!activeTenant) return <NoTenantSelected />;
 
   const pool = poolQuery.data;
-  const summary = summaryQuery.data;
+  const summary = hostsQuery.data?.summary ?? summaryQuery.data;
 
   return (
     <div className="space-y-6">

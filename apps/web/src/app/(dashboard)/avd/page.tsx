@@ -48,15 +48,15 @@ function HostPoolCard({ pool }: { pool: SyncedHostPool }) {
   const { activeTenant } = useTenant();
   const encodedId = encodeURIComponent(pool.azureResourceId);
 
+  // Kennzahlen kommen mit der Liste; nur aeltere API-Staende brauchen die Einzelabfrage
   const summaryQuery = useQuery<HostPoolSummary>({
     queryKey: ['hostPoolSummary', activeTenant?.id, pool.id],
     queryFn: () =>
       api.get<HostPoolSummary>(`/tenants/${activeTenant!.id}/avd/host-pools/${encodedId}/summary`),
-    enabled: !!activeTenant,
-    refetchInterval: 30000,
+    enabled: !!activeTenant && !pool.summary,
   });
 
-  const summary = summaryQuery.data;
+  const summary = pool.summary ?? summaryQuery.data;
   const status = summary ? getPoolStatus(summary) : 'healthy';
 
   return (

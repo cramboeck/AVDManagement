@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import clsx from 'clsx';
 import { useTenant } from '@/hooks/use-tenant';
+import { useJobs } from '@/hooks/use-jobs';
 import { api } from '@/lib/api';
 import { LoadingPage, LoadingTable } from '@/components/ui/loading';
 import { ErrorState } from '@/components/ui/error-state';
@@ -241,14 +242,10 @@ function DevicesTab({ tenantId, appId }: { tenantId: string; appId: string }) {
 }
 
 function JobsTab({ tenantId, appId }: { tenantId: string; appId: string }) {
-  const query = useQuery({
-    queryKey: ['jobs', tenantId],
-    queryFn: () => api.get<{ items: Job[] }>(`/tenants/${tenantId}/jobs?limit=100`),
-    refetchInterval: 5000,
-  });
+  const query = useJobs(tenantId, { typePrefix: 'apps.', appId, limit: 100 });
   if (query.isLoading) return <LoadingTable rows={3} />;
   if (query.error) return <ErrorState error={query.error as Error} onRetry={query.refetch} />;
-  const jobs = (query.data?.items ?? []).filter((j) => j.type.startsWith('apps.') && j.payload.appId === appId);
+  const jobs = query.data?.items ?? [];
   if (jobs.length === 0) return <EmptyState title="Keine Jobs fuer diese App" />;
   return (
     <div className="overflow-x-auto rounded-lg border">
