@@ -8,6 +8,7 @@
 export * from './resource-provider.js';
 export * from './graph-client.js';
 export * from './request-url.js';
+export * from './retry-policy.js';
 export * from './arm-client.js';
 export * from './identity-provider.js';
 export * from './avd-provider.js';

@@ -17,7 +17,8 @@ import { validate } from '../middleware/validate.js';
 import { verifyEntraToken } from '../middleware/auth.js';
 import { clientIp } from '../middleware/security.js';
 import { hasClientCredential, loginAuthParams, loginClientId } from '../services/secrets.js';
-import { db, managedTenants } from '../db/index.js';
+import { db, managedTenants, mspUsers } from '../db/index.js';
+import { mfaSatisfied, recordLoginFailure } from '../services/login-attempts.js';
 import { DrizzleAuditLogger } from '../services/audit-logger.js';
 import { verifyConsentState, type ConsentStateClaims } from '../services/consent-state.js';
 import { testTenantConnection, persistConnectionTestResult } from '../services/tenant-connection.js';
@@ -76,19 +77,31 @@ app.post('/token', validate('json', tokenSchema), async (c) => {
     data = (await response.json()) as typeof data;
     if (!response.ok) {
       console.error('Token exchange failed:', data.error ?? 'unknown');
+      await recordLoginFailure('token-exchange-failed', { ip: clientIp(c) });
       return c.json(problem(400, 'Anmeldung fehlgeschlagen', data.error_description || data.error || 'Token exchange failed'), 400);
     }
   } catch (error) {
     console.error('Token exchange error:', error instanceof Error ? error.message : String(error));
+    await recordLoginFailure('token-endpoint-unreachable', { ip: clientIp(c) });
     return c.json(problem(500, 'Anmeldung fehlgeschlagen', 'Der Token-Endpunkt war nicht erreichbar'), 500);
   }
 
-  if (!data.id_token) return c.json(problem(400, 'Anmeldung fehlgeschlagen', 'Kein ID-Token erhalten'), 400);
+  if (!data.id_token) {
+    await recordLoginFailure('no-id-token', { ip: clientIp(c) });
+    return c.json(problem(400, 'Anmeldung fehlgeschlagen', 'Kein ID-Token erhalten'), 400);
+  }
 
+  let claims: Awaited<ReturnType<typeof verifyEntraToken>> | null = null;
   try {
-    const claims = await verifyEntraToken(data.id_token, [config.clientId]);
+    claims = await verifyEntraToken(data.id_token, [config.clientId]);
     if (claims.tid && claims.tid.toLowerCase() !== config.tenantId.toLowerCase()) {
+      await recordLoginFailure('foreign-tenant', { oid: claims.oid, tid: claims.tid, ip: clientIp(c) });
       return c.json(problem(401, 'Anmeldung abgelehnt', 'Das Konto gehoert nicht zum Partnertenant'), 401);
+    }
+    if (!mfaSatisfied(claims.amr)) {
+      await recordLoginFailure('mfa-missing', { oid: claims.oid, ip: clientIp(c) });
+      await auditKnownUserFailure(claims.oid, 'mfa-missing');
+      return c.json(problem(401, 'Anmeldung abgelehnt', 'Die Anmeldung erfolgte ohne zweiten Faktor. Conditional Access fuer die Konsole muss MFA oder einen Passkey verlangen.'), 401);
     }
     const user = await findOrCreateUser(claims.oid, claims.email, claims.name);
     const { token } = await createSession({ userId: user.id, mspId: user.mspId, ip: clientIp(c), userAgent: c.req.header('User-Agent') });
@@ -107,11 +120,39 @@ app.post('/token', validate('json', tokenSchema), async (c) => {
     });
     return c.json({ authenticated: true, user });
   } catch (error) {
-    if (error instanceof UserInactiveError) return c.json(problem(401, 'Anmeldung abgelehnt', error.message), 401);
+    if (error instanceof UserInactiveError) {
+      await recordLoginFailure('user-inactive', { oid: claims?.oid, ip: clientIp(c) });
+      if (claims) await auditKnownUserFailure(claims.oid, 'user-inactive');
+      return c.json(problem(401, 'Anmeldung abgelehnt', error.message), 401);
+    }
     console.error('Login failed:', error instanceof Error ? error.message : String(error));
+    await recordLoginFailure('invalid-id-token', { oid: claims?.oid, ip: clientIp(c) });
     return c.json(problem(401, 'Anmeldung abgelehnt', 'Das ID-Token konnte nicht geprueft werden'), 401);
   }
 });
+
+/** Fehlversuch eines bekannten Konsolenbenutzers ins Audit (das Audit braucht einen Benutzer). */
+async function auditKnownUserFailure(oid: string, reason: string): Promise<void> {
+  try {
+    const user = await db.query.mspUsers.findFirst({ where: eq(mspUsers.entraObjectId, oid) });
+    if (!user) return;
+    await audit.log({
+      mspId: user.mspId as MspId,
+      tenantId: null,
+      userId: user.id as UserId,
+      action: 'auth.login',
+      targetType: 'msp-user',
+      targetId: user.id,
+      targetDisplayName: 'Anmeldung',
+      afterState: { reason },
+      result: 'failure',
+      errorMessage: reason,
+      correlationId: randomUUID() as CorrelationId,
+    });
+  } catch (error) {
+    console.error('Login failure audit failed:', error instanceof Error ? error.message : String(error));
+  }
+}
 
 // Sitzungsinfo fuer die Oberflaeche; ohne gueltiges Cookie authenticated=false statt 401
 app.get('/me', async (c) => {

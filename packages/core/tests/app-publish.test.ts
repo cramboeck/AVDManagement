@@ -64,8 +64,23 @@ describe('publishWin32App', () => {
       post: vi.fn(async (_t: string, path: string) => (path.endsWith('/mobileApps') ? { id: 'app-1' } : path.endsWith('/contentVersions') ? { id: '1' } : { id: 'f1', uploadState: 'azureStorageUriRequestFailed', azureStorageUri: null })),
       get: vi.fn(),
       patch: vi.fn(),
+      delete: vi.fn(async () => undefined),
     };
-    await expect(publishWin32App(graph as unknown as GraphClient, [], ctx, {}, opened, undefined, { sleep: async () => undefined })).rejects.toThrow(/lehnte die Datei ab/);
+    await expect(publishWin32App(graph as unknown as GraphClient, [], ctx, {}, opened, undefined, { sleep: async () => undefined })).rejects.toThrow(/lehnte die Datei ab.*wieder entfernt/);
+    // Die halbfertige App wird geloescht, damit kein Duplikat entsteht
+    expect(graph.delete).toHaveBeenCalledWith(ctx.tenantId, `${GRAPH_BETA}/deviceAppManagement/mobileApps/app-1`, []);
+  });
+
+  it('names the leftover app when it cannot be removed', async () => {
+    const graph = {
+      post: vi.fn(async (_t: string, path: string) => (path.endsWith('/mobileApps') ? { id: 'app-2' } : path.endsWith('/contentVersions') ? { id: '1' } : { id: 'f1', uploadState: 'azureStorageUriRequestFailed', azureStorageUri: null })),
+      get: vi.fn(),
+      patch: vi.fn(),
+      delete: vi.fn(async () => {
+        throw new Error('403');
+      }),
+    };
+    await expect(publishWin32App(graph as unknown as GraphClient, [], ctx, {}, opened, undefined, { sleep: async () => undefined })).rejects.toThrow(/app-2 konnte nicht entfernt werden/);
   });
 });
 

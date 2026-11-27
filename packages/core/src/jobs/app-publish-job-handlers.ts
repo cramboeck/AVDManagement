@@ -68,7 +68,15 @@ export function registerAppPublishJobs(ops: PublishOperations): void {
     async (ctx: JobContext): Promise<JobResult> => {
       const payload = ctx.payload as unknown as PublishPayload;
       const providerCtx = { tenantId: ctx.tenantId, correlationId: ctx.correlationId };
-      const loaded = await ops.loadPackage(ctx.mspId, payload.packageId);
+      let loaded: Awaited<ReturnType<PublishOperations['loadPackage']>>;
+      try {
+        loaded = await ops.loadPackage(ctx.mspId, payload.packageId);
+      } catch (error) {
+        // Sonst bliebe die Bereitstellung auf "ausstehend" stehen
+        const message = error instanceof Error ? error.message : String(error);
+        await ops.recordDeployment(ctx.mspId, payload.packageId, ctx.tenantId, { status: 'failed', error: message }).catch(() => undefined);
+        return failure('PACKAGE_LOAD_FAILED', message);
+      }
       if (!loaded) return failure('PACKAGE_NOT_FOUND', 'Paket nicht gefunden');
       const { pkg, artifact, detectionPrefix } = loaded;
       const m = pkg.manifest;

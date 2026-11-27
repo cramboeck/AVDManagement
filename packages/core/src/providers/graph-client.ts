@@ -7,6 +7,7 @@
 
 import { GraphApiError } from '../errors.js';
 import { resolveRequestUrl } from './request-url.js';
+import { backoffMs, isReadOnlyGraphPost, parseRetryAfter, shouldRetryStatus, shouldRetryTransport } from './retry-policy.js';
 
 export interface GraphClientConfig {
   getAccessToken: (tenantId: string, scopes: string[]) => Promise<string>;
@@ -25,6 +26,8 @@ export interface GraphRequestOptions {
   timeoutMs?: number;
   // Berichte liefern CSV ueber eine Weiterleitung; dann Text statt JSON lesen
   responseType?: 'json' | 'text';
+  // Lesender POST ($batch mit GETs, Berichte): darf bei Zeitueberschreitung und 5xx wiederholt werden
+  idempotent?: boolean;
 }
 
 export interface GraphResponse<T> {
@@ -66,11 +69,13 @@ export class GraphClient {
 
     // Vor dem Token pruefen: eine fremde URL bekommt nie ein Token
     const url = resolveRequestUrl(this.baseUrl, path, this.extraOrigins);
-    const accessToken = await this.getAccessToken(tenantId, scopes);
+    const idempotent = options.idempotent ?? (method === 'POST' && isReadOnlyGraphPost(url, body) ? true : undefined);
 
     let lastError: Error | null = null;
 
     for (let attempt = 0; attempt <= retries; attempt++) {
+      // Je Versuch neu holen: nach langem Retry-After kann das Token abgelaufen sein (Cache im TokenProvider)
+      const accessToken = await this.getAccessToken(tenantId, scopes);
       try {
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), timeoutMs);
@@ -112,16 +117,16 @@ export class GraphClient {
           response.status,
           errorBody.code ?? 'Unknown',
           errorBody.message ?? response.statusText,
-          this.parseRetryAfter(response),
+          parseRetryAfter(response.headers.get('Retry-After')),
           undefined
         );
 
-        if (!graphError.isRetryable || attempt === retries) {
+        if (!shouldRetryStatus(response.status, method, idempotent) || attempt === retries) {
           throw graphError;
         }
 
         lastError = graphError;
-        await this.delay(this.calculateBackoff(attempt, graphError.retryAfterSeconds));
+        await this.delay(backoffMs(attempt, graphError.retryAfterSeconds));
       } catch (error) {
         if (error instanceof GraphApiError) {
           throw error;
@@ -133,11 +138,12 @@ export class GraphClient {
           lastError = error instanceof Error ? error : new Error(String(error));
         }
 
-        if (attempt === retries) {
+        // Ein POST ohne Antwort kann bei Microsoft schon ausgefuehrt sein: nicht blind wiederholen
+        if (attempt === retries || !shouldRetryTransport(method, idempotent)) {
           throw lastError;
         }
 
-        await this.delay(this.calculateBackoff(attempt));
+        await this.delay(backoffMs(attempt));
       }
     }
 
@@ -193,29 +199,7 @@ export class GraphClient {
     }
   }
 
-  private parseRetryAfter(response: Response): number | undefined {
-    const header = response.headers.get('Retry-After');
-    if (!header) return undefined;
 
-    const seconds = parseInt(header, 10);
-    if (!isNaN(seconds)) return seconds;
-
-    const date = Date.parse(header);
-    if (!isNaN(date)) {
-      return Math.max(0, Math.ceil((date - Date.now()) / 1000));
-    }
-
-    return undefined;
-  }
-
-  private calculateBackoff(attempt: number, retryAfterSeconds?: number): number {
-    if (retryAfterSeconds !== undefined) {
-      return retryAfterSeconds * 1000;
-    }
-    const baseDelay = 1000;
-    const maxDelay = 60000;
-    return Math.min(baseDelay * Math.pow(2, attempt), maxDelay);
-  }
 
   private delay(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));

@@ -14,6 +14,8 @@ import { registerJob, type JobContext, type JobResult, type PreviewContext, type
 export interface ExchangeOperations {
   enqueue(input: { mspId: string; tenantId: string; userId: string; jobId: string; operation: ExchangeOperation; parameters: Record<string, unknown> }): Promise<string>;
   wait(exchangeJobId: string, timeoutMs: number): Promise<ExchangeJobRecord | null>;
+  // Auftrag zurueckziehen, solange ihn kein Worker uebernommen hat; true = zurueckgezogen
+  withdraw(exchangeJobId: string): Promise<boolean>;
   factsFor(tenantId: string, upn: string): Promise<{ facts: ExchangeMailboxFacts | null; collectedAt: string | null; autoForwardingMode: string | null }>;
   tenantDomains(tenantId: string): Promise<string[]>;
 }
@@ -223,7 +225,13 @@ export function registerExchangeJobs(ops: ExchangeOperations, options: ExchangeJ
           return failure('EXCHANGE_ENQUEUE_FAILED', error instanceof Error ? error.message : String(error));
         }
         const record = await ops.wait(exchangeJobId, timeoutMs);
-        if (!record) return failure('EXCHANGE_TIMEOUT', 'Kein Exchange-Worker hat den Auftrag innerhalb der Wartezeit abgeschlossen. Laeuft der Worker? Der Auftrag bleibt in der Warteschlange.');
+        if (!record) {
+          // Nicht spaeter heimlich ausfuehren, waehrend das Audit "fehlgeschlagen" sagt
+          const withdrawn = await ops.withdraw(exchangeJobId).catch(() => false);
+          return withdrawn
+            ? failure('EXCHANGE_TIMEOUT', 'Kein Exchange-Worker hat den Auftrag innerhalb der Wartezeit uebernommen. Der Auftrag wurde zurueckgezogen; im Postfach wurde nichts geaendert. Laeuft der Worker?')
+            : failure('EXCHANGE_OUTCOME_UNKNOWN', 'Der Worker hat den Auftrag uebernommen, aber nicht rechtzeitig abgeschlossen. Ob die Aenderung angekommen ist, ist offen; bitte im Postfach pruefen und im Worker-Protokoll nachsehen.');
+        }
         if (record.status !== 'succeeded') return failure('EXCHANGE_FAILED', record.error ?? 'Der Worker meldete einen Fehler');
         return { success: true, data: { exchangeJobId, operation: def.operation, identity: params.identity, result: record.result ?? null, workerId: record.workerId } };
       },

@@ -8,6 +8,13 @@ Alle nennenswerten Aenderungen an ZeroStress Cockpit. Format angelehnt an
 
 ### Sicherheit
 
+- AVD: Run Command und Start/Stopp nehmen die VM aus ARM ueber Hostpool und
+  Host statt aus dem Browser; Hostpool-Ids werden geprueft. Vorher konnte
+  ein manipulierter Aufruf ein SYSTEM-Skript auf jeder VM des Abos starten.
+- Fehlgeschlagene Konsolen-Anmeldungen: bekannte Konten im Audit, alle
+  Versuche in `login_attempts` (nur Hashes, 90 Tage). Optional
+  `LOGIN_REQUIRE_MFA=true` (amr-Claim).
+
 - Jobs: Lesen, Freigeben, Abbrechen und Anzeigen versiegelter Ergebnisse
   pruefen jetzt Tenant und MSP; fremde Job-Ids antworten mit 404 (vorher
   konnte ein Techniker Jobs anderer Tenants lesen und freigeben). MCP prueft
@@ -247,6 +254,30 @@ Alle nennenswerten Aenderungen an ZeroStress Cockpit. Format angelehnt an
 
 ### Geaendert
 
+- App-Zuweisungen behalten ihre Einstellungen (Frist, Benachrichtigung,
+  Neustart, Delivery Optimization). Vorher setzte jede Zuweisung einer
+  weiteren Gruppe die Einstellungen aller anderen auf Standard zurueck.
+- AVD: Aktionen auf einzelnen Hosts (Drain, Sitzungen, Abmelden,
+  Nachricht) bauen den ARM-Pfad aus dem Host-Teil von "pool/host"; vorher
+  scheiterten sie. Aktive Sitzungen je Hostpool werden gezaehlt.
+- Wiederholungen: POST wird nach Zeitueberschreitung oder 5xx nicht mehr
+  wiederholt (keine doppelten Objekte oder doppelt laufenden Skripte);
+  lesende POSTs ($batch mit GETs, Berichte) schon. Retry-After hoechstens
+  120 s mit Streuung, Token je Versuch neu.
+- Job-Queue wendet `maxRetries` (nur bei 429), `timeoutSeconds` und
+  `concurrencyPerTenant` der Jobdefinition an; Audit nur fuer den letzten
+  Versuch. Einheitliche Fehlermeldungen fuer 401/403/404/429/5xx.
+- ARM: lang laufende Vorgaenge auch bei 200/201 und reinen
+  Location-Antworten (VM-Groesse, Deployment-Pruefung) werden abgewartet;
+  leere 200-Antworten fuehren nicht mehr zum erneuten Senden.
+- Exchange: ein Auftrag, den kein Worker rechtzeitig uebernimmt, wird
+  zurueckgezogen; uebernommene Auftraege melden "Ergebnis offen".
+- Win32-Veroeffentlichung entfernt bei einem Fehler die halbfertige App.
+- Mitglieder von Verteilerlisten, E-Mail-aktivierten Sicherheitsgruppen und
+  synchronisierten Gruppen werden nicht mehr angeboten bzw. vor dem
+  Graph-Aufruf abgelehnt.
+- Unbestaetigte Jobs verfallen nach 60 statt 10 Minuten; haengende Jobs
+  werden nach ihrem Start bewertet.
 - `docker-compose.yml`: Postgres und Redis nur noch auf 127.0.0.1
   (Docker umgeht ufw), Postgres-Passwort ueber `POSTGRES_PASSWORD`.
 - Abhaengigkeiten: Next.js 14.1.0 auf 14.2.35 (kritische SSRF-Luecke in

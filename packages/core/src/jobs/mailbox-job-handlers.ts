@@ -9,6 +9,7 @@
 
 import type { AutoReplyAudience, AutoReplyStatus, InboxRule, MailboxSettingsInfo, CapabilityResult } from '@zerostress/types';
 import { registerJob, type JobContext, type JobResult, type PreviewContext, type PreviewResult } from './job-types.js';
+import { jobFailure } from './job-types.js';
 import type { ProviderContext } from '../providers/resource-provider.js';
 import type { AutoReplyInput, ForwardRuleInput } from '../providers/mailbox-provider.js';
 import { domainOf } from '../providers/mailbox-provider.js';
@@ -55,7 +56,7 @@ const statusLabel: Record<AutoReplyStatus, string> = { disabled: 'aus', alwaysEn
 const audienceLabel: Record<AutoReplyAudience, string> = { none: 'niemand extern', contactsOnly: 'nur Kontakte', all: 'alle externen Absender' };
 
 function failure(code: string, error: unknown): JobResult {
-  return { success: false, error: { code, message: error instanceof Error ? error.message : String(error), retryable: false } };
+  return jobFailure(code, error);
 }
 
 async function requireUser(ops: MailboxOperations, ctx: ProviderContext, upn: string): Promise<string> {

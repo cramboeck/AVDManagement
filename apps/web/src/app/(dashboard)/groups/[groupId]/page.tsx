@@ -50,7 +50,9 @@ export default function GroupDetailPage({ params }: { params: { groupId: string 
   };
 
   const group = query.data?.available ? query.data.data.group : null;
-  const canEditMembers = !!group && !group.isDynamic && !group.onPremisesSynced;
+  // Verteilerlisten und E-Mail-aktivierte Sicherheitsgruppen verwaltet Exchange, nicht Graph
+  const exchangeManaged = !!group && (group.kind === 'distribution' || group.kind === 'mail-enabled-security');
+  const canEditMembers = !!group && !group.isDynamic && !group.onPremisesSynced && !exchangeManaged;
 
   const memberColumns: ColumnDef<GroupMember>[] = useMemo(
     () => [

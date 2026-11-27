@@ -114,13 +114,14 @@ export function mapAssignment(a: GraphAssignment): AppAssignment {
     groupName: null,
     filterId: a.target.deviceAndAppManagementAssignmentFilterId || null,
     filterType: filterType === 'include' || filterType === 'exclude' ? filterType : null,
+    settings: a.settings && typeof a.settings === 'object' && !Array.isArray(a.settings) ? (a.settings as Record<string, unknown>) : null,
   };
 }
 
 /**
  * Graph-Nutzlast fuer /assign aus unserer Eingabe.
  */
-export function toGraphAssignment(input: AppAssignmentInput): { '@odata.type': string; intent: string; target: Record<string, unknown> } {
+export function toGraphAssignment(input: AppAssignmentInput): { '@odata.type': string; intent: string; target: Record<string, unknown>; settings?: Record<string, unknown> } {
   const targetTypes: Record<AppAssignmentTargetType, string> = {
     group: '#microsoft.graph.groupAssignmentTarget',
     exclusionGroup: '#microsoft.graph.exclusionGroupAssignmentTarget',
@@ -135,7 +136,10 @@ export function toGraphAssignment(input: AppAssignmentInput): { '@odata.type': s
   if (input.targetType === 'group' || input.targetType === 'exclusionGroup') {
     target.groupId = input.groupId;
   }
-  return { '@odata.type': '#microsoft.graph.mobileAppAssignment', intent: input.intent, target };
+  const assignment: { '@odata.type': string; intent: string; target: Record<string, unknown>; settings?: Record<string, unknown> } = { '@odata.type': '#microsoft.graph.mobileAppAssignment', intent: input.intent, target };
+  // /assign ersetzt alle Zuweisungen: ohne die alten Einstellungen gingen Fristen und Benachrichtigungen verloren
+  if (input.settings) assignment.settings = input.settings;
+  return assignment;
 }
 
 function sameTarget(a: AppAssignment, b: AppAssignmentInput): boolean {
@@ -144,13 +148,22 @@ function sameTarget(a: AppAssignment, b: AppAssignmentInput): boolean {
 
 /**
  * Zusammenfuehren: gleiche Zielgruppe ersetzt die alte Zuweisung, sonst wird angehaengt.
+ * Bestehende Zuweisungen behalten ihre Einstellungen. Ersetzt eine neue
+ * Zuweisung eine alte mit gleicher Absicht, uebernimmt sie deren Einstellungen;
+ * bei geaenderter Absicht gelten die Intune-Standards, weil etwa eine Frist
+ * fuer "required" bei "uninstall" nicht passt.
  */
 export function mergeAssignments(existing: AppAssignment[], add: AppAssignmentInput[], removeIds: string[] = []): AppAssignmentInput[] {
   const kept: AppAssignmentInput[] = existing
     .filter((e) => !removeIds.includes(e.id))
     .filter((e) => !add.some((n) => sameTarget(e, n)))
-    .map((e) => ({ intent: e.intent, targetType: e.targetType, groupId: e.groupId, filterId: e.filterId, filterType: e.filterType }));
-  return [...kept, ...add];
+    .map((e) => ({ intent: e.intent, targetType: e.targetType, groupId: e.groupId, filterId: e.filterId, filterType: e.filterType, settings: e.settings }));
+  const added = add.map((n) => {
+    if (n.settings !== undefined) return n;
+    const previous = existing.find((e) => sameTarget(e, n) && e.intent === n.intent);
+    return previous?.settings ? { ...n, settings: previous.settings } : n;
+  });
+  return [...kept, ...added];
 }
 
 /**
@@ -407,6 +420,33 @@ export async function publishWin32App(
   // 1. App-Objekt
   const app = await graphClient.post<{ id: string }>(tenantId, `${GRAPH_BETA}/deviceAppManagement/mobileApps`, scopes, payload);
   onProgress(`App angelegt: ${app.id}`);
+  try {
+    return await uploadWin32Content(graphClient, scopes, tenantId, app.id, opened, onProgress, { sleep, now, fetchImpl, timeoutMs });
+  } catch (error) {
+    // Halbfertige App wieder entfernen, sonst entsteht beim naechsten Versuch ein Duplikat ohne Inhalt
+    const reason = error instanceof Error ? error.message : String(error);
+    try {
+      await graphClient.delete(tenantId, `${GRAPH_BETA}/deviceAppManagement/mobileApps/${encodeURIComponent(app.id)}`, scopes);
+      onProgress(`Halbfertige App ${app.id} wieder entfernt`);
+      throw new Error(`${reason} (die angelegte App wurde wieder entfernt)`);
+    } catch (cleanupError) {
+      if (cleanupError instanceof Error && cleanupError.message.startsWith(reason)) throw cleanupError;
+      throw new Error(`${reason}. Die halbfertige App ${app.id} konnte nicht entfernt werden; bitte in Intune loeschen.`);
+    }
+  }
+}
+
+async function uploadWin32Content(
+  graphClient: GraphClient,
+  scopes: string[],
+  tenantId: string,
+  appId: string,
+  opened: OpenedIntuneWin,
+  onProgress: (step: string) => void,
+  deps: { sleep: (ms: number) => Promise<void>; now: () => number; fetchImpl: typeof fetch; timeoutMs: number }
+): Promise<{ appId: string; contentVersion: string }> {
+  const { sleep, now, fetchImpl, timeoutMs } = deps;
+  const app = { id: appId };
   const base = `${GRAPH_BETA}/deviceAppManagement/mobileApps/${encodeURIComponent(app.id)}/microsoft.graph.win32LobApp`;
 
   // 2. Content-Version

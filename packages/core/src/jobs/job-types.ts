@@ -2,6 +2,7 @@
  * Job-Typen und -Definitionen
  */
 
+import { GraphApiError, ArmApiError } from '../errors.js';
 import type {
   TenantId,
   MspId,
@@ -62,6 +63,30 @@ export interface JobResult {
   success: boolean;
   data?: Record<string, unknown>;
   error?: JobError;
+}
+
+/**
+ * Einheitliche Fehlerabbildung fuer Jobs aus Graph- und ARM-Fehlern.
+ * Wiederholt wird nur bei 429: der Aufruf wurde dann abgelehnt und nicht
+ * ausgefuehrt. Bei 5xx ist offen, ob die Aenderung schon passiert ist.
+ */
+export function jobFailure(code: string, error: unknown): JobResult {
+  const message = error instanceof Error ? error.message : String(error);
+  if (error instanceof GraphApiError || error instanceof ArmApiError) {
+    const status = error.statusCode;
+    const hint =
+      status === 401 || status === 403
+        ? 'Berechtigung fehlt'
+        : status === 404
+          ? 'Ziel nicht gefunden (geloescht oder umbenannt)'
+          : status === 429
+            ? 'Microsoft drosselt gerade'
+            : status >= 500
+              ? 'Fehler bei Microsoft; Ergebnis im Tenant pruefen'
+              : null;
+    return { success: false, error: { code, message: hint ? `${hint} (${status}): ${message}` : message, retryable: status === 429 } };
+  }
+  return { success: false, error: { code, message, retryable: false } };
 }
 
 export interface PreviewContext {

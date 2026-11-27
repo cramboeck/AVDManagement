@@ -199,9 +199,20 @@ export async function mailboxExchangeInfo(tenantId: string, upn: string): Promis
   return { collectedAt: facts.collectedAt, autoForwardingMode: facts.autoForwardingMode, facts: facts.mailboxes.find((m) => m.userPrincipalName === lower || m.primarySmtpAddress === lower) ?? null };
 }
 
+/** Nur ein noch nicht uebernommener Auftrag laesst sich zurueckziehen (atomar ueber den Status). */
+export async function withdrawExchangeJob(id: string): Promise<boolean> {
+  const rows = await db
+    .update(exchangeJobs)
+    .set({ status: 'failed', error: 'Withdrawn: not claimed by a worker in time', finishedAt: new Date() })
+    .where(and(eq(exchangeJobs.id, id), eq(exchangeJobs.status, 'queued')))
+    .returning({ id: exchangeJobs.id });
+  return rows.length > 0;
+}
+
 export const exchangeOperations: ExchangeOperations = {
   enqueue: (input) => enqueueExchangeJob(input),
   wait: (id, timeoutMs) => waitForExchangeJob(id, timeoutMs),
+  withdraw: (id) => withdrawExchangeJob(id),
   factsFor: (tenantId, upn) => mailboxExchangeInfo(tenantId, upn),
   tenantDomains: (tenantId) => getMailboxProvider().getTenantDomains({ tenantId: tenantId as TenantId, correlationId: `exchange-preview-${tenantId}` }, []),
 };

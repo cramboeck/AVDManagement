@@ -21,12 +21,15 @@ import type {
   SessionHostStatus,
   SessionHostHealthStatus,
   UserSessionState,
+  UserSessionId,
+  MspId,
 } from '@zerostress/types';
 import {
   BaseResourceProvider,
   type ProviderContext,
 } from './resource-provider.js';
 import { ArmClient, type ArmResponse, type ArmAsyncOperation } from './arm-client.js';
+import { ValidationError } from '../errors.js';
 
 // Run Command: Ausgabe der Compute-API je Kanal
 export interface VmCommandOutput {
@@ -115,6 +118,31 @@ export interface AvdProviderConfig {
   subscriptionIds?: AzureSubscriptionId[];
 }
 
+const HOST_POOL_ID = /^\/subscriptions\/[0-9a-f-]{36}\/resourceGroups\/[^/]+\/providers\/Microsoft\.DesktopVirtualization\/hostPools\/[^/]+$/i;
+
+/** Hostpool-Ressourcen-Id pruefen, bevor sie in einen ARM-Pfad geht. */
+export function assertHostPoolId(id: string): void {
+  if (!HOST_POOL_ID.test(id)) throw new ValidationError(`Invalid host pool resource id`);
+}
+
+/**
+ * ARM liefert Sitzungshosts als "pool/host.fqdn"; im Pfad steht nur der
+ * Host-Teil. Akzeptiert beide Formen, damit Aufrufer nichts zerlegen muessen.
+ */
+export function sessionHostShortName(name: string): string {
+  return name.split('/').filter(Boolean).pop() ?? name;
+}
+
+function hostPath(hostPoolResourceId: string, sessionHostName: string): string {
+  assertHostPoolId(hostPoolResourceId);
+  return `${hostPoolResourceId}/sessionHosts/${encodeURIComponent(sessionHostShortName(sessionHostName))}`;
+}
+
+function sessionPath(hostPoolResourceId: string, sessionHostName: string, sessionId: string): string {
+  // Session-Namen kommen ebenfalls als "pool/host/1"
+  return `${hostPath(hostPoolResourceId, sessionHostName)}/userSessions/${encodeURIComponent(sessionHostShortName(sessionId))}`;
+}
+
 export class AvdProvider extends BaseResourceProvider {
   readonly name = 'avd';
   readonly requiredScopes = ['https://management.azure.com/.default'];
@@ -160,7 +188,7 @@ export class AvdProvider extends BaseResourceProvider {
     const { pools, warnings } = await this.collectHostPools(ctx);
 
     return {
-      items: pools.map(({ pool, hosts }) => this.mapAzureHostPoolToSynced(ctx, pool, hosts.length)),
+      items: pools.map(({ pool, hosts }) => this.mapAzureHostPoolToSynced(ctx, pool, hosts.length, hosts.reduce((sum, h) => sum + (h.properties.sessions ?? 0), 0))),
       nextPageToken: null,
       warnings,
     };
@@ -280,7 +308,7 @@ export class AvdProvider extends BaseResourceProvider {
       );
 
       const sessionHosts = await this.listSessionHostsForPool(ctx, pool.id);
-      return this.mapAzureHostPoolToSynced(ctx, pool, sessionHosts.length);
+      return this.mapAzureHostPoolToSynced(ctx, pool, sessionHosts.length, sessionHosts.reduce((sum, h) => sum + (h.properties.sessions ?? 0), 0));
     } catch (error) {
       if ((error as { statusCode?: number }).statusCode === 404) {
         return null;
@@ -337,7 +365,7 @@ export class AvdProvider extends BaseResourceProvider {
     try {
       const sessionHost = await this.armClient.get<AzureSessionHost>(
         tenantId,
-        `${hostPoolResourceId}/sessionHosts/${sessionHostName}`,
+        hostPath(hostPoolResourceId, sessionHostName),
         { apiVersion: AVD_API_VERSION }
       );
 
@@ -349,6 +377,15 @@ export class AvdProvider extends BaseResourceProvider {
       }
       throw error;
     }
+  }
+
+  /**
+   * VM eines Sitzungshosts aus ARM, nicht aus Aufruferdaten: Run Command und
+   * Start/Stopp duerfen nur die VM treffen, die wirklich zu diesem Host gehoert.
+   */
+  async resolveSessionHostVm(ctx: ProviderContext, hostPoolResourceId: string, sessionHostName: string): Promise<string | null> {
+    const host = await this.getSessionHost(ctx, hostPoolResourceId, sessionHostName);
+    return host?.vmResourceId ?? null;
   }
 
   /**
@@ -364,7 +401,7 @@ export class AvdProvider extends BaseResourceProvider {
 
     const sessions = await this.armClient.getAllPages<AzureUserSession>(
       tenantId,
-      `${hostPoolResourceId}/sessionHosts/${sessionHostName}/userSessions`,
+      `${hostPath(hostPoolResourceId, sessionHostName)}/userSessions`,
       { apiVersion: AVD_API_VERSION }
     );
 
@@ -390,7 +427,7 @@ export class AvdProvider extends BaseResourceProvider {
 
     await this.armClient.patch(
       tenantId,
-      `${hostPoolResourceId}/sessionHosts/${sessionHostName}`,
+      hostPath(hostPoolResourceId, sessionHostName),
       { properties: { allowNewSession } },
       { apiVersion: AVD_API_VERSION }
     );
@@ -410,7 +447,7 @@ export class AvdProvider extends BaseResourceProvider {
 
     await this.armClient.post(
       tenantId,
-      `${hostPoolResourceId}/sessionHosts/${sessionHostName}/userSessions/${sessionId}/disconnect`,
+      `${sessionPath(hostPoolResourceId, sessionHostName, sessionId)}/disconnect`,
       null,
       { apiVersion: AVD_API_VERSION }
     );
@@ -429,7 +466,7 @@ export class AvdProvider extends BaseResourceProvider {
     this.validateContext(ctx);
     const tenantId = ctx.tenantId as string;
 
-    const url = `${hostPoolResourceId}/sessionHosts/${sessionHostName}/userSessions/${sessionId}`;
+    const url = sessionPath(hostPoolResourceId, sessionHostName, sessionId);
     const params = force ? '?force=true' : '';
 
     await this.armClient.delete(tenantId, `${url}${params}`, { apiVersion: AVD_API_VERSION });
@@ -451,7 +488,7 @@ export class AvdProvider extends BaseResourceProvider {
 
     await this.armClient.post(
       tenantId,
-      `${hostPoolResourceId}/sessionHosts/${sessionHostName}/userSessions/${sessionId}/sendMessage`,
+      `${sessionPath(hostPoolResourceId, sessionHostName, sessionId)}/sendMessage`,
       { messageTitle, messageBody },
       { apiVersion: AVD_API_VERSION }
     );
@@ -585,7 +622,8 @@ export class AvdProvider extends BaseResourceProvider {
   private mapAzureHostPoolToSynced(
     ctx: ProviderContext,
     pool: AzureHostPool,
-    sessionHostCount: number
+    sessionHostCount: number,
+    activeSessionCount: number
   ): SyncedHostPool {
     const parts = pool.id.split('/');
     const subscriptionIndex = parts.indexOf('subscriptions');
@@ -594,7 +632,7 @@ export class AvdProvider extends BaseResourceProvider {
     return {
       id: pool.id as HostPoolId,
       tenantId: ctx.tenantId,
-      mspId: '' as any,
+      mspId: '' as MspId,
       azureResourceId: pool.id as AzureResourceId,
       azureSubscriptionId: parts[subscriptionIndex + 1] as AzureSubscriptionId,
       resourceGroupName: parts[rgIndex + 1],
@@ -611,7 +649,7 @@ export class AvdProvider extends BaseResourceProvider {
       personalDesktopAssignmentType: pool.properties.personalDesktopAssignmentType ?? null,
       vmTemplate: pool.properties.vmTemplate ?? null,
       sessionHostCount,
-      activeSessionCount: 0,
+      activeSessionCount,
       syncedAt: new Date(),
     };
   }
@@ -624,7 +662,7 @@ export class AvdProvider extends BaseResourceProvider {
     return {
       id: sh.id as SessionHostId,
       tenantId: ctx.tenantId,
-      mspId: '' as any,
+      mspId: '' as MspId,
       hostPoolId,
       azureResourceId: sh.id as AzureResourceId,
       vmResourceId: (sh.properties.resourceId as AzureResourceId) ?? null,
@@ -659,7 +697,7 @@ export class AvdProvider extends BaseResourceProvider {
     const sessionId = session.name.split('/').pop() ?? session.name;
 
     return {
-      id: sessionId as any,
+      id: sessionId as UserSessionId,
       sessionHostId,
       hostPoolId,
       userPrincipalName: session.properties.userPrincipalName ?? 'Unknown',

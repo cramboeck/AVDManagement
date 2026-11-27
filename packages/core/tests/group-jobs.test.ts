@@ -60,7 +60,20 @@ describe('group jobs', () => {
 
     registerGroupJobs(ops({ getGroupDetail: vi.fn(async () => ({ available: true as const, data: detail({ isDynamic: true }) })) }, true));
     const dyn = await getRegisteredJob('group.remove-member')!.handler({ ...base, payload });
-    expect(dyn.error?.code).toBe('GROUP_DYNAMIC');
+    expect(dyn.error?.code).toBe('GROUP_NOT_EDITABLE');
+  });
+
+  it('refuses distribution lists and mail-enabled security groups before calling Graph', async () => {
+    for (const kind of ['distribution', 'mail-enabled-security'] as const) {
+      const o = ops({ getGroupDetail: vi.fn(async () => ({ available: true as const, data: detail({ kind }) })) }, true);
+      registerGroupJobs(o);
+      const job = getRegisteredJob('group.add-member')!;
+      const preview = await job.previewGenerator!({ ...base, payload });
+      expect(preview.warnings.some((w) => w.includes('Exchange'))).toBe(true);
+      const result = await job.handler({ ...base, payload });
+      expect(result.error?.code).toBe('GROUP_NOT_EDITABLE');
+      expect(o.addRelation).not.toHaveBeenCalled();
+    }
   });
 
   it('refuses to remove the last owner of a Microsoft 365 group', async () => {

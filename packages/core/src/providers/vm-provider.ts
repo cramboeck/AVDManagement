@@ -256,12 +256,16 @@ export class VmProvider extends BaseResourceProvider {
   async validateDeployment(ctx: ProviderContext, subscriptionId: string, resourceGroup: string, deploymentName: string, template: Record<string, unknown>, parameters: Record<string, { value: unknown }>): Promise<DeploymentValidation> {
     this.validateContext(ctx);
     try {
-      const result = await this.armClient.post<{ asyncOperationUrl?: string; properties?: { validatedResources?: Array<{ id?: string }>; error?: { message?: string } }; error?: { message?: string; details?: Array<{ message?: string }> } }>(
+      type ValidationBody = { asyncOperationUrl?: string; locationUrl?: string; properties?: { validatedResources?: Array<{ id?: string }>; error?: { message?: string } }; error?: { message?: string; details?: Array<{ message?: string }> } };
+      let result = await this.armClient.post<ValidationBody>(
         ctx.tenantId as string,
         `${this.deploymentPath(subscriptionId, resourceGroup, deploymentName)}/validate`,
         { properties: { mode: 'Incremental', template, parameters } },
-        { apiVersion: RESOURCES_API, timeoutMs: 120000 }
+        // Die Pruefung legt nichts an und darf wiederholt werden
+        { apiVersion: RESOURCES_API, timeoutMs: 120000, idempotent: true }
       );
+      // ARM prueft oft asynchron (202 mit Location); ohne Warten galt die Pruefung faelschlich als bestanden
+      if (result?.locationUrl) result = await this.armClient.waitForLocation<ValidationBody>(ctx.tenantId as string, result.locationUrl, 5 * 60 * 1000);
       if (result?.error) return { ok: false, error: [result.error.message, ...(result.error.details ?? []).map((d) => d.message)].filter(Boolean).join(' / '), resources: [] };
       return { ok: true, error: null, resources: (result?.properties?.validatedResources ?? []).map((r) => r.id ?? '').filter(Boolean) };
     } catch (error) {

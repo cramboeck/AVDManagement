@@ -11,6 +11,7 @@
 import { randomInt } from 'node:crypto';
 import type { AzureVmDetail, SealedCipher, VmCostEstimate } from '@zerostress/types';
 import { registerJob, type JobContext, type JobResult, type PreviewContext, type PreviewResult } from './job-types.js';
+import { jobFailure } from './job-types.js';
 import type { ProviderContext } from '../providers/resource-provider.js';
 import type { DeploymentOutcome, DeploymentValidation } from '../providers/vm-provider.js';
 import { buildTemplateParameters, getVmTemplate, managedParameterNames, TemplateInputError, type LoadedTemplate } from '../azure/templates.js';
@@ -53,7 +54,7 @@ const SUBSCRIPTION = /^[0-9a-fA-F-]{36}$/;
 const VM_SIZE = /^[A-Za-z0-9_]{3,40}$/;
 
 function failure(code: string, error: unknown): JobResult {
-  return { success: false, error: { code, message: error instanceof Error ? error.message : String(error), retryable: false } };
+  return jobFailure(code, error);
 }
 
 function requireResourceId(id: string): string {

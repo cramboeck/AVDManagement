@@ -8,6 +8,7 @@
 
 import type { CapabilityResult, GroupDetail, GroupSummary } from '@zerostress/types';
 import { registerJob, type JobContext, type JobResult, type PreviewContext, type PreviewResult } from './job-types.js';
+import { jobFailure } from './job-types.js';
 import type { ProviderContext } from '../providers/resource-provider.js';
 
 export interface GroupMembershipOperations {
@@ -32,7 +33,7 @@ type Verb = 'add' | 'remove';
 const relationLabel: Record<Relation, string> = { members: 'Mitglied', owners: 'Besitzer' };
 
 function failure(code: string, error: unknown): JobResult {
-  return { success: false, error: { code, message: error instanceof Error ? error.message : String(error), retryable: false } };
+  return jobFailure(code, error);
 }
 
 async function loadGroup(ops: GroupMembershipOperations, ctx: ProviderContext, groupId: string): Promise<GroupSummary> {
@@ -40,6 +41,20 @@ async function loadGroup(ops: GroupMembershipOperations, ctx: ProviderContext, g
   if (!detail) throw new Error('Gruppe nicht gefunden');
   if (!detail.available) throw new Error(`Gruppe nicht lesbar: ${detail.detail ?? detail.reason}`);
   return detail.data.group;
+}
+
+/**
+ * Gruende, aus denen Graph eine Aenderung ablehnt. Verteilerlisten und
+ * E-Mail-aktivierte Sicherheitsgruppen verwaltet Exchange; synchronisierte
+ * Gruppen das lokale AD.
+ */
+export function membershipBlockReason(group: Pick<GroupSummary, 'kind' | 'isDynamic' | 'onPremisesSynced'>, relation: Relation): string | null {
+  if (group.onPremisesSynced) return 'Die Gruppe wird aus dem lokalen Active Directory synchronisiert; Aenderungen dort vornehmen.';
+  if (group.kind === 'distribution' || group.kind === 'mail-enabled-security') {
+    return 'Verteilerlisten und E-Mail-aktivierte Sicherheitsgruppen verwaltet Exchange Online; Graph lehnt die Aenderung ab. Im Exchange Admin Center oder per Exchange-Worker aendern.';
+  }
+  if (group.isDynamic && relation === 'members') return 'Mitglieder dynamischer Gruppen kommen aus der Regel und koennen nicht manuell geaendert werden';
+  return null;
 }
 
 function define(ops: GroupMembershipOperations, relation: Relation, verb: Verb) {
@@ -53,9 +68,8 @@ function define(ops: GroupMembershipOperations, relation: Relation, verb: Verb) 
       const providerCtx = { tenantId: ctx.tenantId, correlationId: ctx.correlationId };
       try {
         const group = await loadGroup(ops, providerCtx, payload.groupId);
-        if (group.isDynamic && relation === 'members') {
-          return failure('GROUP_DYNAMIC', 'Mitglieder dynamischer Gruppen kommen aus der Regel und koennen nicht manuell geaendert werden');
-        }
+        const blocked = membershipBlockReason(group, relation);
+        if (blocked) return failure('GROUP_NOT_EDITABLE', blocked);
         const present = await ops.hasRelation(providerCtx, payload.groupId, relation, payload.objectId);
         if (verb === 'add' && present) {
           return { success: true, data: { groupId: payload.groupId, objectId: payload.objectId, relation, changed: false, note: 'bereits vorhanden' } };
@@ -80,7 +94,8 @@ function define(ops: GroupMembershipOperations, relation: Relation, verb: Verb) 
       const group = await loadGroup(ops, providerCtx, payload.groupId);
       const present = await ops.hasRelation(providerCtx, payload.groupId, relation, payload.objectId);
       const warnings: string[] = [];
-      if (group.isDynamic && relation === 'members') warnings.push('Dynamische Gruppe: die Aenderung wird abgelehnt, Mitglieder kommen aus der Regel.');
+      const blocked = membershipBlockReason(group, relation);
+      if (blocked) warnings.push(`Der Job wird abgelehnt: ${blocked}`);
       if (verb === 'add' && present) warnings.push(`${payload.objectDisplayName} ist bereits ${relationLabel[relation]}; es aendert sich nichts.`);
       if (verb === 'remove' && !present) warnings.push(`${payload.objectDisplayName} ist kein ${relationLabel[relation]}; es aendert sich nichts.`);
       if (verb === 'remove' && relation === 'owners' && group.ownerCount <= 1 && (group.kind === 'team' || group.kind === 'microsoft365')) warnings.push('Das ist der letzte Besitzer; Microsoft 365-Gruppen brauchen mindestens einen. Der Job wird abgelehnt.');

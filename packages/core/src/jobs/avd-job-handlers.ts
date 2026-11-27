@@ -9,6 +9,19 @@ import {
   type PreviewResult,
 } from './job-types.js';
 import { AvdProvider } from '../providers/avd-provider.js';
+import { ArmApiError } from '../errors.js';
+
+/** Wiederholbar nur bei Drosselung oder Serverfehler, erkannt am Statuscode. */
+function isRetryable(error: unknown): boolean {
+  return error instanceof ArmApiError && error.isRetryable;
+}
+
+/** VM des Hosts aus ARM; der vmResourceId-Wert aus dem Payload wird bewusst ignoriert. */
+async function resolveVm(avdProvider: AvdProvider, ctx: { tenantId: JobContext['tenantId']; correlationId: string }, payload: { hostPoolId: string; sessionHostName: string }): Promise<string> {
+  const vm = await avdProvider.resolveSessionHostVm(ctx, payload.hostPoolId, payload.sessionHostName);
+  if (!vm) throw new Error(`Session host ${payload.sessionHostName} not found in host pool or has no VM`);
+  return vm;
+}
 
 // Payload-Typen
 interface StartSessionHostPayload {
@@ -76,10 +89,8 @@ export function createStartSessionHostHandler(
     const payload = ctx.payload as unknown as StartSessionHostPayload;
 
     try {
-      await avdProvider.startVm(
-        { tenantId: ctx.tenantId, correlationId: ctx.correlationId },
-        payload.vmResourceId
-      );
+      const providerCtx = { tenantId: ctx.tenantId, correlationId: ctx.correlationId };
+      await avdProvider.startVm(providerCtx, await resolveVm(avdProvider, providerCtx, payload));
 
       return {
         success: true,
@@ -96,7 +107,7 @@ export function createStartSessionHostHandler(
         error: {
           code: 'VM_START_FAILED',
           message,
-          retryable: message.includes('429') || message.includes('timeout'),
+          retryable: isRetryable(error),
         },
       };
     }
@@ -150,10 +161,8 @@ export function createStopSessionHostHandler(
     const payload = ctx.payload as unknown as StopSessionHostPayload;
 
     try {
-      await avdProvider.stopVm(
-        { tenantId: ctx.tenantId, correlationId: ctx.correlationId },
-        payload.vmResourceId
-      );
+      const providerCtx = { tenantId: ctx.tenantId, correlationId: ctx.correlationId };
+      await avdProvider.stopVm(providerCtx, await resolveVm(avdProvider, providerCtx, payload));
 
       return {
         success: true,
@@ -170,7 +179,7 @@ export function createStopSessionHostHandler(
         error: {
           code: 'VM_STOP_FAILED',
           message,
-          retryable: message.includes('429') || message.includes('timeout'),
+          retryable: isRetryable(error),
         },
       };
     }

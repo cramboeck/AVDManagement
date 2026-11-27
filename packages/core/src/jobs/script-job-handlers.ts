@@ -222,6 +222,8 @@ export interface AvdRunScriptPayload {
  */
 export interface VmCommandRunner {
   runCommand(ctx: ProviderContext, vmResourceId: string, scriptLines: string[], timeoutMs?: number): Promise<VmCommandOutput>;
+  // VM des Sitzungshosts aus ARM; der Wert aus dem Browser zaehlt nicht
+  resolveSessionHostVm(ctx: ProviderContext, hostPoolResourceId: string, sessionHostName: string): Promise<string | null>;
 }
 
 function scriptWarnings(script: LoadedScript, transport: string): string[] {
@@ -252,14 +254,21 @@ export function registerAvdScriptJobs(runner: VmCommandRunner, options: RunScrip
       if (!script) {
         return failure('SCRIPT_UNKNOWN', `Script '${payload.scriptId}' is not in the library`);
       }
-      if (!payload.vmResourceId) {
-        return failure('VM_UNKNOWN', 'Session host has no VM resource id');
+      const providerCtx = { tenantId: ctx.tenantId, correlationId: ctx.correlationId };
+      let vmResourceId: string | null;
+      try {
+        vmResourceId = await runner.resolveSessionHostVm(providerCtx, payload.hostPoolId, payload.sessionHostName);
+      } catch (error) {
+        return failure('SESSION_HOST_LOOKUP_FAILED', error instanceof Error ? error.message : String(error));
+      }
+      if (!vmResourceId) {
+        return failure('VM_UNKNOWN', 'Session host not found in this host pool or has no VM');
       }
 
       const requestedAt = new Date();
       let raw: VmCommandOutput;
       try {
-        raw = await runner.runCommand({ tenantId: ctx.tenantId, correlationId: ctx.correlationId }, payload.vmResourceId, buildRunCommandScript(script), options.timeoutMs);
+        raw = await runner.runCommand(providerCtx, vmResourceId, buildRunCommandScript(script), options.timeoutMs);
       } catch (error) {
         return failure('RUN_COMMAND_FAILED', error instanceof Error ? error.message : String(error));
       }
@@ -280,7 +289,7 @@ export function registerAvdScriptJobs(runner: VmCommandRunner, options: RunScrip
         version: script.version,
         hash: script.hash,
         tenantScriptId: 'azure-run-command',
-        managedDeviceId: payload.vmResourceId,
+        managedDeviceId: vmResourceId,
         requestedAt: requestedAt.toISOString(),
         completedAt: new Date().toISOString(),
         detectionState,

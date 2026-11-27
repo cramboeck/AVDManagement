@@ -58,6 +58,20 @@ Im Bericht-Modus starten, Anmeldeprotokoll pruefen, dann scharf schalten.
 Ohne Conditional Access reicht ein gestohlenes Passwort plus SMS-Code fuer
 Adminrechte auf allen Kundentenants.
 
+### MFA zusaetzlich in der Konsole pruefen
+
+Conditional Access ist die eigentliche Sperre. Als zweite Linie prueft die
+API mit `LOGIN_REQUIRE_MFA=true` den `amr`-Claim des ID-Tokens und lehnt
+Anmeldungen ohne `mfa`, `fido`, `rsa`, `hwk`, `swk` oder `ngcmfa` ab.
+Vorher pruefen, dass Entra den Claim liefert: einmal anmelden und unter
+https://jwt.ms das ID-Token aus den Entwicklertools ansehen (Anfrage
+`/auth/token`, Feld `id_token`). Fehlt `amr`, nicht einschalten.
+
+Fehlgeschlagene Anmeldungen bekannter Konsolenbenutzer stehen im Audit
+(`auth.login`, Ergebnis Fehlschlag). Alle Fehlversuche, auch von fremden
+Konten, stehen in der Tabelle `login_attempts` (Grund, Zeit und nur Hashes
+von Objekt-Id, Tenant und IP), 90 Tage lang.
+
 ## 3. TLS und Reverse Proxy
 
 Web und API laufen hinter einem Proxy unter **einem Host**, damit das

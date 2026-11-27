@@ -786,6 +786,8 @@ export interface AppAssignment {
   groupName: string | null;
   filterId: string | null;
   filterType: 'include' | 'exclude' | null;
+  // Einstellungen der Zuweisung (Benachrichtigung, Frist, Neustart, Delivery Optimization) unveraendert aus Graph
+  settings: Record<string, unknown> | null;
 }
 
 export interface AppInstallSummary {
@@ -848,6 +850,8 @@ export interface AppAssignmentInput {
   groupId: string | null;
   filterId?: string | null;
   filterType?: 'include' | 'exclude' | null;
+  // Nur beim Zurueckschreiben bestehender Zuweisungen; neue Zuweisungen nutzen die Intune-Standards
+  settings?: Record<string, unknown> | null;
 }
 
 // ============================================

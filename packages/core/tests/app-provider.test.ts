@@ -32,14 +32,37 @@ describe('helpers', () => {
 
   it('merges by target: replaces the same group, keeps others, removes by id', () => {
     const existing: AppAssignment[] = [
-      { id: 'a1', intent: 'available', targetType: 'group', groupId: 'g1', groupName: null, filterId: null, filterType: null },
-      { id: 'a2', intent: 'required', targetType: 'group', groupId: 'g2', groupName: null, filterId: null, filterType: null },
+      { id: 'a1', intent: 'available', targetType: 'group', groupId: 'g1', groupName: null, filterId: null, filterType: null, settings: null },
+      { id: 'a2', intent: 'required', targetType: 'group', groupId: 'g2', groupName: null, filterId: null, filterType: null, settings: null },
     ];
     expect(mergeAssignments(existing, [{ intent: 'required', targetType: 'group', groupId: 'g1' }]).map((m) => [m.groupId, m.intent])).toEqual([
       ['g2', 'required'],
       ['g1', 'required'],
     ]);
     expect(mergeAssignments(existing, [], ['a2']).map((m) => m.groupId)).toEqual(['g1']);
+  });
+
+  it('keeps deadlines and notification settings of untouched assignments when assigning another group', () => {
+    const win32Settings = {
+      '@odata.type': '#microsoft.graph.win32LobAppAssignmentSettings',
+      notifications: 'hideAll',
+      installTimeSettings: { useLocalTime: true, deadlineDateTime: '2026-12-01T18:00:00Z' },
+      restartSettings: { gracePeriodInMinutes: 1440, countdownDisplayBeforeRestartInMinutes: 15 },
+      deliveryOptimizationPriority: 'foreground',
+    };
+    const existing = [mapAssignment({ id: 'a1', intent: 'required', target: { '@odata.type': '#microsoft.graph.groupAssignmentTarget', groupId: 'pilot' }, settings: win32Settings })];
+    const merged = mergeAssignments(existing, [{ intent: 'required', targetType: 'group', groupId: 'wave-1' }]);
+    const payload = merged.map(toGraphAssignment);
+    expect(payload.find((p) => p.target.groupId === 'pilot')?.settings).toEqual(win32Settings);
+    // Neue Gruppe ohne eigene Einstellungen bekommt keine fremden
+    expect(payload.find((p) => p.target.groupId === 'wave-1')?.settings).toBeUndefined();
+  });
+
+  it('carries settings over when the same group is re-assigned with the same intent, not when the intent changes', () => {
+    const settings = { '@odata.type': '#microsoft.graph.win32LobAppAssignmentSettings', notifications: 'showReboot' };
+    const existing = [mapAssignment({ id: 'a1', intent: 'required', target: { '@odata.type': '#microsoft.graph.groupAssignmentTarget', groupId: 'g1' }, settings })];
+    expect(mergeAssignments(existing, [{ intent: 'required', targetType: 'group', groupId: 'g1', filterId: 'f1', filterType: 'include' }])[0].settings).toEqual(settings);
+    expect(mergeAssignments(existing, [{ intent: 'uninstall', targetType: 'group', groupId: 'g1' }])[0].settings).toBeUndefined();
   });
 
   it('turns report schema and values into rows', () => {

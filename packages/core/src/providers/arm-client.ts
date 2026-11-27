@@ -7,6 +7,7 @@
 
 import { ArmApiError } from '../errors.js';
 import { resolveRequestUrl } from './request-url.js';
+import { backoffMs, parseRetryAfter, shouldRetryStatus, shouldRetryTransport } from './retry-policy.js';
 
 export interface ArmClientConfig {
   getAccessToken: (tenantId: string, scopes: string[]) => Promise<string>;
@@ -16,6 +17,14 @@ export interface ArmClientConfig {
   apiVersion?: string;
 }
 
+interface ArmRawResponse {
+  status: number;
+  body: unknown;
+  asyncOperationUrl?: string;
+  location?: string;
+  retryAfterSeconds?: number;
+}
+
 export interface ArmRequestOptions {
   method?: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
   body?: unknown;
@@ -23,6 +32,8 @@ export interface ArmRequestOptions {
   retries?: number;
   timeoutMs?: number;
   apiVersion?: string;
+  // Lesender POST: darf bei Zeitueberschreitung und 5xx wiederholt werden
+  idempotent?: boolean;
 }
 
 export interface ArmResponse<T> {
@@ -56,11 +67,11 @@ export class ArmClient {
     this.getAccessToken = config.getAccessToken;
   }
 
-  async request<T>(
-    tenantId: string,
-    path: string,
-    options: ArmRequestOptions = {}
-  ): Promise<T> {
+  /**
+   * Ein Aufruf mit Wiederholungsregeln (retry-policy.ts). Liefert Status,
+   * Body und die Kopfzeilen fuer lang laufende Vorgaenge.
+   */
+  private async send(tenantId: string, path: string, options: ArmRequestOptions = {}): Promise<ArmRawResponse> {
     const {
       method = 'GET',
       body,
@@ -68,6 +79,7 @@ export class ArmClient {
       retries = this.defaultRetries,
       timeoutMs = this.defaultTimeoutMs,
       apiVersion = this.defaultApiVersion,
+      idempotent,
     } = options;
 
     // Absolute URLs (nextLink, Async-Operation) nur auf dem ARM-Host, siehe request-url.ts
@@ -78,11 +90,12 @@ export class ArmClient {
       const separator = path.includes('?') ? '&' : '?';
       url = `${this.baseUrl}${path}${separator}api-version=${apiVersion}`;
     }
-    const accessToken = await this.getAccessToken(tenantId, ARM_SCOPES);
 
     let lastError: Error | null = null;
 
     for (let attempt = 0; attempt <= retries; attempt++) {
+      // Je Versuch neu holen: nach langem Retry-After kann das Token abgelaufen sein
+      const accessToken = await this.getAccessToken(tenantId, ARM_SCOPES);
       try {
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), timeoutMs);
@@ -101,14 +114,23 @@ export class ArmClient {
         clearTimeout(timeout);
 
         if (response.ok) {
-          if (response.status === 204 || response.status === 202) {
-            const asyncOpUrl = response.headers.get('Azure-AsyncOperation');
-            if (asyncOpUrl) {
-              return { asyncOperationUrl: asyncOpUrl } as T;
+          // Erst als Text lesen: 200/202 mit leerem Body ist gueltig und kein JSON-Fehler
+          const text = response.status === 204 ? '' : await response.text();
+          let parsed: unknown;
+          if (text.trim()) {
+            try {
+              parsed = JSON.parse(text);
+            } catch {
+              throw new ArmApiError(response.status, 'InvalidResponse', `ARM antwortete mit ${response.status}, aber ohne gueltiges JSON`);
             }
-            return undefined as T;
           }
-          return (await response.json()) as T;
+          return {
+            status: response.status,
+            body: parsed,
+            asyncOperationUrl: response.headers.get('Azure-AsyncOperation') ?? undefined,
+            location: response.headers.get('Location') ?? undefined,
+            retryAfterSeconds: parseRetryAfter(response.headers.get('Retry-After')),
+          };
         }
 
         const errorBody = await this.parseErrorBody(response);
@@ -116,15 +138,15 @@ export class ArmClient {
           response.status,
           errorBody.code ?? 'Unknown',
           errorBody.message ?? response.statusText,
-          this.parseRetryAfter(response)
+          parseRetryAfter(response.headers.get('Retry-After'))
         );
 
-        if (!armError.isRetryable || attempt === retries) {
+        if (!shouldRetryStatus(response.status, method, idempotent) || attempt === retries) {
           throw armError;
         }
 
         lastError = armError;
-        await this.delay(this.calculateBackoff(attempt, armError.retryAfterSeconds));
+        await this.delay(backoffMs(attempt, armError.retryAfterSeconds));
       } catch (error) {
         if (error instanceof ArmApiError) {
           throw error;
@@ -136,15 +158,52 @@ export class ArmClient {
           lastError = error instanceof Error ? error : new Error(String(error));
         }
 
-        if (attempt === retries) {
+        // Ein POST ohne Antwort (z. B. Run Command, VM-Start) kann schon laufen: nicht doppelt senden
+        if (attempt === retries || !shouldRetryTransport(method, idempotent)) {
           throw lastError;
         }
 
-        await this.delay(this.calculateBackoff(attempt));
+        await this.delay(backoffMs(attempt));
       }
     }
 
     throw lastError ?? new Error('Unexpected error in ArmClient');
+  }
+
+  /**
+   * Aufruf mit Body als Ergebnis. Laeuft der Vorgang bei Azure noch weiter
+   * (Azure-AsyncOperation oder 202 mit Location, auch bei 200/201), steht
+   * die Adresse zum Warten in asyncOperationUrl bzw. locationUrl.
+   */
+  async request<T>(
+    tenantId: string,
+    path: string,
+    options: ArmRequestOptions = {}
+  ): Promise<T> {
+    const res = await this.send(tenantId, path, options);
+    const bodyObject = res.body && typeof res.body === 'object' && !Array.isArray(res.body) ? (res.body as Record<string, unknown>) : null;
+    if (res.asyncOperationUrl) {
+      return { ...(bodyObject ?? {}), asyncOperationUrl: res.asyncOperationUrl } as T;
+    }
+    if (res.status === 202 && res.location) {
+      return { ...(bodyObject ?? {}), locationUrl: res.location } as T;
+    }
+    return (res.body === undefined ? undefined : res.body) as T;
+  }
+
+  /**
+   * Auf einen Vorgang mit Location-Kopfzeile warten: 202 heisst laeuft noch,
+   * 200/204 ist das Ergebnis. Fehler kommen als ArmApiError (z. B. 400 bei
+   * einer gescheiterten Pruefung).
+   */
+  async waitForLocation<T>(tenantId: string, locationUrl: string, timeoutMs = 300000): Promise<T> {
+    const started = Date.now();
+    while (Date.now() - started < timeoutMs) {
+      const res = await this.send(tenantId, locationUrl, { method: 'GET' });
+      if (res.status !== 202) return res.body as T;
+      await this.delay(Math.min(backoffMs(0, res.retryAfterSeconds ?? 5), 60000));
+    }
+    throw new Error(`Operation did not finish within ${timeoutMs}ms`);
   }
 
   async get<T>(
@@ -266,29 +325,7 @@ export class ArmClient {
     }
   }
 
-  private parseRetryAfter(response: Response): number | undefined {
-    const header = response.headers.get('Retry-After');
-    if (!header) return undefined;
 
-    const seconds = parseInt(header, 10);
-    if (!isNaN(seconds)) return seconds;
-
-    const date = Date.parse(header);
-    if (!isNaN(date)) {
-      return Math.max(0, Math.ceil((date - Date.now()) / 1000));
-    }
-
-    return undefined;
-  }
-
-  private calculateBackoff(attempt: number, retryAfterSeconds?: number): number {
-    if (retryAfterSeconds !== undefined) {
-      return retryAfterSeconds * 1000;
-    }
-    const baseDelay = 1000;
-    const maxDelay = 60000;
-    return Math.min(baseDelay * Math.pow(2, attempt), maxDelay);
-  }
 
   private delay(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));

@@ -95,6 +95,8 @@ export interface EntraClaims {
   tid: string | null;
   email: string;
   name: string;
+  // Authentifizierungsmethoden laut Entra (z. B. pwd, mfa, fido); leer, wenn nicht geliefert
+  amr: string[];
 }
 
 /**
@@ -111,7 +113,8 @@ export async function verifyEntraToken(token: string, audience: string[]): Promi
   const oid = typeof payload.oid === 'string' ? payload.oid : '';
   const email = (payload.preferred_username ?? payload.email ?? payload.upn) as string | undefined;
   if (!oid || !email) throw new HTTPException(401, { message: 'Invalid token claims' });
-  return { oid, tid: typeof payload.tid === 'string' ? payload.tid : null, email, name: typeof payload.name === 'string' ? payload.name : email };
+  const amr = Array.isArray(payload.amr) ? payload.amr.filter((x): x is string => typeof x === 'string') : [];
+  return { oid, tid: typeof payload.tid === 'string' ? payload.tid : null, email, name: typeof payload.name === 'string' ? payload.name : email, amr };
 }
 
 // Rollen-Pruefung

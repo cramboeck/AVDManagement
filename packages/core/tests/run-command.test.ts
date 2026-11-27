@@ -64,9 +64,12 @@ describe('avd.run-script', () => {
     hostPoolName: 'hp',
     sessionHostId: 'hp/host-1.contoso.local',
     sessionHostName: 'host-1.contoso.local',
-    vmResourceId: '/subscriptions/s/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/host-1',
+    // Wert aus dem Browser; der Job darf ihn nicht verwenden
+    vmResourceId: '/subscriptions/s/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/dc01',
     scriptId: 'system-info',
   };
+  const hostVm = '/subscriptions/s/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/host-1';
+  const resolveSessionHostVm = vi.fn(async () => hostVm);
 
   it('runs the framed script on the VM and parses the result', async () => {
     const runner = {
@@ -74,6 +77,7 @@ describe('avd.run-script', () => {
         stdout: 'ZSC-RESULT-BEGIN\n{"schema":"zsc.system-info/1","uptimeHours":2}\nZSC-RESULT-END\nZSC-EXIT:0\nZSC-REMEDIATION:none:\n',
         stderr: null,
       })),
+      resolveSessionHostVm,
     };
     registerAvdScriptJobs(runner, { timeoutMs: 1000 });
     const result = await getRegisteredJob('avd.run-script')!.handler({ ...base, payload });
@@ -81,27 +85,36 @@ describe('avd.run-script', () => {
     const data = result.data as unknown as ScriptRunResult;
     expect(data).toMatchObject({ stateSource: 'run-command', detectionState: 'success', remediationState: 'skipped', outputJson: { uptimeHours: 2 } });
     const [, vmId, lines] = runner.runCommand.mock.calls[0];
-    expect(vmId).toBe(payload.vmResourceId);
+    // Die VM kommt aus ARM ueber Hostpool und Hostname, nicht aus dem Payload
+    expect(vmId).toBe(hostVm);
+    expect(resolveSessionHostVm).toHaveBeenCalledWith(expect.anything(), payload.hostPoolId, payload.sessionHostName);
     expect(lines.join('\n')).toContain('ZSC-RESULT-BEGIN');
   });
 
   it('fails when the VM does not answer or the script errors', async () => {
-    registerAvdScriptJobs({ runCommand: vi.fn(async () => ({ stdout: '', stderr: null })) });
+    registerAvdScriptJobs({ runCommand: vi.fn(async () => ({ stdout: '', stderr: null })), resolveSessionHostVm });
     expect((await getRegisteredJob('avd.run-script')!.handler({ ...base, payload })).error?.code).toBe('RUN_COMMAND_NO_OUTPUT');
 
-    registerAvdScriptJobs({ runCommand: vi.fn(async () => ({ stdout: 'ZSC-RESULT-BEGIN\nZSC-RESULT-END\nZSC-EXIT:5\nZSC-REMEDIATION:none:\n', stderr: 'boom' })) });
+    registerAvdScriptJobs({ runCommand: vi.fn(async () => ({ stdout: 'ZSC-RESULT-BEGIN\nZSC-RESULT-END\nZSC-EXIT:5\nZSC-REMEDIATION:none:\n', stderr: 'boom' })), resolveSessionHostVm });
     expect((await getRegisteredJob('avd.run-script')!.handler({ ...base, payload })).error?.code).toBe('SCRIPT_FAILED_ON_HOST');
 
     registerAvdScriptJobs({
       runCommand: vi.fn(async () => {
         throw new Error('VM deallocated');
       }),
+      resolveSessionHostVm,
     });
     expect((await getRegisteredJob('avd.run-script')!.handler({ ...base, payload })).error?.message).toBe('VM deallocated');
+
+    // Host nicht im Pool: es laeuft nichts
+    const runCommand = vi.fn();
+    registerAvdScriptJobs({ runCommand, resolveSessionHostVm: vi.fn(async () => null) });
+    expect((await getRegisteredJob('avd.run-script')!.handler({ ...base, payload })).error?.code).toBe('VM_UNKNOWN');
+    expect(runCommand).not.toHaveBeenCalled();
   });
 
   it('previews the transport and the host', async () => {
-    registerAvdScriptJobs({ runCommand: vi.fn() });
+    registerAvdScriptJobs({ runCommand: vi.fn(), resolveSessionHostVm });
     const preview = await getRegisteredJob('avd.run-script')!.previewGenerator!({ ...base, payload: { ...payload, scriptId: 'update-scan' } });
     expect(preview.changes[0]).toMatchObject({ objectType: 'session-host', objectId: payload.sessionHostId, after: { transport: 'azure-run-command', remediation: true } });
     expect(preview.warnings.some((w) => w.includes('Azure-VM-Agent'))).toBe(true);

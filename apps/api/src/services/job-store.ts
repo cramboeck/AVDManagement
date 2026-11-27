@@ -2,7 +2,7 @@
  * Job-Store Implementation mit Drizzle
  */
 
-import { eq, and, desc, lt, inArray, sql } from 'drizzle-orm';
+import { eq, and, or, desc, lt, inArray, sql } from 'drizzle-orm';
 import { db, jobs, mspUsers } from '../db/index.js';
 import { targetCountOf, type JobStore } from '@zerostress/core';
 import type { Job, JobId, TenantId, JobStatus } from '@zerostress/types';
@@ -125,7 +125,12 @@ export class DrizzleJobStore implements JobStore {
   }
 
   // Jobs, die der Worker nie abgeschlossen hat (z. B. Neustart, Redis weg), nicht ewig "laufen" lassen
-  async failStaleActive(olderThan: Date): Promise<number> {
+  /**
+   * Haengende Jobs beenden. Laufende nach ihrem Start, eingereihte nach dem
+   * Anlegen plus Freigabefenster: eine zweite Freigabe darf Stunden nach dem
+   * Anlegen kommen, der Job ist dann frisch eingereiht und nicht "alt".
+   */
+  async failStaleActive(runningStartedBefore: Date, queuedCreatedBefore: Date = runningStartedBefore): Promise<number> {
     const failed = await db
       .update(jobs)
       .set({
@@ -133,7 +138,12 @@ export class DrizzleJobStore implements JobStore {
         completedAt: new Date(),
         error: 'Job was not completed by the worker within the expected time',
       })
-      .where(and(inArray(jobs.status, ['queued', 'running']), lt(jobs.createdAt, olderThan)))
+      .where(
+        or(
+          and(eq(jobs.status, 'running'), lt(sql`coalesce(${jobs.startedAt}, ${jobs.createdAt})`, runningStartedBefore)),
+          and(eq(jobs.status, 'queued'), lt(jobs.createdAt, queuedCreatedBefore))
+        )
+      )
       .returning({ id: jobs.id });
 
     return failed.length;

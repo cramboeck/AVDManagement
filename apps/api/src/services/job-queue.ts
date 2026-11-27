@@ -18,8 +18,8 @@ import { getResultSealer } from './result-crypto.js';
 import { publishOperations } from './publishing.js';
 import { getWriteGuard } from './access-mode.js';
 
-// Freigaben verfallen nach der Preview-Gueltigkeit (5 Min) plus Puffer
-const PENDING_APPROVAL_TTL_MS = 10 * 60 * 1000;
+// Unbestaetigte Jobs nach einer Stunde verwerfen; eine abgelaufene Vorschau (15 Min) wird beim Freigeben neu erzeugt
+const PENDING_APPROVAL_TTL_MS = 60 * 60 * 1000;
 const ACTIVE_JOB_TTL_MS = 2 * 60 * 60 * 1000;
 // Versiegelte, personenbezogene Ergebnisse werden nach 30 Tagen geloescht
 const SEALED_RESULT_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
@@ -99,7 +99,7 @@ export function getJobQueue(): JobQueue {
       if (!store) return;
       Promise.all([
         store.cancelExpiredPending(new Date(Date.now() - PENDING_APPROVAL_TTL_MS), new Date(Date.now() - SECOND_APPROVAL_WINDOW_MS - PENDING_APPROVAL_TTL_MS)),
-        store.failStaleActive(new Date(Date.now() - ACTIVE_JOB_TTL_MS)),
+        store.failStaleActive(new Date(Date.now() - ACTIVE_JOB_TTL_MS), new Date(Date.now() - SECOND_APPROVAL_WINDOW_MS - ACTIVE_JOB_TTL_MS)),
         store.purgeSealedResults(new Date(Date.now() - SEALED_RESULT_RETENTION_MS)),
       ])
         .then(([cancelled, failed, purged]) => {

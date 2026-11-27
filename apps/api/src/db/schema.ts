@@ -56,6 +56,18 @@ export const workerTokens = pgTable('worker_tokens', {
   revokedAt: timestamp('revoked_at', { withTimezone: true }),
 });
 
+// Fehlgeschlagene Anmeldungen an der Konsole, auch von unbekannten Konten.
+// Keine Namen: nur der SHA-256 der Entra-Objekt-Id; Aufbewahrung 90 Tage.
+export const loginAttempts = pgTable('login_attempts', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  at: timestamp('at', { withTimezone: true }).notNull().defaultNow(),
+  reason: varchar('reason', { length: 50 }).notNull(),
+  oidHash: varchar('oid_hash', { length: 64 }),
+  tenantHash: varchar('tenant_hash', { length: 64 }),
+  // Wie bei den Sitzungen nur ein Hash der Client-IP
+  ipHash: varchar('ip_hash', { length: 64 }),
+});
+
 // Browser-Sitzungen: nur der Hash der Sitzungs-Id, keine Entra-Tokens
 export const userSessions = pgTable('user_sessions', {
   id: uuid('id').primaryKey().defaultRandom(),

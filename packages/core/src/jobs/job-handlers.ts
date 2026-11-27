@@ -8,6 +8,7 @@ import {
   type PreviewContext,
   type PreviewResult,
 } from './job-types.js';
+import { jobFailure } from './job-types.js';
 import { IdentityProvider } from '../providers/identity-provider.js';
 import type { ResultSealer } from './script-job-handlers.js';
 
@@ -155,14 +156,7 @@ interface DisableUserPayload extends UserAccountPayload {
 }
 
 function failure(code: string, error: unknown): JobResult {
-  return {
-    success: false,
-    error: {
-      code,
-      message: error instanceof Error ? error.message : String(error),
-      retryable: false,
-    },
-  };
+  return jobFailure(code, error);
 }
 
 function accountChange(

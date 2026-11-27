@@ -23,6 +23,7 @@ import {
   getRegisteredJob,
 } from './job-types.js';
 import { JobError, ReadOnlyModeError } from '../errors.js';
+import { jobFailure } from './job-types.js';
 import type { WriteGuard } from './write-guard.js';
 import { targetCountOf } from './approval-policy.js';
 
@@ -34,6 +35,8 @@ export interface JobQueueConfig {
   approvalPolicy?: (job: Job, preview: PreviewResult) => Promise<{ required: boolean; reason: string | null }>;
   // Nur-Lese-Betrieb: wird beim Anlegen, Freigeben und Ausfuehren geprueft
   writeGuard?: WriteGuard;
+  // Grundwartezeit vor einer Job-Wiederholung (exponentiell); Standard 30 s
+  retryBackoffMs?: number;
 }
 
 // Eine zweite Person braucht Zeit; die Vorschau gilt dann laenger als fuenf Minuten
@@ -65,6 +68,25 @@ export interface AuditLogger {
   }): Promise<void>;
 }
 
+
+/** Handler hat das Zeitlimit der Jobdefinition ueberschritten. */
+class JobTimeoutError extends Error {}
+
+/** Signal an BullMQ: nach Backoff erneut versuchen. */
+class RetryableJobError extends Error {}
+
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  if (!Number.isFinite(ms) || ms <= 0) return promise;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () => reject(new JobTimeoutError(`Zeitlimit von ${Math.round(ms / 1000)} s ueberschritten. Der Vorgang kann im Tenant noch laufen; Ergebnis dort pruefen.`)),
+      ms
+    );
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
 export class JobQueue {
   private readonly queue: Queue<JobData>;
   private worker: Worker<JobData, JobResult> | null = null;
@@ -79,10 +101,11 @@ export class JobQueue {
     this.queue = new Queue<JobData>(config.queueName ?? 'jobs', {
       connection: config.redis,
       defaultJobOptions: {
-        attempts: 3,
+        attempts: 1,
+        // Job-Wiederholung erst nach den Retry-After-Wartezeiten im Client; daher grosszuegig
         backoff: {
           type: 'exponential',
-          delay: 1000,
+          delay: 30000,
         },
         removeOnComplete: { count: 1000 },
         removeOnFail: { count: 5000 },
@@ -92,10 +115,30 @@ export class JobQueue {
     this.auditLogger = auditLogger;
     this.approvalPolicy = config.approvalPolicy;
     this.writeGuard = config.writeGuard;
+    this.retryBackoffMs = config.retryBackoffMs ?? 30000;
   }
 
   private readonly approvalPolicy?: JobQueueConfig['approvalPolicy'];
   private readonly writeGuard?: WriteGuard;
+  private readonly retryBackoffMs: number;
+  // Laufende Jobs je Tenant und Typ in diesem Prozess
+  private readonly running = new Map<string, number>();
+
+  private async acquireSlot(key: string, limit: number): Promise<() => void> {
+    const max = Math.max(1, limit || 1);
+    while ((this.running.get(key) ?? 0) >= max) {
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+    this.running.set(key, (this.running.get(key) ?? 0) + 1);
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      const left = (this.running.get(key) ?? 1) - 1;
+      if (left <= 0) this.running.delete(key);
+      else this.running.set(key, left);
+    };
+  }
 
   /**
    * Nur-Lese-Sperre pruefen. Ein gesperrter Versuch landet als Fehlschlag im
@@ -350,29 +393,44 @@ export class JobQueue {
           }
         }
 
-        await this.jobStore.update(job.id, {
-          status: 'running',
-          startedAt: new Date().toISOString(),
-          retryCount: bullJob.attemptsMade,
-        });
+        const definition = registered.definition;
+        const maxAttempts = Math.max(1, definition.maxRetries + 1);
+        const isLastAttempt = bullJob.attemptsMade + 1 >= maxAttempts;
 
+        // Limit je Tenant und Jobtyp aus der Definition (z. B. hoechstens 3 Run Commands gleichzeitig)
+        const release = await this.acquireSlot(`${job.tenantId}:${job.type}`, definition.concurrencyPerTenant);
         try {
-          const result = await registered.handler({
-            jobId: job.id,
-            tenantId: job.tenantId,
-            mspId: job.mspId,
-            userId: job.createdBy,
-            correlationId: job.correlationId,
-            payload: job.payload,
-            attempt: bullJob.attemptsMade,
+          await this.jobStore.update(job.id, {
+            status: 'running',
+            startedAt: new Date().toISOString(),
+            retryCount: bullJob.attemptsMade,
           });
 
-          const now = new Date();
+          let result: JobResult;
+          try {
+            result = await withTimeout(
+              registered.handler({
+                jobId: job.id,
+                tenantId: job.tenantId,
+                mspId: job.mspId,
+                userId: job.createdBy,
+                correlationId: job.correlationId,
+                payload: job.payload,
+                attempt: bullJob.attemptsMade,
+              }),
+              definition.timeoutSeconds * 1000
+            );
+          } catch (error) {
+            const timedOut = error instanceof JobTimeoutError;
+            result = timedOut
+              ? { success: false, error: { code: 'JOB_TIMEOUT', message: error.message, retryable: false } }
+              : jobFailure('HANDLER_ERROR', error);
+          }
 
           if (result.success) {
             await this.jobStore.update(job.id, {
               status: 'completed',
-              completedAt: now.toISOString(),
+              completedAt: new Date().toISOString(),
               result: result.data ?? {},
             });
 
@@ -389,35 +447,20 @@ export class JobQueue {
               result: 'success',
               correlationId: job.correlationId,
             });
-          } else {
-            await this.jobStore.update(job.id, {
-              status: 'failed',
-              completedAt: now.toISOString(),
-              error: result.error?.message ?? 'Unknown error',
-            });
-
-            await this.auditLogger.log({
-              mspId: job.mspId,
-              tenantId: job.tenantId,
-              userId: job.createdBy,
-              action: job.type,
-              targetType: this.extractTargetType(job.payload),
-              targetId: this.extractTargetId(job.payload),
-              targetDisplayName: this.extractTargetDisplayName(job.payload),
-              result: 'failure',
-              errorMessage: result.error?.message,
-              correlationId: job.correlationId,
-            });
+            return result;
           }
 
-          return result;
-        } catch (error) {
-          const errorMessage = error instanceof Error ? error.message : String(error);
+          const message = result.error?.message ?? 'Unknown error';
+          // Nur gedrosselte Aufrufe (429) wiederholen, und nur so oft wie die Definition erlaubt
+          if (result.error?.retryable && !isLastAttempt) {
+            await this.jobStore.update(job.id, { status: 'queued', error: `Wird wiederholt (Versuch ${bullJob.attemptsMade + 2} von ${maxAttempts}): ${message}` });
+            throw new RetryableJobError(message);
+          }
 
           await this.jobStore.update(job.id, {
             status: 'failed',
             completedAt: new Date().toISOString(),
-            error: errorMessage,
+            error: message,
           });
 
           await this.auditLogger.log({
@@ -429,11 +472,14 @@ export class JobQueue {
             targetId: this.extractTargetId(job.payload),
             targetDisplayName: this.extractTargetDisplayName(job.payload),
             result: 'failure',
-            errorMessage,
+            errorMessage: message,
             correlationId: job.correlationId,
           });
 
-          throw error;
+          // Endgueltig: BullMQ soll nicht noch einmal anfangen
+          return result;
+        } finally {
+          release();
         }
       },
       {
@@ -500,9 +546,13 @@ export class JobQueue {
       low: 4,
     };
 
+    const definition = getRegisteredJob(job.type)?.definition;
     await this.queue.add(job.type, jobData, {
       jobId: job.id,
       priority: priorityMap[job.priority] ?? 3,
+      // maxRetries der Definition statt pauschal 3 Versuche
+      attempts: Math.max(1, (definition?.maxRetries ?? 0) + 1),
+      backoff: { type: 'exponential', delay: this.retryBackoffMs },
     });
 
     await this.jobStore.update(job.id, { status: 'queued' });

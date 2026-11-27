@@ -3,6 +3,7 @@
  */
 
 import { registerJob, type JobContext, type JobResult, type PreviewContext, type PreviewResult } from './job-types.js';
+import { jobFailure } from './job-types.js';
 import { DeviceProvider } from '../providers/device-provider.js';
 
 interface DevicePayload {
@@ -12,14 +13,7 @@ interface DevicePayload {
 }
 
 function failure(code: string, error: unknown): JobResult {
-  return {
-    success: false,
-    error: {
-      code,
-      message: error instanceof Error ? error.message : String(error),
-      retryable: false,
-    },
-  };
+  return jobFailure(code, error);
 }
 
 function devicePreview(

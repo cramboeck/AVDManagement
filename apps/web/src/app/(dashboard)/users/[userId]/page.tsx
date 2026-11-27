@@ -445,17 +445,22 @@ function GroupsTab({ base, tenantId, userId, user }: { base: string; tenantId: s
       sortable: false,
       searchable: false,
       align: 'right',
-      cell: (g) => (
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            setRemoving(g);
-          }}
-          className="rounded-md border border-destructive/40 px-2 py-1 text-xs text-destructive hover:bg-destructive/10"
-        >
-          Entfernen
-        </button>
-      ),
+      cell: (g) =>
+        g.kind === 'distribution' || g.kind === 'mail-enabled-security' ? (
+          <span className="text-xs text-muted-foreground" title="Verwaltet Exchange Online; Graph kann die Mitgliedschaft nicht aendern">
+            in Exchange
+          </span>
+        ) : (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setRemoving(g);
+            }}
+            className="rounded-md border border-destructive/40 px-2 py-1 text-xs text-destructive hover:bg-destructive/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-destructive"
+          >
+            Entfernen
+          </button>
+        ),
     },
   ];
 

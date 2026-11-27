@@ -9,6 +9,7 @@
  */
 
 import { createHash, randomBytes } from 'node:crypto';
+import { pruneLoginAttempts } from './login-attempts.js';
 import { and, eq, isNull, lt, or } from 'drizzle-orm';
 import { db, userSessions } from '../db/index.js';
 import { sessionPolicy } from './session-cookie.js';
@@ -116,6 +117,7 @@ export function startSessionPruning(): void {
   if (pruneTimer) return;
   pruneTimer = setInterval(() => {
     pruneSessions().catch((error: Error) => console.error('Session pruning failed:', error.message));
+    pruneLoginAttempts().catch((error: Error) => console.error('Login attempt pruning failed:', error.message));
   }, 60 * 60 * 1000);
   pruneTimer.unref();
 }

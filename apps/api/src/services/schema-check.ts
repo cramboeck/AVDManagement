@@ -28,6 +28,7 @@ const REQUIRED_COLUMNS: ReadonlyArray<readonly [table: string, column: string]> 
   ['software_blocklist', 'id'],
   ['cve_explanations', 'cve_id'],
   ['managed_tenants', 'access_mode'],
+  ['login_attempts', 'id'],
 ];
 
 export interface SchemaCheckResult {

@@ -168,4 +168,31 @@ describe('AvdProvider', () => {
       );
     });
   });
+  describe('session host paths', () => {
+    const pool = '/subscriptions/11111111-2222-3333-4444-555555555555/resourceGroups/rg/providers/Microsoft.DesktopVirtualization/hostPools/pool';
+
+    it('uses only the host part of "pool/host" names in the ARM path', async () => {
+      mockArmClient.patch.mockResolvedValue(undefined);
+      await provider.setDrainMode(ctx, pool, 'pool/avd-0.contoso.local', false);
+      expect(mockArmClient.patch).toHaveBeenCalledWith(tenantId, `${pool}/sessionHosts/avd-0.contoso.local`, { properties: { allowNewSession: false } }, expect.anything());
+    });
+
+    it('builds session paths from "pool/host/id" session names', async () => {
+      mockArmClient.post.mockResolvedValue(undefined);
+      await provider.sendMessage(ctx, pool, 'pool/avd-0.contoso.local', 'pool/avd-0.contoso.local/3', 'Wartung', 'Bitte abmelden');
+      expect(mockArmClient.post.mock.calls[0][1]).toBe(`${pool}/sessionHosts/avd-0.contoso.local/userSessions/3/sendMessage`);
+    });
+
+    it('rejects anything that is not a host pool resource id', async () => {
+      await expect(provider.setDrainMode(ctx, '/subscriptions/x/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/dc01', 'h', true)).rejects.toMatchObject({ statusCode: 400 });
+      expect(mockArmClient.patch).not.toHaveBeenCalled();
+    });
+
+    it('resolves the VM from ARM and returns null on 404', async () => {
+      mockArmClient.get.mockResolvedValueOnce({ id: `${pool}/sessionHosts/h1`, name: 'pool/h1', type: 'sh', properties: { status: 'Available', allowNewSession: true, sessions: 2, resourceId: '/subscriptions/s/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/h1' } });
+      expect(await provider.resolveSessionHostVm(ctx, pool, 'pool/h1')).toBe('/subscriptions/s/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/h1');
+      mockArmClient.get.mockRejectedValueOnce(new ArmApiError(404, 'NotFound', 'missing'));
+      expect(await provider.resolveSessionHostVm(ctx, pool, 'pool/h9')).toBeNull();
+    });
+  });
 });

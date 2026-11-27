@@ -24,6 +24,7 @@ function ops(over: Partial<ExchangeOperations> = {}): ExchangeOperations {
   return {
     enqueue: vi.fn(async () => 'x1'),
     wait: vi.fn(async () => record('succeeded')),
+    withdraw: vi.fn(async () => true),
     factsFor: vi.fn(async () => ({ facts, collectedAt: '2026-09-26T08:00:00Z', autoForwardingMode: 'Off' })),
     tenantDomains: vi.fn(async () => ['contoso.com']),
     ...over,
@@ -69,9 +70,17 @@ describe('exchange jobs', () => {
     registerExchangeJobs(ops({ wait: vi.fn(async () => record('failed', { error: 'The operation could not be performed' })) }));
     const failed = await getRegisteredJob('mailbox.set-quota')!.handler({ ...base, payload });
     expect(failed.error?.code).toBe('EXCHANGE_FAILED');
-    registerExchangeJobs(ops({ wait: vi.fn(async () => null) }));
+    // Zeitueberschreitung vor der Uebernahme: Auftrag wird zurueckgezogen, nichts geaendert
+    const withdrawn = ops({ wait: vi.fn(async () => null) });
+    registerExchangeJobs(withdrawn);
     const timeout = await getRegisteredJob('mailbox.set-quota')!.handler({ ...base, payload });
     expect(timeout.error?.code).toBe('EXCHANGE_TIMEOUT');
+    expect(withdrawn.withdraw).toHaveBeenCalledWith('x1');
+    expect(timeout.error?.message).toContain('nichts geaendert');
+    // Worker hat schon uebernommen: Ergebnis offen statt "fehlgeschlagen"
+    registerExchangeJobs(ops({ wait: vi.fn(async () => null), withdraw: vi.fn(async () => false) }));
+    const unknown = await getRegisteredJob('mailbox.set-quota')!.handler({ ...base, payload });
+    expect(unknown.error?.code).toBe('EXCHANGE_OUTCOME_UNKNOWN');
     const invalid = await getRegisteredJob('mailbox.set-quota')!.handler({ ...base, payload: { ...payload, prohibitSendReceiveGb: 1 } });
     expect(invalid.error?.code).toBe('EXCHANGE_INVALID');
   });
